@@ -6,7 +6,7 @@ url=$2
 echo >&2 "尝试将 $2 推送到 $1"
 
 # 运行代码规范检查器，如果失败则退出
-printf "运行代码规范检查器..."
+printf "运行代码规范检查器...\n"
 if ! RESULT=$(make lint); then
   echo >&2 "make lint"
   echo >&2 "请检查代码以通过规范检查。"
