@@ -3,8 +3,13 @@ package ioc
 import (
 	"context"
 	"fmt"
-	clientv3 "go.etcd.io/etcd/client/v3"
 	"time"
+
+	clientv3 "go.etcd.io/etcd/client/v3"
+)
+
+const (
+	dialTimeout = 5 * time.Second
 )
 
 // 初始化 etcd 客户端
@@ -14,16 +19,16 @@ func InitEtcdClient() *clientv3.Client {
 
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
-		DialTimeout: 5 * time.Second,
+		DialTimeout: dialTimeout,
 	})
 	if err != nil {
-		panic(fmt.Errorf("连接失败: %v", err))
+		panic(fmt.Errorf("连接失败: %w", err))
 	}
 	// 验证连接
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), dialTimeout)
 	defer cancel()
 	if _, err := cli.Status(ctx, endpoints[0]); err != nil {
-		panic(fmt.Errorf("连接状态异常: %v", err))
+		panic(fmt.Errorf("连接状态异常: %w", err))
 	}
 	return cli
 }

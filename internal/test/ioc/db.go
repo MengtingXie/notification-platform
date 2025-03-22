@@ -4,11 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
+
 	"github.com/ecodeclub/ekit/retry"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"time"
 )
 
 func WaitForDBSetup(dsn string) {
@@ -38,6 +39,7 @@ func WaitForDBSetup(dsn string) {
 		time.Sleep(next)
 	}
 }
+
 func InitDB() *gorm.DB {
 	// 数据库连接配置
 	dsn := "root:root@tcp(localhost:13316)/notification?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s"
@@ -47,7 +49,7 @@ func InitDB() *gorm.DB {
 	}
 	db, err := gorm.Open(mysql.Open(dsn), config)
 	if err != nil {
-		panic(fmt.Errorf("数据库连接失败: %v", err))
+		panic(fmt.Errorf("数据库连接失败: %w", err))
 	}
 	return db
 }
