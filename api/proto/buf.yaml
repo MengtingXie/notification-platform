@@ -8,11 +8,12 @@ lint:
   use:
     - STANDARD  # Omit all Buf categories if you don't want to use Buf's built-in rules
   except:
-    - PACKAGE_VERSION_SUFFIX
-    - FIELD_LOWER_SNAKE_CASE
-    - SERVICE_SUFFIX
+    - ENUM_VALUE_PREFIX
+    - ENUM_ZERO_VALUE_SUFFIX
   ignore:
     - google/type/datetime.proto
+    - google/protobuf/empty.proto
+    - google/protobuf/timestamp.proto
   disallow_comment_ignores: false # The default behavior of this key has changed from v1
   enum_zero_value_suffix: _UNSPECIFIED
   rpc_allow_same_request_response: false

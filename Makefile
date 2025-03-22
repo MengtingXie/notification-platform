@@ -52,8 +52,7 @@ bench:
 # 生成gRPC相关文件
 .PHONY: grpc
 grpc:
-	# 暂时不要打开这个 breaking 的，因为在开发阶段有很多 breaking 的修改
-	# @buf breaking --against '.git#branch=master'
+	@buf breaking --against '.git#branch=master'
 	@buf format -w api/proto
 	@buf lint api/proto
 	@buf generate api/proto

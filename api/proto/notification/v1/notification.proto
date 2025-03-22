@@ -1,0 +1,250 @@
+syntax = "proto3";
+
+package notification.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "gitee.com/flycash/notification-platform/api/gen/v1;notificationpb";
+
+// 渠道类型枚举
+enum Channel {
+  // 未指定渠道
+  CHANNEL_UNSPECIFIED = 0;
+  // 短信
+  SMS = 1;
+  // 邮件
+  EMAIL = 2;
+  // 站内信
+  IN_APP = 3;
+  // 微信公众号
+  WECHAT_OFFICIAL = 4;
+  // 微信服务号
+  WECHAT_SERVICE = 5;
+  // 企业通信工具（如钉钉、飞书）
+  ENTERPRISE_IM = 6;
+}
+
+// 通知发送状态枚举
+enum SendStatus {
+  // 未指定通知发送状态
+  SEND_STATUS_UNSPECIFIED = 0;
+  // 待发送
+  PENDING = 1;
+  // 发送成功
+  SUCCEEDED = 2;
+  // 发送失败
+  FAILED = 3;
+  // 发送已取消
+  CANCELED = 4;
+}
+
+// 错误代码枚举
+enum ErrorCode {
+  // 未指定错误码
+  ERROR_CODE_UNSPECIFIED = 0;
+  // 无效参数
+  INVALID_PARAMETER = 1;
+  // 频率限制
+  RATE_LIMITED = 2;
+  // 模板未找到
+  TEMPLATE_NOT_FOUND = 3;
+  // 渠道被禁用
+  CHANNEL_DISABLED = 4;
+}
+
+// 通知发送策略定义
+message SendStrategy {
+  oneof strategy_type {
+    // 立即发送
+    ImmediateStrategy immediate = 1;
+    // 延迟发送
+    DelayedStrategy delayed = 2;
+    // 定时发送
+    ScheduledStrategy scheduled = 3;
+    // 时间窗口内发送
+    TimeWindowStrategy time_window = 4;
+  }
+
+  // 空结构表示立即发送
+  message ImmediateStrategy {}
+
+  message DelayedStrategy {
+    // 延迟秒数
+    int64 delay_seconds = 1;
+  }
+
+  message ScheduledStrategy {
+    // 具体发送时间
+    google.protobuf.Timestamp send_time = 1;
+  }
+
+  message TimeWindowStrategy {
+    // 开始时间
+    int64 start_time_milliseconds = 1;
+    // 结束时间
+    int64 end_time_milliseconds = 2;
+  }
+}
+
+service CallbackService {
+  // 业务方需要实现的回调接口
+  rpc HandleNotificationResult(HandleNotificationResultRequest) returns (HandleNotificationResultResponse);
+}
+
+// 回调请求
+message HandleNotificationResultRequest {
+  // 通知平台内部的id
+  string notification_id = 1;
+  // 原始请求
+  SendNotificationRequest original_request = 2;
+  // 发送结果
+  SendNotificationResponse result = 3;
+}
+
+// 回调响应
+message HandleNotificationResultResponse {
+  // 回调是否成功处理
+  bool success = 1;
+}
+
+service NotificationService {
+  // 同步单条发送
+  rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse);
+
+  // 异步单条发送
+  rpc SendNotificationAsync(SendNotificationAsyncRequest) returns (SendNotificationAsyncResponse);
+
+  // 同步批量发送
+  rpc BatchSendNotifications(BatchSendNotificationsRequest) returns (BatchSendNotificationsResponse);
+
+  // 异步批量发送
+  rpc BatchSendNotificationsAsync(BatchSendNotificationsAsyncRequest) returns (BatchSendNotificationsAsyncResponse);
+
+  // 同步查询通知
+  rpc QueryNotification(QueryNotificationRequest) returns (QueryNotificationResponse);
+}
+
+// 同步单条发送通知请求
+message SendNotificationRequest {
+  // 请求的唯一标识，主要用于去重
+  string key = 1;
+  // 业务方ID
+  string biz_id = 2;
+  // 接收者标识(可以是用户ID、邮箱、手机号等)
+  string receiver = 3;
+  // int64 receiver = 3;              // 接收者 id
+  // 发送渠道
+  Channel channel = 4;
+  // 模板ID
+  string template_id = 5;
+  // 模板参数
+  map<string, string> template_params = 6;
+  // 发送策略
+  SendStrategy strategy = 7;
+}
+
+// 同步单条发送通知响应
+message SendNotificationResponse {
+  // 请求的唯一标识
+  string request_key = 1;
+  // 通知平台生成的消息ID
+  string notification_id = 2;
+  // 发送状态
+  SendStatus status = 3;
+  // 发送时间
+  google.protobuf.Timestamp send_time = 4;
+  // 失败时的错误代码
+  ErrorCode error_code = 5;
+  // 错误详情
+  string error_message = 6;
+}
+
+// 异步单条发送通知请求
+message SendNotificationAsyncRequest {
+  // 请求的唯一标识，主要用于去重
+  string key = 1;
+  // 业务方ID
+  string biz_id = 2;
+  // 接收者标识(可以是用户ID、邮箱、手机号等)
+  string receiver = 3;
+  // int64 receiver = 3;              // 接收者 id
+  // 发送渠道
+  Channel channel = 4;
+  // 模板ID
+  string template_id = 5;
+  // 模板参数
+  map<string, string> template_params = 6;
+  // 发送策略
+  SendStrategy strategy = 7;
+  // 可选回调地址
+  string callback_endpoint = 8;
+}
+
+// 异步单条发送通知响应
+message SendNotificationAsyncResponse {
+  // 平台任务ID
+  string task_id = 1;
+  // 结果过期时间
+  google.protobuf.Timestamp expire_time = 2;
+  // 回调地址
+  optional string callback_endpoint = 3;
+}
+
+// 同步批量发送通知请求
+message BatchSendNotificationsRequest {
+  // 公共请求参数，这里的Key需要特殊处理
+  SendNotificationRequest base_request = 1;
+  // 批量接收者列表
+  repeated string receivers = 2;
+  // repeated int64 receivers = 2;
+}
+
+// 同步批量发送通知响应
+message BatchSendNotificationsResponse {
+  // 所有结果
+  repeated SendNotificationResponse results = 1;
+  // 总数
+  int32 total_count = 2;
+  // 成功数
+  int32 success_count = 3;
+}
+
+// 异步批量发送通知请求
+message BatchSendNotificationsAsyncRequest {
+  // 公共请求参数
+  SendNotificationAsyncRequest base_request = 1;
+  // 批量接收者列表
+  repeated string receivers = 2;
+  // repeated int64 receivers = 2;
+  // 可选回调地址
+  string callback_endpoint = 3;
+}
+
+// 异步批量发送通知响应
+message BatchSendNotificationsAsyncResponse {
+  // 平台任务ID
+  string task_id = 1;
+  // 结果过期时间
+  google.protobuf.Timestamp expire_time = 2;
+  // 回调地址
+  string callback_endpoint = 3;
+}
+
+// 查询请求
+message QueryNotificationRequest {
+  // 请求唯一标识
+  string key = 1;
+  // 平台任务ID
+  string task_id = 2;
+}
+
+// 查询响应
+message QueryNotificationResponse {
+  oneof original_request {
+    // 立即发送
+    SendNotificationAsyncRequest single = 1;
+    // 延迟发送
+    BatchSendNotificationsAsyncRequest batch = 2;
+  }
+  repeated SendNotificationResponse results = 3;
+}
