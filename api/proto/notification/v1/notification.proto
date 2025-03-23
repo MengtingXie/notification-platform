@@ -28,14 +28,16 @@ enum Channel {
 enum SendStatus {
   // 未指定通知发送状态
   SEND_STATUS_UNSPECIFIED = 0;
-  // 待发送
-  PENDING = 1;
+  // 事务消息，准备阶段
+  PREPARE = 1;
+  // 事务消息，取消发送
+  CANCELED = 2;
+  // 等待发送，普通消息的默认状态，事务消息的确认发送状态（二者重合故用一个状态表示）
+  PENDING = 3;
   // 发送成功
-  SUCCEEDED = 2;
+  SUCCEEDED = 4;
   // 发送失败
-  FAILED = 3;
-  // 发送已取消
-  CANCELED = 4;
+  FAILED = 5;
 }
 
 // 错误代码枚举

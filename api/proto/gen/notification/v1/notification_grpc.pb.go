@@ -229,15 +229,19 @@ type UnimplementedNotificationServiceServer struct{}
 func (UnimplementedNotificationServiceServer) SendNotification(context.Context, *SendNotificationRequest) (*SendNotificationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendNotification not implemented")
 }
+
 func (UnimplementedNotificationServiceServer) SendNotificationAsync(context.Context, *SendNotificationAsyncRequest) (*SendNotificationAsyncResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendNotificationAsync not implemented")
 }
+
 func (UnimplementedNotificationServiceServer) BatchSendNotifications(context.Context, *BatchSendNotificationsRequest) (*BatchSendNotificationsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BatchSendNotifications not implemented")
 }
+
 func (UnimplementedNotificationServiceServer) BatchSendNotificationsAsync(context.Context, *BatchSendNotificationsAsyncRequest) (*BatchSendNotificationsAsyncResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BatchSendNotificationsAsync not implemented")
 }
+
 func (UnimplementedNotificationServiceServer) QueryNotification(context.Context, *QueryNotificationRequest) (*QueryNotificationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QueryNotification not implemented")
 }

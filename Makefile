@@ -6,7 +6,8 @@ setup:
 # 格式化代码
 .PHONY: fmt
 fmt:
-	@sh ./scripts/fmt.sh
+	@goimports -l -w $$(find . -type f -name '*.go' -not -path "./.idea/*" -not -path "./**/ioc/wire_gen.go" -not -path "./**/ioc/wire.go")
+	@gofumpt -l -w $$(find . -type f -name '*.go' -not -path "./.idea/*" -not -path "./**/ioc/wire_gen.go" -not -path "./**/ioc/wire.go")
 
 # 清理项目依赖
 .PHONY: tidy
