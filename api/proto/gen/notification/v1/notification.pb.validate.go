@@ -573,6 +573,144 @@ var _ interface {
 	ErrorName() string
 } = HandleNotificationResultResponseValidationError{}
 
+// Validate checks the field values on Notification with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Notification) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Notification with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in NotificationMultiError, or
+// nil if none found.
+func (m *Notification) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Notification) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Key
+
+	// no validation rules for Receiver
+
+	// no validation rules for Channel
+
+	// no validation rules for TemplateId
+
+	// no validation rules for TemplateParams
+
+	if all {
+		switch v := interface{}(m.GetStrategy()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, NotificationValidationError{
+					field:  "Strategy",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, NotificationValidationError{
+					field:  "Strategy",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetStrategy()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return NotificationValidationError{
+				field:  "Strategy",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return NotificationMultiError(errors)
+	}
+
+	return nil
+}
+
+// NotificationMultiError is an error wrapping multiple validation errors
+// returned by Notification.ValidateAll() if the designated constraints aren't met.
+type NotificationMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m NotificationMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m NotificationMultiError) AllErrors() []error { return m }
+
+// NotificationValidationError is the validation error returned by
+// Notification.Validate if the designated constraints aren't met.
+type NotificationValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e NotificationValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e NotificationValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e NotificationValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e NotificationValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e NotificationValidationError) ErrorName() string { return "NotificationValidationError" }
+
+// Error satisfies the builtin error interface
+func (e NotificationValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sNotification.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = NotificationValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = NotificationValidationError{}
+
 // Validate checks the field values on SendNotificationRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
@@ -595,24 +733,12 @@ func (m *SendNotificationRequest) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Key
-
-	// no validation rules for BizId
-
-	// no validation rules for Receiver
-
-	// no validation rules for Channel
-
-	// no validation rules for TemplateId
-
-	// no validation rules for TemplateParams
-
 	if all {
-		switch v := interface{}(m.GetStrategy()).(type) {
+		switch v := interface{}(m.GetNotification()).(type) {
 		case interface{ ValidateAll() error }:
 			if err := v.ValidateAll(); err != nil {
 				errors = append(errors, SendNotificationRequestValidationError{
-					field:  "Strategy",
+					field:  "Notification",
 					reason: "embedded message failed validation",
 					cause:  err,
 				})
@@ -620,16 +746,16 @@ func (m *SendNotificationRequest) validate(all bool) error {
 		case interface{ Validate() error }:
 			if err := v.Validate(); err != nil {
 				errors = append(errors, SendNotificationRequestValidationError{
-					field:  "Strategy",
+					field:  "Notification",
 					reason: "embedded message failed validation",
 					cause:  err,
 				})
 			}
 		}
-	} else if v, ok := interface{}(m.GetStrategy()).(interface{ Validate() error }); ok {
+	} else if v, ok := interface{}(m.GetNotification()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
 			return SendNotificationRequestValidationError{
-				field:  "Strategy",
+				field:  "Notification",
 				reason: "embedded message failed validation",
 				cause:  err,
 			}
@@ -737,8 +863,6 @@ func (m *SendNotificationResponse) validate(all bool) error {
 	}
 
 	var errors []error
-
-	// no validation rules for RequestKey
 
 	// no validation rules for NotificationId
 
@@ -879,24 +1003,12 @@ func (m *SendNotificationAsyncRequest) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Key
-
-	// no validation rules for BizId
-
-	// no validation rules for Receiver
-
-	// no validation rules for Channel
-
-	// no validation rules for TemplateId
-
-	// no validation rules for TemplateParams
-
 	if all {
-		switch v := interface{}(m.GetStrategy()).(type) {
+		switch v := interface{}(m.GetNotification()).(type) {
 		case interface{ ValidateAll() error }:
 			if err := v.ValidateAll(); err != nil {
 				errors = append(errors, SendNotificationAsyncRequestValidationError{
-					field:  "Strategy",
+					field:  "Notification",
 					reason: "embedded message failed validation",
 					cause:  err,
 				})
@@ -904,23 +1016,21 @@ func (m *SendNotificationAsyncRequest) validate(all bool) error {
 		case interface{ Validate() error }:
 			if err := v.Validate(); err != nil {
 				errors = append(errors, SendNotificationAsyncRequestValidationError{
-					field:  "Strategy",
+					field:  "Notification",
 					reason: "embedded message failed validation",
 					cause:  err,
 				})
 			}
 		}
-	} else if v, ok := interface{}(m.GetStrategy()).(interface{ Validate() error }); ok {
+	} else if v, ok := interface{}(m.GetNotification()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
 			return SendNotificationAsyncRequestValidationError{
-				field:  "Strategy",
+				field:  "Notification",
 				reason: "embedded message failed validation",
 				cause:  err,
 			}
 		}
 	}
-
-	// no validation rules for CallbackEndpoint
 
 	if len(errors) > 0 {
 		return SendNotificationAsyncRequestMultiError(errors)
@@ -1025,40 +1135,11 @@ func (m *SendNotificationAsyncResponse) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for TaskId
+	// no validation rules for NotificationId
 
-	if all {
-		switch v := interface{}(m.GetExpireTime()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, SendNotificationAsyncResponseValidationError{
-					field:  "ExpireTime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, SendNotificationAsyncResponseValidationError{
-					field:  "ExpireTime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetExpireTime()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return SendNotificationAsyncResponseValidationError{
-				field:  "ExpireTime",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
+	// no validation rules for ErrorCode
 
-	if m.CallbackEndpoint != nil {
-		// no validation rules for CallbackEndpoint
-	}
+	// no validation rules for ErrorMessage
 
 	if len(errors) > 0 {
 		return SendNotificationAsyncResponseMultiError(errors)
@@ -1163,33 +1244,38 @@ func (m *BatchSendNotificationsRequest) validate(all bool) error {
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetBaseRequest()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, BatchSendNotificationsRequestValidationError{
-					field:  "BaseRequest",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
+	for idx, item := range m.GetNotifications() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, BatchSendNotificationsRequestValidationError{
+						field:  fmt.Sprintf("Notifications[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, BatchSendNotificationsRequestValidationError{
+						field:  fmt.Sprintf("Notifications[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
 			}
-		case interface{ Validate() error }:
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				errors = append(errors, BatchSendNotificationsRequestValidationError{
-					field:  "BaseRequest",
+				return BatchSendNotificationsRequestValidationError{
+					field:  fmt.Sprintf("Notifications[%v]", idx),
 					reason: "embedded message failed validation",
 					cause:  err,
-				})
+				}
 			}
 		}
-	} else if v, ok := interface{}(m.GetBaseRequest()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return BatchSendNotificationsRequestValidationError{
-				field:  "BaseRequest",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
+
 	}
 
 	if len(errors) > 0 {
@@ -1437,36 +1523,39 @@ func (m *BatchSendNotificationsAsyncRequest) validate(all bool) error {
 
 	var errors []error
 
-	if all {
-		switch v := interface{}(m.GetBaseRequest()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, BatchSendNotificationsAsyncRequestValidationError{
-					field:  "BaseRequest",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, BatchSendNotificationsAsyncRequestValidationError{
-					field:  "BaseRequest",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetBaseRequest()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return BatchSendNotificationsAsyncRequestValidationError{
-				field:  "BaseRequest",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
+	for idx, item := range m.GetNotifications() {
+		_, _ = idx, item
 
-	// no validation rules for CallbackEndpoint
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, BatchSendNotificationsAsyncRequestValidationError{
+						field:  fmt.Sprintf("Notifications[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, BatchSendNotificationsAsyncRequestValidationError{
+						field:  fmt.Sprintf("Notifications[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return BatchSendNotificationsAsyncRequestValidationError{
+					field:  fmt.Sprintf("Notifications[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
 
 	if len(errors) > 0 {
 		return BatchSendNotificationsAsyncRequestMultiError(errors)
@@ -1573,39 +1662,6 @@ func (m *BatchSendNotificationsAsyncResponse) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for TaskId
-
-	if all {
-		switch v := interface{}(m.GetExpireTime()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, BatchSendNotificationsAsyncResponseValidationError{
-					field:  "ExpireTime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, BatchSendNotificationsAsyncResponseValidationError{
-					field:  "ExpireTime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetExpireTime()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return BatchSendNotificationsAsyncResponseValidationError{
-				field:  "ExpireTime",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
-	// no validation rules for CallbackEndpoint
-
 	if len(errors) > 0 {
 		return BatchSendNotificationsAsyncResponseMultiError(errors)
 	}
@@ -1688,46 +1744,42 @@ var _ interface {
 	ErrorName() string
 } = BatchSendNotificationsAsyncResponseValidationError{}
 
-// Validate checks the field values on QueryNotificationRequest with the rules
-// defined in the proto definition for this message. If any rules are
+// Validate checks the field values on BatchQueryNotificationsRequest with the
+// rules defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
-func (m *QueryNotificationRequest) Validate() error {
+func (m *BatchQueryNotificationsRequest) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on QueryNotificationRequest with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// QueryNotificationRequestMultiError, or nil if none found.
-func (m *QueryNotificationRequest) ValidateAll() error {
+// ValidateAll checks the field values on BatchQueryNotificationsRequest with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the result is a list of violation errors wrapped in
+// BatchQueryNotificationsRequestMultiError, or nil if none found.
+func (m *BatchQueryNotificationsRequest) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *QueryNotificationRequest) validate(all bool) error {
+func (m *BatchQueryNotificationsRequest) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
 
-	// no validation rules for Key
-
-	// no validation rules for TaskId
-
 	if len(errors) > 0 {
-		return QueryNotificationRequestMultiError(errors)
+		return BatchQueryNotificationsRequestMultiError(errors)
 	}
 
 	return nil
 }
 
-// QueryNotificationRequestMultiError is an error wrapping multiple validation
-// errors returned by QueryNotificationRequest.ValidateAll() if the designated
-// constraints aren't met.
-type QueryNotificationRequestMultiError []error
+// BatchQueryNotificationsRequestMultiError is an error wrapping multiple
+// validation errors returned by BatchQueryNotificationsRequest.ValidateAll()
+// if the designated constraints aren't met.
+type BatchQueryNotificationsRequestMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m QueryNotificationRequestMultiError) Error() string {
+func (m BatchQueryNotificationsRequestMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -1736,11 +1788,12 @@ func (m QueryNotificationRequestMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m QueryNotificationRequestMultiError) AllErrors() []error { return m }
+func (m BatchQueryNotificationsRequestMultiError) AllErrors() []error { return m }
 
-// QueryNotificationRequestValidationError is the validation error returned by
-// QueryNotificationRequest.Validate if the designated constraints aren't met.
-type QueryNotificationRequestValidationError struct {
+// BatchQueryNotificationsRequestValidationError is the validation error
+// returned by BatchQueryNotificationsRequest.Validate if the designated
+// constraints aren't met.
+type BatchQueryNotificationsRequestValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -1748,24 +1801,24 @@ type QueryNotificationRequestValidationError struct {
 }
 
 // Field function returns field value.
-func (e QueryNotificationRequestValidationError) Field() string { return e.field }
+func (e BatchQueryNotificationsRequestValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e QueryNotificationRequestValidationError) Reason() string { return e.reason }
+func (e BatchQueryNotificationsRequestValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e QueryNotificationRequestValidationError) Cause() error { return e.cause }
+func (e BatchQueryNotificationsRequestValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e QueryNotificationRequestValidationError) Key() bool { return e.key }
+func (e BatchQueryNotificationsRequestValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e QueryNotificationRequestValidationError) ErrorName() string {
-	return "QueryNotificationRequestValidationError"
+func (e BatchQueryNotificationsRequestValidationError) ErrorName() string {
+	return "BatchQueryNotificationsRequestValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e QueryNotificationRequestValidationError) Error() string {
+func (e BatchQueryNotificationsRequestValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -1777,14 +1830,14 @@ func (e QueryNotificationRequestValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sQueryNotificationRequest.%s: %s%s",
+		"invalid %sBatchQueryNotificationsRequest.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = QueryNotificationRequestValidationError{}
+var _ error = BatchQueryNotificationsRequestValidationError{}
 
 var _ interface {
 	Field() string
@@ -1792,24 +1845,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = QueryNotificationRequestValidationError{}
+} = BatchQueryNotificationsRequestValidationError{}
 
-// Validate checks the field values on QueryNotificationResponse with the rules
-// defined in the proto definition for this message. If any rules are
+// Validate checks the field values on BatchQueryNotificationsResponse with the
+// rules defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
-func (m *QueryNotificationResponse) Validate() error {
+func (m *BatchQueryNotificationsResponse) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on QueryNotificationResponse with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// QueryNotificationResponseMultiError, or nil if none found.
-func (m *QueryNotificationResponse) ValidateAll() error {
+// ValidateAll checks the field values on BatchQueryNotificationsResponse with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the result is a list of violation errors wrapped in
+// BatchQueryNotificationsResponseMultiError, or nil if none found.
+func (m *BatchQueryNotificationsResponse) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *QueryNotificationResponse) validate(all bool) error {
+func (m *BatchQueryNotificationsResponse) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -1823,7 +1876,7 @@ func (m *QueryNotificationResponse) validate(all bool) error {
 			switch v := interface{}(item).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, QueryNotificationResponseValidationError{
+					errors = append(errors, BatchQueryNotificationsResponseValidationError{
 						field:  fmt.Sprintf("Results[%v]", idx),
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -1831,7 +1884,7 @@ func (m *QueryNotificationResponse) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, QueryNotificationResponseValidationError{
+					errors = append(errors, BatchQueryNotificationsResponseValidationError{
 						field:  fmt.Sprintf("Results[%v]", idx),
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -1840,7 +1893,7 @@ func (m *QueryNotificationResponse) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return QueryNotificationResponseValidationError{
+				return BatchQueryNotificationsResponseValidationError{
 					field:  fmt.Sprintf("Results[%v]", idx),
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -1850,107 +1903,20 @@ func (m *QueryNotificationResponse) validate(all bool) error {
 
 	}
 
-	switch v := m.OriginalRequest.(type) {
-	case *QueryNotificationResponse_Single:
-		if v == nil {
-			err := QueryNotificationResponseValidationError{
-				field:  "OriginalRequest",
-				reason: "oneof value cannot be a typed-nil",
-			}
-			if !all {
-				return err
-			}
-			errors = append(errors, err)
-		}
-
-		if all {
-			switch v := interface{}(m.GetSingle()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, QueryNotificationResponseValidationError{
-						field:  "Single",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, QueryNotificationResponseValidationError{
-						field:  "Single",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetSingle()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return QueryNotificationResponseValidationError{
-					field:  "Single",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	case *QueryNotificationResponse_Batch:
-		if v == nil {
-			err := QueryNotificationResponseValidationError{
-				field:  "OriginalRequest",
-				reason: "oneof value cannot be a typed-nil",
-			}
-			if !all {
-				return err
-			}
-			errors = append(errors, err)
-		}
-
-		if all {
-			switch v := interface{}(m.GetBatch()).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, QueryNotificationResponseValidationError{
-						field:  "Batch",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, QueryNotificationResponseValidationError{
-						field:  "Batch",
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(m.GetBatch()).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return QueryNotificationResponseValidationError{
-					field:  "Batch",
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	default:
-		_ = v // ensures v is used
-	}
-
 	if len(errors) > 0 {
-		return QueryNotificationResponseMultiError(errors)
+		return BatchQueryNotificationsResponseMultiError(errors)
 	}
 
 	return nil
 }
 
-// QueryNotificationResponseMultiError is an error wrapping multiple validation
-// errors returned by QueryNotificationResponse.ValidateAll() if the
-// designated constraints aren't met.
-type QueryNotificationResponseMultiError []error
+// BatchQueryNotificationsResponseMultiError is an error wrapping multiple
+// validation errors returned by BatchQueryNotificationsResponse.ValidateAll()
+// if the designated constraints aren't met.
+type BatchQueryNotificationsResponseMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m QueryNotificationResponseMultiError) Error() string {
+func (m BatchQueryNotificationsResponseMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -1959,11 +1925,12 @@ func (m QueryNotificationResponseMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m QueryNotificationResponseMultiError) AllErrors() []error { return m }
+func (m BatchQueryNotificationsResponseMultiError) AllErrors() []error { return m }
 
-// QueryNotificationResponseValidationError is the validation error returned by
-// QueryNotificationResponse.Validate if the designated constraints aren't met.
-type QueryNotificationResponseValidationError struct {
+// BatchQueryNotificationsResponseValidationError is the validation error
+// returned by BatchQueryNotificationsResponse.Validate if the designated
+// constraints aren't met.
+type BatchQueryNotificationsResponseValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -1971,24 +1938,24 @@ type QueryNotificationResponseValidationError struct {
 }
 
 // Field function returns field value.
-func (e QueryNotificationResponseValidationError) Field() string { return e.field }
+func (e BatchQueryNotificationsResponseValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e QueryNotificationResponseValidationError) Reason() string { return e.reason }
+func (e BatchQueryNotificationsResponseValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e QueryNotificationResponseValidationError) Cause() error { return e.cause }
+func (e BatchQueryNotificationsResponseValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e QueryNotificationResponseValidationError) Key() bool { return e.key }
+func (e BatchQueryNotificationsResponseValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e QueryNotificationResponseValidationError) ErrorName() string {
-	return "QueryNotificationResponseValidationError"
+func (e BatchQueryNotificationsResponseValidationError) ErrorName() string {
+	return "BatchQueryNotificationsResponseValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e QueryNotificationResponseValidationError) Error() string {
+func (e BatchQueryNotificationsResponseValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -2000,14 +1967,14 @@ func (e QueryNotificationResponseValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sQueryNotificationResponse.%s: %s%s",
+		"invalid %sBatchQueryNotificationsResponse.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = QueryNotificationResponseValidationError{}
+var _ error = BatchQueryNotificationsResponseValidationError{}
 
 var _ interface {
 	Field() string
@@ -2015,7 +1982,7 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = QueryNotificationResponseValidationError{}
+} = BatchQueryNotificationsResponseValidationError{}
 
 // Validate checks the field values on SendStrategy_ImmediateStrategy with the
 // rules defined in the proto definition for this message. If any rules are

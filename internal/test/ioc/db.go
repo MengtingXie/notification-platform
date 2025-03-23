@@ -3,13 +3,12 @@ package ioc
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"time"
 
+	"github.com/ego-component/egorm"
+	"github.com/gotomicro/ego/core/econf"
+
 	"github.com/ecodeclub/ekit/retry"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 func WaitForDBSetup(dsn string) {
@@ -40,16 +39,17 @@ func WaitForDBSetup(dsn string) {
 	}
 }
 
-func InitDB() *gorm.DB {
-	// 数据库连接配置
-	dsn := "root:root@tcp(localhost:13316)/notification?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s"
-	WaitForDBSetup(dsn)
-	config := &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn), // 生产环境推荐关闭 Info 级别日志
+var db *egorm.Component
+
+func InitDB() *egorm.Component {
+	if db != nil {
+		return db
 	}
-	db, err := gorm.Open(mysql.Open(dsn), config)
-	if err != nil {
-		panic(fmt.Errorf("数据库连接失败: %w", err))
-	}
+	econf.Set("mysql", map[string]any{
+		"dsn":   "root:root@tcp(localhost:13316)/notification?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true",
+		"debug": true,
+	})
+	WaitForDBSetup(econf.GetStringMapString("mysql")["dsn"])
+	db = egorm.Load("mysql").Build()
 	return db
 }

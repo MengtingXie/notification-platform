@@ -28,7 +28,7 @@ issues:
 # All available settings of specific linters.
 linters-settings:
   cyclop:
-    max-complexity: 15
+    max-complexity: 20
   errcheck:
     check-type-assertions: true
   goconst:

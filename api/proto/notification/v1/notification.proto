@@ -16,26 +16,22 @@ enum Channel {
   EMAIL = 2;
   // 站内信
   IN_APP = 3;
-  // 微信公众号
-  WECHAT_OFFICIAL = 4;
-  // 微信服务号
-  WECHAT_SERVICE = 5;
-  // 企业通信工具（如钉钉、飞书）
-  ENTERPRISE_IM = 6;
 }
 
 // 通知发送状态枚举
 enum SendStatus {
   // 未指定通知发送状态
   SEND_STATUS_UNSPECIFIED = 0;
-  // 待发送
-  PENDING = 1;
+  // 事务消息，准备阶段
+  PREPARE = 1;
+  // 事务消息，取消发送
+  CANCELED = 2;
+  // 等待发送，普通消息的默认状态，事务消息的确认发送状态（二者重合故用一个状态表示）
+  PENDING = 3;
   // 发送成功
-  SUCCEEDED = 2;
+  SUCCEEDED = 4;
   // 发送失败
-  FAILED = 3;
-  // 发送已取消
-  CANCELED = 4;
+  FAILED = 5;
 }
 
 // 错误代码枚举
@@ -50,6 +46,8 @@ enum ErrorCode {
   TEMPLATE_NOT_FOUND = 3;
   // 渠道被禁用
   CHANNEL_DISABLED = 4;
+  // 创建通知失败
+  CREATE_NOTIFICATION_FAILED = 5;
 }
 
 // 通知发送策略定义
@@ -93,8 +91,8 @@ service CallbackService {
 
 // 回调请求
 message HandleNotificationResultRequest {
-  // 通知平台内部的id
-  string notification_id = 1;
+  // 通知平台生成的通知id
+  uint64 notification_id = 1;
   // 原始请求
   SendNotificationRequest original_request = 2;
   // 发送结果
@@ -120,83 +118,63 @@ service NotificationService {
   // 异步批量发送
   rpc BatchSendNotificationsAsync(BatchSendNotificationsAsyncRequest) returns (BatchSendNotificationsAsyncResponse);
 
-  // 同步查询通知
-  rpc QueryNotification(QueryNotificationRequest) returns (QueryNotificationResponse);
+  // 同步批量查询
+  rpc BatchQueryNotifications(BatchQueryNotificationsRequest) returns (BatchQueryNotificationsResponse);
+}
+
+// 通知
+message Notification {
+  // 业务方某个业务内部的唯一标识
+  string key = 1;
+  // 接收者标识(可以是用户ID、邮箱、手机号等)
+  string receiver = 2;
+  // 发送渠道
+  Channel channel = 3;
+  // 模板ID
+  string template_id = 4;
+  // 模板参数
+  map<string, string> template_params = 5;
+  // 发送策略
+  SendStrategy strategy = 6;
 }
 
 // 同步单条发送通知请求
 message SendNotificationRequest {
-  // 请求的唯一标识，主要用于去重
-  string key = 1;
-  // 业务方ID
-  string biz_id = 2;
-  // 接收者标识(可以是用户ID、邮箱、手机号等)
-  string receiver = 3;
-  // int64 receiver = 3;              // 接收者 id
-  // 发送渠道
-  Channel channel = 4;
-  // 模板ID
-  string template_id = 5;
-  // 模板参数
-  map<string, string> template_params = 6;
-  // 发送策略
-  SendStrategy strategy = 7;
+  Notification notification = 1;
 }
 
 // 同步单条发送通知响应
 message SendNotificationResponse {
-  // 请求的唯一标识
-  string request_key = 1;
-  // 通知平台生成的消息ID
-  string notification_id = 2;
+  // 通知平台生成的通知ID
+  uint64 notification_id = 1;
   // 发送状态
-  SendStatus status = 3;
+  SendStatus status = 2;
   // 发送时间
-  google.protobuf.Timestamp send_time = 4;
+  google.protobuf.Timestamp send_time = 3;
   // 失败时的错误代码
-  ErrorCode error_code = 5;
+  ErrorCode error_code = 4;
   // 错误详情
-  string error_message = 6;
+  string error_message = 5;
 }
 
 // 异步单条发送通知请求
 message SendNotificationAsyncRequest {
-  // 请求的唯一标识，主要用于去重
-  string key = 1;
-  // 业务方ID
-  string biz_id = 2;
-  // 接收者标识(可以是用户ID、邮箱、手机号等)
-  string receiver = 3;
-  // int64 receiver = 3;              // 接收者 id
-  // 发送渠道
-  Channel channel = 4;
-  // 模板ID
-  string template_id = 5;
-  // 模板参数
-  map<string, string> template_params = 6;
-  // 发送策略
-  SendStrategy strategy = 7;
-  // 可选回调地址
-  string callback_endpoint = 8;
+  Notification notification = 1;
 }
 
 // 异步单条发送通知响应
 message SendNotificationAsyncResponse {
-  // 平台任务ID
-  string task_id = 1;
-  // 结果过期时间
-  google.protobuf.Timestamp expire_time = 2;
-  // 回调地址
-  optional string callback_endpoint = 3;
+  // 通知平台生成的通知ID
+  uint64 notification_id = 1;
+  // 失败时的错误代码
+  ErrorCode error_code = 4;
+  // 错误详情
+  string error_message = 5;
 }
 
 // 同步批量发送通知请求
 message BatchSendNotificationsRequest {
-  // 公共请求参数，这里的Key需要特殊处理
-  SendNotificationRequest base_request = 1;
-  // 批量接收者列表
-  repeated string receivers = 2;
-  // repeated int64 receivers = 2;
+  repeated Notification notifications = 1;
 }
 
 // 同步批量发送通知响应
@@ -211,40 +189,22 @@ message BatchSendNotificationsResponse {
 
 // 异步批量发送通知请求
 message BatchSendNotificationsAsyncRequest {
-  // 公共请求参数
-  SendNotificationAsyncRequest base_request = 1;
-  // 批量接收者列表
-  repeated string receivers = 2;
-  // repeated int64 receivers = 2;
-  // 可选回调地址
-  string callback_endpoint = 3;
+  repeated Notification notifications = 1;
 }
 
 // 异步批量发送通知响应
 message BatchSendNotificationsAsyncResponse {
-  // 平台任务ID
-  string task_id = 1;
-  // 结果过期时间
-  google.protobuf.Timestamp expire_time = 2;
-  // 回调地址
-  string callback_endpoint = 3;
+  // 通知平台生成的通知ID
+  repeated uint64 notification_ids = 1;
 }
 
-// 查询请求
-message QueryNotificationRequest {
-  // 请求唯一标识
-  string key = 1;
-  // 平台任务ID
-  string task_id = 2;
+// 同步批量查询请求
+message BatchQueryNotificationsRequest {
+  // 业务方某个业务内部的唯一标识
+  repeated string keys = 1;
 }
 
-// 查询响应
-message QueryNotificationResponse {
-  oneof original_request {
-    // 立即发送
-    SendNotificationAsyncRequest single = 1;
-    // 延迟发送
-    BatchSendNotificationsAsyncRequest batch = 2;
-  }
-  repeated SendNotificationResponse results = 3;
+// 同步批量查询响应
+message BatchQueryNotificationsResponse {
+  repeated SendNotificationResponse results = 1;
 }
