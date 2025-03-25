@@ -3,9 +3,10 @@ package ioc
 import (
 	"context"
 	"database/sql"
+	"time"
+
 	"github.com/ego-component/egorm"
 	"github.com/gotomicro/ego/core/econf"
-	"time"
 
 	"github.com/ecodeclub/ekit/retry"
 )
