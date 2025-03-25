@@ -46,8 +46,8 @@ func InitDB() *egorm.Component {
 		return db
 	}
 	econf.Set("mysql", map[string]any{
-		"dsn":   "root:root@tcp(localhost:13316)/notification?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s",
-		"debug": false,
+		"dsn":   "root:root@tcp(localhost:13316)/notification?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true",
+		"debug": true,
 	})
 	WaitForDBSetup(econf.GetStringMapString("mysql")["dsn"])
 	db = egorm.Load("mysql").Build()
