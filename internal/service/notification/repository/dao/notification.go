@@ -219,12 +219,7 @@ func (n *notificationDAO) BatchUpdateStatusSucceededOrFailed(ctx context.Context
 		// 拼接所有SQL并执行
 		if len(sqls) > 0 {
 			combinedSQL := strings.Join(sqls, "; ")
-
-			err := tx.Exec(combinedSQL).Error
-			if err != nil {
-				fmt.Println(combinedSQL)
-			}
-			return err
+			return tx.Exec(combinedSQL).Error
 		}
 
 		return nil
