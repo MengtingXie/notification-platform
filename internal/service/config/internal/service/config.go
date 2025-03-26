@@ -78,7 +78,7 @@ func (b *businessConfigService) Delete(ctx context.Context, id int64) error {
 	return b.repo.Delete(ctx, id)
 }
 
-// SaveNonZeroConfig 保存业务配置（仅保存非零字段）
+// SaveConfig 保存业务配置（仅保存非零字段）
 func (b *businessConfigService) SaveConfig(ctx context.Context, config domain.BusinessConfig) error {
 	// 参数校验
 	if config.ID <= 0 {

@@ -23,6 +23,11 @@ type BusinessConfig struct {
 	Utime         int64
 }
 
+// TableName 重命名表
+func (BusinessConfig) TableName() string {
+	return "business_configs"
+}
+
 type BusinessConfigDAO interface {
 	GetByIDs(ctx context.Context, id []int64) (map[int64]BusinessConfig, error)
 	GetByID(ctx context.Context, id int64) (BusinessConfig, error)
@@ -31,6 +36,7 @@ type BusinessConfigDAO interface {
 	SaveConfig(ctx context.Context, config BusinessConfig) error
 }
 
+// Implementation of the BusinessConfigDAO interface
 type businessConfigDAO struct {
 	db *egorm.Component
 }
@@ -75,7 +81,10 @@ func (b *businessConfigDAO) Delete(ctx context.Context, id int64) error {
 	result := b.db.WithContext(ctx).
 		Where("id = ?", id).
 		Delete(&BusinessConfig{})
-	return result.Error
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
 }
 
 // SaveConfig 保存业务配置
