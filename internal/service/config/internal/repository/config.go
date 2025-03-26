@@ -5,8 +5,9 @@ import (
 	"database/sql"
 	"errors"
 
-	"gitee.com/flycash/notification-platform/internal/service/config/domain"
-	daopkg "gitee.com/flycash/notification-platform/internal/service/config/repository/dao"
+	"gitee.com/flycash/notification-platform/internal/service/config/internal/domain"
+	daopkg "gitee.com/flycash/notification-platform/internal/service/config/internal/repository/dao"
+
 	"github.com/ego-component/egorm"
 )
 

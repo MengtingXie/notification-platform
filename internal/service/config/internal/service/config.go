@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"gitee.com/flycash/notification-platform/internal/service/config/domain"
-	"gitee.com/flycash/notification-platform/internal/service/config/repository"
+	"gitee.com/flycash/notification-platform/internal/service/config/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/service/config/internal/repository"
+
 	"github.com/ego-component/egorm"
 )
 

@@ -4,13 +4,13 @@
 //go:build !wireinject
 // +build !wireinject
 
-package startup
+package mocks
 
 import (
 	"gitee.com/flycash/notification-platform/internal/service/config"
-	"gitee.com/flycash/notification-platform/internal/service/config/repository"
-	"gitee.com/flycash/notification-platform/internal/service/config/repository/dao"
-	"gitee.com/flycash/notification-platform/internal/service/config/service"
+	"gitee.com/flycash/notification-platform/internal/service/config/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/service/config/internal/repository/dao"
+	"gitee.com/flycash/notification-platform/internal/service/config/internal/service"
 	"gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/ego-component/egorm"
 )

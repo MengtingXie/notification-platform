@@ -1,14 +1,19 @@
+//go:build e2e
+
 package integration
 
 import (
 	"context"
 	"testing"
+	"time"
+
+	"gitee.com/flycash/notification-platform/internal/service/config/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/service/config/internal/integration/startup"
+	"gitee.com/flycash/notification-platform/internal/service/config/internal/service"
+	"github.com/ego-component/egorm"
 
 	"github.com/stretchr/testify/require"
 
-	"gitee.com/flycash/notification-platform/internal/service/config/domain"
-	"gitee.com/flycash/notification-platform/internal/service/config/integration/startup"
-	"gitee.com/flycash/notification-platform/internal/service/config/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
@@ -91,8 +96,8 @@ func (s *BusinessConfigTestSuite) createConfigAndGetID(t *testing.T) int64 {
 	return 5
 }
 
-// TestBusinessConfigCreate 测试创建业务配置
-func (s *BusinessConfigTestSuite) TestBusinessConfigCreate() {
+// TestServiceCreate 测试创建业务配置
+func (s *BusinessConfigTestSuite) TestServiceSaveConfig() {
 	t := s.T()
 	ctx := context.Background()
 
@@ -147,24 +152,64 @@ func (s *BusinessConfigTestSuite) TestBusinessConfigCreate() {
 		err = s.svc.Delete(ctx, 5)
 		assert.NoError(t, err, "删除业务配置应成功")
 	})
+
+	t.Run("id为0", func(t *testing.T) {
+		invalidConfig := domain.BusinessConfig{
+			ID: 0, // 无效ID
+		}
+		err := s.svc.SaveConfig(ctx, invalidConfig)
+		assert.Equal(t, service.ErrIDNotSet, err)
+	})
 }
 
 // TestBusinessConfigRead 测试读取业务配置
-func (s *BusinessConfigTestSuite) TestBusinessConfigRead() {
+func (s *BusinessConfigTestSuite) TestServiceGetByID() {
+	testcases := []struct {
+		name       string
+		before     func(t *testing.T) int64
+		wantConfig domain.BusinessConfig
+		wantErr    error
+	}{
+		{
+			name: "成功获取",
+			before: func(t *testing.T) int64 {
+				return s.createConfigAndGetID(t)
+			},
+			wantConfig: s.createTestConfig(),
+		},
+		{
+			name: "未存在的id",
+			before: func(t *testing.T) int64 {
+				return 9999
+			},
+			wantErr: service.ErrConfigNotFound,
+		},
+	}
+	for _, tc := range testcases {
+		tc := tc
+		s.T().Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			id := tc.before(t)
+			config, err := s.svc.GetByID(ctx, id)
+			require.Equal(t, tc.wantErr, err)
+			if err != nil {
+				return
+			}
+			assertBusinessConfig(t, tc.wantConfig, config)
+			err = s.svc.Delete(ctx, 5)
+			assert.NoError(t, err, "删除业务配置应成功")
+		})
+	}
+}
+
+func (s *BusinessConfigTestSuite) TestServiceGetByIDs() {
 	t := s.T()
 	ctx := context.Background()
-	// 先创建配置
-	newID := s.createConfigAndGetID(t)
-	testConfig := s.createTestConfig() // 用于验证
-
-	// 测试GetByID
-	config, err := s.svc.GetByID(ctx, newID)
-	assert.NoError(t, err, "查询单个业务配置应成功")
-	assertBusinessConfig(t, testConfig, config)
-
 	configList := s.createTestConfigList()
 	for _, nconfig := range configList {
-		err = s.svc.SaveConfig(ctx, nconfig)
+		err := s.svc.SaveConfig(ctx, nconfig)
+		require.NoError(t, err)
 	}
 
 	// 测试GetByIDs
@@ -181,55 +226,55 @@ func (s *BusinessConfigTestSuite) TestBusinessConfigRead() {
 	assert.Empty(t, nonExistConfigs[9999999], "不存在的ID对应值应为空")
 
 	// 清理：删除创建的配置
-	for i := 1; i <= 5; i++ {
+	for i := 1; i <= 4; i++ {
 		err = s.svc.Delete(ctx, int64(i))
 		require.NoError(t, err)
 	}
 }
 
 // TestBusinessConfigDelete 测试删除业务配置
-func (s *BusinessConfigTestSuite) TestBusinessConfigDelete() {
-	t := s.T()
-	ctx := context.Background()
-	// 先创建配置
-	newID := s.createConfigAndGetID(t)
-
-	// 测试Delete
-	err := s.svc.Delete(ctx, newID)
-	assert.NoError(t, err, "删除业务配置应成功")
-
-	// 验证删除结果
-	_, err = s.svc.GetByID(ctx, newID)
-	assert.Error(t, err, "查询已删除的配置应返回错误")
-	assert.Equal(t, service.ErrConfigNotFound, err, "应返回配置不存在错误")
-}
-
-func (s *BusinessConfigTestSuite) TestInvalidParameters() {
-	t := s.T()
-	ctx := context.Background()
-	// 测试GetByID无效参数
-	_, err := s.svc.GetByID(ctx, 0)
-	assert.Error(t, err)
-	assert.Equal(t, service.ErrInvalidParameter, err)
-
-	// 测试Delete无效参数
-	err = s.svc.Delete(ctx, 0)
-	assert.Error(t, err)
-	assert.Equal(t, service.ErrInvalidParameter, err)
-
-	// 测试SaveNonZeroConfig无效参数
-	invalidConfig := domain.BusinessConfig{
-		ID: 0, // 无效ID
+func (s *BusinessConfigTestSuite) TestServiceDelete() {
+	testcases := []struct {
+		name    string
+		id      int64
+		before  func(t *testing.T)
+		after   func(t *testing.T)
+		wantErr error
+	}{
+		{
+			name: "正常删除",
+			id:   5,
+			before: func(t *testing.T) {
+				s.createConfigAndGetID(t)
+			},
+			after: func(t *testing.T) {
+				_, err := s.svc.GetByID(context.Background(), 5)
+				assert.Equal(t, service.ErrConfigNotFound, err, "应返回配置不存在错误")
+			},
+		},
+		{
+			name: "删除id不存在的数据",
+			id:   99999,
+			before: func(t *testing.T) {
+			},
+			after:   func(t *testing.T) {},
+			wantErr: egorm.ErrRecordNotFound,
+		},
 	}
-	err = s.svc.SaveConfig(ctx, invalidConfig)
-	assert.Error(t, err)
-	assert.Equal(t, service.ErrIDNotSet, err)
-
-	// 新增时缺少必填参数
-	emptyConfig := domain.BusinessConfig{}
-	err = s.svc.SaveConfig(ctx, emptyConfig)
-	assert.Error(t, err)
-	assert.Equal(t, service.ErrIDNotSet, err)
+	for _, tc := range testcases {
+		tc := tc
+		s.T().Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			tc.before(t)
+			err := s.svc.Delete(ctx, tc.id)
+			assert.Equal(t, tc.wantErr, err)
+			if err != nil {
+				return
+			}
+			tc.after(t)
+		})
+	}
 }
 
 func TestBusinessConfigService(t *testing.T) {

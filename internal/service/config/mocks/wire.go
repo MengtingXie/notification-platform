@@ -1,12 +1,12 @@
 //go:build wireinject
 
-package startup
+package mocks
 
 import (
 	"gitee.com/flycash/notification-platform/internal/service/config"
-	"gitee.com/flycash/notification-platform/internal/service/config/repository"
-	"gitee.com/flycash/notification-platform/internal/service/config/repository/dao"
-	"gitee.com/flycash/notification-platform/internal/service/config/service"
+	"gitee.com/flycash/notification-platform/internal/service/config/internal/repository"
+	dao2 "gitee.com/flycash/notification-platform/internal/service/config/internal/repository/dao"
+	"gitee.com/flycash/notification-platform/internal/service/config/internal/service"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/ego-component/egorm"
 	"github.com/google/wire"
@@ -23,10 +23,10 @@ func InitService() *config.Module {
 	return new(config.Module)
 }
 
-func InitBusinessConfigDAO(db *egorm.Component) dao.BusinessConfigDAO {
-	err := dao.InitTables(db)
+func InitBusinessConfigDAO(db *egorm.Component) dao2.BusinessConfigDAO {
+	err := dao2.InitTables(db)
 	if err != nil {
 		panic(err)
 	}
-	return dao.NewBusinessConfigDAO(db)
+	return dao2.NewBusinessConfigDAO(db)
 }
