@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
+	domain "gitee.com/flycash/notification-platform/internal/service/notification"
 	"github.com/sony/sonyflake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/mock/gomock"
 
-	"gitee.com/flycash/notification-platform/internal/service/notification/domain"
 	notificationmocks "gitee.com/flycash/notification-platform/internal/service/notification/mocks"
 )
 
@@ -60,7 +60,7 @@ func (s *ExecutorTestSuite) TestSendNotification_Success() {
 		})
 
 	s.mockNotifSvc.EXPECT().
-		UpdateNotificationStatus(gomock.Any(), gomock.Any(), gomock.Any(), domain.StatusSucceeded).
+		UpdateNotificationStatus(gomock.Any(), gomock.Any(), domain.StatusSucceeded).
 		Return(nil)
 
 	s.mockNotifSvc.EXPECT().
@@ -161,7 +161,7 @@ func (s *ExecutorTestSuite) TestSendNotification_WithDifferentStrategies() {
 				})
 
 			s.mockNotifSvc.EXPECT().
-				UpdateNotificationStatus(gomock.Any(), gomock.Any(), gomock.Any(), domain.StatusSucceeded).
+				UpdateNotificationStatus(gomock.Any(), gomock.Any(), domain.StatusSucceeded).
 				Return(nil)
 
 			s.mockNotifSvc.EXPECT().
@@ -334,7 +334,7 @@ func (s *ExecutorTestSuite) TestBatchSendNotifications_Success() {
 		}).Times(2)
 
 	s.mockNotifSvc.EXPECT().
-		UpdateNotificationStatus(gomock.Any(), gomock.Any(), gomock.Any(), domain.StatusSucceeded).
+		UpdateNotificationStatus(gomock.Any(), gomock.Any(), domain.StatusSucceeded).
 		Return(nil).Times(2)
 
 	s.mockNotifSvc.EXPECT().

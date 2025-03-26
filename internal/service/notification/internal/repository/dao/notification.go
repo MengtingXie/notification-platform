@@ -7,11 +7,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ego-component/egorm"
 	"github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
 )
 
-var ErrNotificationDuplicate = errors.New("通知记录主键冲突")
+var (
+	ErrNotificationDuplicate = errors.New("通知记录主键冲突")
+	ErrNotificationNotFound  = errors.New("通知记录不存在")
+)
 
 const (
 	notificationStatusPending   = "PENDING"
@@ -24,7 +28,7 @@ type NotificationDAO interface {
 	Create(ctx context.Context, data Notification) error
 
 	// UpdateStatus 更新通知状态
-	UpdateStatus(ctx context.Context, id uint64, bizID int64, status string) error
+	UpdateStatus(ctx context.Context, id uint64, status string) error
 
 	// BatchCreate 批量创建通知记录
 	BatchCreate(ctx context.Context, dataList []Notification) error
@@ -39,6 +43,9 @@ type NotificationDAO interface {
 
 	// FindByBizID 根据业务ID查询通知列表
 	FindByBizID(ctx context.Context, bizID int64) ([]Notification, error)
+
+	// FindByKeys 根据业务ID和业务内唯一标识获取通知列表
+	FindByKeys(ctx context.Context, bizID int64, keys ...string) ([]Notification, error)
 
 	// ListByStatus 根据状态查询通知列表
 	ListByStatus(ctx context.Context, status string, limit int) ([]Notification, error)
@@ -56,6 +63,7 @@ type Notification struct {
 	Channel           string `gorm:"type:ENUM('SMS','EMAIL','IN_APP');NOT NULL;comment:'发送渠道'"`
 	TemplateID        int64  `gorm:"type:BIGINT;NOT NULL;comment:'模板ID'"`
 	TemplateVersionID int64  `gorm:"type:BIGINT;NOT NULL;comment:'模板版本ID'"`
+	TemplateParams    string `gorm:"NOT NULL;comment:'模版参数'"`
 	Status            string `gorm:"type:ENUM('PREPARE','CANCELED','PENDING','SUCCEEDED','FAILED');DEFAULT:'PENDING';index:idx_biz_id_status,priority:2;comment:'发送状态'"`
 	RetryCount        int8   `gorm:"type:TINYINT;DEFAULT:0;comment:'当前重试次数'"`
 	ScheduledSTime    int64  `gorm:"index:idx_scheduled,priority:1;comment:'计划发送开始时间'"`
@@ -65,21 +73,21 @@ type Notification struct {
 }
 
 type notificationDAO struct {
-	db *gorm.DB
+	db *egorm.Component
 }
 
 // NewNotificationDAO 创建通知DAO实例
-func NewNotificationDAO(db *gorm.DB) NotificationDAO {
+func NewNotificationDAO(db *egorm.Component) NotificationDAO {
 	return &notificationDAO{
 		db: db,
 	}
 }
 
 // Create 创建单条通知记录
-func (n *notificationDAO) Create(ctx context.Context, data Notification) error {
+func (d *notificationDAO) Create(ctx context.Context, data Notification) error {
 	now := time.Now().Unix()
 	data.Ctime, data.Utime = now, now
-	err := n.db.WithContext(ctx).Create(&data).Error
+	err := d.db.WithContext(ctx).Create(&data).Error
 	me := new(mysql.MySQLError)
 	if ok := errors.As(err, &me); ok {
 		const uniqueIndexErrNo uint16 = 1062
@@ -91,7 +99,7 @@ func (n *notificationDAO) Create(ctx context.Context, data Notification) error {
 }
 
 // BatchCreate 批量创建通知记录
-func (n *notificationDAO) BatchCreate(ctx context.Context, dataList []Notification) error {
+func (d *notificationDAO) BatchCreate(ctx context.Context, dataList []Notification) error {
 	if len(dataList) == 0 {
 		return nil
 	}
@@ -99,13 +107,13 @@ func (n *notificationDAO) BatchCreate(ctx context.Context, dataList []Notificati
 	for i := range dataList {
 		dataList[i].Ctime, dataList[i].Utime = now, now
 	}
-	return n.db.WithContext(ctx).CreateInBatches(dataList, len(dataList)).Error
+	return d.db.WithContext(ctx).CreateInBatches(dataList, len(dataList)).Error
 }
 
 // UpdateStatus 更新通知状态
-func (n *notificationDAO) UpdateStatus(ctx context.Context, id uint64, bizID int64, status string) error {
-	result := n.db.WithContext(ctx).Model(&Notification{}).
-		Where("id = ? AND biz_id = ?", id, bizID).
+func (d *notificationDAO) UpdateStatus(ctx context.Context, id uint64, status string) error {
+	result := d.db.WithContext(ctx).Model(&Notification{}).
+		Where("id = ?", id).
 		Updates(map[string]interface{}{
 			"status": status,
 			"utime":  time.Now().Unix(),
@@ -114,12 +122,12 @@ func (n *notificationDAO) UpdateStatus(ctx context.Context, id uint64, bizID int
 }
 
 // FindByID 根据ID查询通知
-func (n *notificationDAO) FindByID(ctx context.Context, id uint64) (Notification, error) {
+func (d *notificationDAO) FindByID(ctx context.Context, id uint64) (Notification, error) {
 	var notification Notification
-	err := n.db.WithContext(ctx).First(&notification, id).Error
+	err := d.db.WithContext(ctx).First(&notification, id).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return Notification{}, fmt.Errorf("通知记录不存在: id=%d", id)
+			return Notification{}, fmt.Errorf("%w: id=%d", ErrNotificationNotFound, id)
 		}
 		return Notification{}, err
 	}
@@ -127,19 +135,29 @@ func (n *notificationDAO) FindByID(ctx context.Context, id uint64) (Notification
 }
 
 // FindByBizID 根据业务ID查询通知列表
-func (n *notificationDAO) FindByBizID(ctx context.Context, bizID int64) ([]Notification, error) {
+func (d *notificationDAO) FindByBizID(ctx context.Context, bizID int64) ([]Notification, error) {
 	var notifications []Notification
-	err := n.db.WithContext(ctx).Where("biz_id = ?", bizID).Find(&notifications).Error
+	err := d.db.WithContext(ctx).Where("biz_id = ?", bizID).Find(&notifications).Error
 	if err != nil {
 		return nil, err
 	}
 	return notifications, nil
 }
 
-// ListByStatus 根据状态查询通知列表
-func (n *notificationDAO) ListByStatus(ctx context.Context, status string, limit int) ([]Notification, error) {
+// FindByKeys 根据业务ID和业务内唯一标识获取通知列表
+func (d *notificationDAO) FindByKeys(ctx context.Context, bizID int64, keys ...string) ([]Notification, error) {
 	var notifications []Notification
-	query := n.db.WithContext(ctx).Where("status = ?", status)
+	err := d.db.WithContext(ctx).Where("biz_id = ? AND `key` IN ?", bizID, keys).Find(&notifications).Error
+	if err != nil {
+		return nil, fmt.Errorf("查询通知列表失败: %w", err)
+	}
+	return notifications, nil
+}
+
+// ListByStatus 根据状态查询通知列表
+func (d *notificationDAO) ListByStatus(ctx context.Context, status string, limit int) ([]Notification, error) {
+	var notifications []Notification
+	query := d.db.WithContext(ctx).Where("status = ?", status)
 
 	if limit > 0 {
 		query = query.Limit(limit)
@@ -150,9 +168,9 @@ func (n *notificationDAO) ListByStatus(ctx context.Context, status string, limit
 }
 
 // ListByScheduleTime 根据计划发送时间查询通知
-func (n *notificationDAO) ListByScheduleTime(ctx context.Context, startTime, endTime int64, limit int) ([]Notification, error) {
+func (d *notificationDAO) ListByScheduleTime(ctx context.Context, startTime, endTime int64, limit int) ([]Notification, error) {
 	var notifications []Notification
-	query := n.db.WithContext(ctx).
+	query := d.db.WithContext(ctx).
 		Where("scheduled_s_time >= ? AND scheduled_s_time <= ?", startTime, endTime).
 		Order("scheduled_s_time ASC")
 
@@ -166,13 +184,13 @@ func (n *notificationDAO) ListByScheduleTime(ctx context.Context, startTime, end
 
 // BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
 // 使用多语句批处理方式: 成功的通知合并为一条语句，失败的每条单独一条语句
-func (n *notificationDAO) BatchUpdateStatusSucceededOrFailed(ctx context.Context, successIDs []uint64, failedNotifications []Notification) error {
+func (d *notificationDAO) BatchUpdateStatusSucceededOrFailed(ctx context.Context, successIDs []uint64, failedNotifications []Notification) error {
 	if len(successIDs) == 0 && len(failedNotifications) == 0 {
 		return nil
 	}
 
 	// 开启事务
-	return n.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		now := time.Now().Unix()
 
 		// 构建SQL语句

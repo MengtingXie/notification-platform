@@ -2,4 +2,4 @@ package ioc
 
 import "github.com/google/wire"
 
-var BaseSet = wire.NewSet(InitDB, InitCache, InitMQ)
+var BaseSet = wire.NewSet(InitDB, InitCache, InitMQ, InitIDGenerator)

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"gitee.com/flycash/notification-platform/internal/service/notification/domain"
+	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 )
 
 // Channel 通知渠道
@@ -33,13 +33,12 @@ const (
 type ErrorCode int
 
 const (
-	ErrorCodeUnspecified                 ErrorCode = 0 // 未指定错误码
-	ErrorCodeInvalidParameter            ErrorCode = 1 // 无效参数
-	ErrorCodeRateLimited                 ErrorCode = 2 // 频率限制
-	ErrorCodeTemplateNotFound            ErrorCode = 3 // 模板未找到
-	ErrorCodeChannelDisabled             ErrorCode = 4 // 渠道被禁用
-	ErrorCodeCreateNotificationFailed    ErrorCode = 5 // 创建通知失败
-	ErrorCodeSendSendStrategyUnspecified           = 6
+	ErrorCodeUnspecified              ErrorCode = 0 // 未指定错误码
+	ErrorCodeInvalidParameter         ErrorCode = 1 // 无效参数
+	ErrorCodeRateLimited              ErrorCode = 2 // 频率限制
+	ErrorCodeTemplateNotFound         ErrorCode = 3 // 模板未找到
+	ErrorCodeChannelDisabled          ErrorCode = 4 // 渠道被禁用
+	ErrorCodeCreateNotificationFailed ErrorCode = 5 // 创建通知失败
 )
 
 // SendStrategy 发送策略类型
@@ -86,7 +85,7 @@ type Notification struct {
 }
 
 // ToDomainNotification 转换为领域模型
-func (n Notification) ToDomainNotification(id uint64) domain.Notification {
+func (n Notification) ToDomainNotification(id uint64) notificationsvc.Notification {
 	// 处理发送策略，默认为立即发送（当前时间 + 24小时窗口）
 	now := time.Now()
 	scheduledSTime := now.Unix()
@@ -94,14 +93,14 @@ func (n Notification) ToDomainNotification(id uint64) domain.Notification {
 	scheduledETime := now.Add(d * time.Hour).Unix()
 
 	// 构建领域模型
-	return domain.Notification{
-		ID:             id,
-		BizID:          n.BizID,
-		Key:            n.Key,
-		Receiver:       n.Receiver,
-		Channel:        domain.Channel(n.Channel),
-		TemplateID:     n.TemplateID,
-		Status:         domain.StatusPending,
+	return notificationsvc.Notification{
+		ID:       id,
+		BizID:    n.BizID,
+		Key:      n.Key,
+		Receiver: n.Receiver,
+		Channel:  notificationsvc.Channel(n.Channel),
+		// TemplateID:     n.TemplateID,
+		Status:         notificationsvc.StatusPending,
 		ScheduledSTime: scheduledSTime,
 		ScheduledETime: scheduledETime,
 	}

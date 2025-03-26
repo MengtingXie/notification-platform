@@ -4,39 +4,36 @@
 //go:build !wireinject
 // +build !wireinject
 
-package ioc
+package notification
 
 import (
-	"gitee.com/flycash/notification-platform/internal/service/notification/repository"
-	"gitee.com/flycash/notification-platform/internal/service/notification/repository/dao"
-	"gitee.com/flycash/notification-platform/internal/service/notification/service"
+	"gitee.com/flycash/notification-platform/internal/service/notification/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/service/notification/internal/repository/dao"
+	"gitee.com/flycash/notification-platform/internal/service/notification/internal/service"
+	"github.com/ego-component/egorm"
 	"github.com/google/wire"
+	"github.com/sony/sonyflake"
 	"gorm.io/gorm"
 )
 
 // Injectors from wire.go:
 
-func InitService(db *gorm.DB) NotificationService {
+func InitModule(db *gorm.DB, idGenerator *sonyflake.Sonyflake) Module {
 	error2 := initTables(db)
 	notificationDAO := dao.NewNotificationDAO(db)
 	notificationRepository := repository.NewNotificationRepository(notificationDAO)
-	notificationService := service.NewNotificationService(notificationRepository)
-	iocNotificationService := NotificationService{
+	notificationService := service.NewNotificationService(notificationRepository, idGenerator)
+	module := Module{
 		ignoredInitTablesErr: error2,
 		Svc:                  notificationService,
 	}
-	return iocNotificationService
+	return module
 }
 
 // wire.go:
 
 var notificationServiceProviderSet = wire.NewSet(dao.NewNotificationDAO, repository.NewNotificationRepository, service.NewNotificationService)
 
-type NotificationService struct {
-	ignoredInitTablesErr error // 必须放在第一个
-	Svc                  service.NotificationService
-}
-
-func initTables(db *gorm.DB) error {
+func initTables(db *egorm.Component) error {
 	return dao.InitTables(db)
 }

@@ -13,8 +13,7 @@ import (
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
 	executormocks "gitee.com/flycash/notification-platform/internal/service/executor/mocks"
 	executorsvc "gitee.com/flycash/notification-platform/internal/service/executor/service"
-	notificationioc "gitee.com/flycash/notification-platform/internal/service/notification/ioc"
-	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification/service"
+	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -38,14 +37,14 @@ type ServerTestSuite struct {
 	listener   *bufconn.Listener
 
 	db              *gorm.DB
-	notificationSvc notificationsvc.NotificationService
+	notificationSvc notificationsvc.Service
 	mockExecutor    *executormocks.MockExecutorService
 	ctrl            *gomock.Controller
 }
 
 func (s *ServerTestSuite) SetupSuite() {
 	s.db = testioc.InitDB()
-	s.notificationSvc = notificationioc.InitService(s.db).Svc
+	s.notificationSvc = notificationsvc.InitModule(s.db, testioc.InitIDGenerator()).Svc
 	s.listener = bufconn.Listen(1024 * 1024)
 
 	// 创建mock控制器

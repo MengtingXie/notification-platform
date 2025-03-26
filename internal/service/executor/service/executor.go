@@ -6,19 +6,18 @@ import (
 	"fmt"
 	"time"
 
-	"gitee.com/flycash/notification-platform/internal/service/notification/domain"
-	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification/service"
+	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 	"github.com/sony/sonyflake"
 )
 
 // executor 执行器实现
 type executor struct {
-	notificationSvc notificationsvc.NotificationService
+	notificationSvc notificationsvc.Service
 	idGenerator     *sonyflake.Sonyflake
 }
 
 // NewExecutorService 创建执行器实例
-func NewExecutorService(notificationSvc notificationsvc.NotificationService, idGenerator *sonyflake.Sonyflake) ExecutorService {
+func NewExecutorService(notificationSvc notificationsvc.Service, idGenerator *sonyflake.Sonyflake) ExecutorService {
 	return &executor{
 		notificationSvc: notificationSvc,
 		idGenerator:     idGenerator,
@@ -45,7 +44,7 @@ func (e *executor) SendNotification(ctx context.Context, n Notification) (SendRe
 	domainNotification := n.ToDomainNotification(id)
 
 	// 调用服务发送通知
-	sentNotification, err := e.notificationSvc.SendNotification(ctx, domainNotification)
+	sentNotification, err := e.notificationSvc.CreateNotification(ctx, domainNotification)
 	if err != nil {
 		// 处理业务错误
 		resp.Status = SendStatusFailed
@@ -242,17 +241,17 @@ func (e *executor) BatchQueryNotifications(_ context.Context, keys ...string) ([
 }
 
 // mapDomainStatusToSendStatus 将领域状态映射到发送状态
-func mapDomainStatusToSendStatus(status domain.Status) SendStatus {
+func mapDomainStatusToSendStatus(status notificationsvc.Status) SendStatus {
 	switch status {
-	case domain.StatusPrepare:
+	case notificationsvc.StatusPrepare:
 		return SendStatusPrepare
-	case domain.StatusCanceled:
+	case notificationsvc.StatusCanceled:
 		return SendStatusCanceled
-	case domain.StatusPending:
+	case notificationsvc.StatusPending:
 		return SendStatusPending
-	case domain.StatusSucceeded:
+	case notificationsvc.StatusSucceeded:
 		return SendStatusSucceeded
-	case domain.StatusFailed:
+	case notificationsvc.StatusFailed:
 		return SendStatusFailed
 	default:
 		return SendStatusUnspecified
