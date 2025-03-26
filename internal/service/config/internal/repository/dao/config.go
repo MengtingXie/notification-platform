@@ -32,7 +32,7 @@ type BusinessConfigDAO interface {
 	GetByIDs(ctx context.Context, id []int64) (map[int64]BusinessConfig, error)
 	GetByID(ctx context.Context, id int64) (BusinessConfig, error)
 	Delete(ctx context.Context, id int64) error
-	// SaveConfig 保存非零字段
+	// SaveConfig
 	SaveConfig(ctx context.Context, config BusinessConfig) error
 }
 
