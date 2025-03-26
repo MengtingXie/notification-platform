@@ -14,18 +14,13 @@ type BusinessConfig struct {
 	ID            int64          `gorm:"primaryKey;type:BIGINT;comment:'业务标识'"`
 	OwnerID       int64          `gorm:"type:BIGINT;comment:'业务方'"`
 	OwnerType     string         `gorm:"type:ENUM('person', 'organization');comment:'业务方类型：person-个人,organization-组织'"`
-	ChannelConfig sql.NullString `gorm:"type:JSON;comment:'{\"allowed_channels\":[\"SMS\",\"EMAIL\"], \"default\":\"SMS\"}'"`
+	ChannelConfig sql.NullString `gorm:"type:JSON;"`
 	TxnConfig     sql.NullString `gorm:"type:JSON;comment:'事务配置'"`
 	RateLimit     int            `gorm:"type:INT;DEFAULT:1000;comment:'每秒最大请求数'"`
-	Quota         sql.NullString `gorm:"type:JSON;comment:'{\"monthly\":{\"SMS\":100000,\"EMAIL\":500000}}'"`
-	RetryPolicy   sql.NullString `gorm:"type:JSON;comment:'{\"max_attempts\":3, \"backoff\":\"EXPONENTIAL\"}'"`
+	Quota         sql.NullString `gorm:"type:JSON;"`
+	RetryPolicy   sql.NullString `gorm:"type:JSON;"`
 	Ctime         int64
 	Utime         int64
-}
-
-// TableName 重命名表
-func (BusinessConfig) TableName() string {
-	return "business_config"
 }
 
 type BusinessConfigDAO interface {
@@ -36,7 +31,6 @@ type BusinessConfigDAO interface {
 	SaveConfig(ctx context.Context, config BusinessConfig) error
 }
 
-// Implementation of the BusinessConfigDAO interface
 type businessConfigDAO struct {
 	db *egorm.Component
 }
@@ -64,7 +58,7 @@ func (b *businessConfigDAO) GetByID(ctx context.Context, id int64) (BusinessConf
 func (b *businessConfigDAO) GetByIDs(ctx context.Context, ids []int64) (map[int64]BusinessConfig, error) {
 	var configs []BusinessConfig
 	// 根据ID查询业务配置
-	err := b.db.WithContext(ctx).Where("id in (?)", ids).First(&configs).Error
+	err := b.db.WithContext(ctx).Where("id in (?)", ids).Find(&configs).Error
 	if err != nil {
 		return nil, err
 	}
@@ -81,27 +75,16 @@ func (b *businessConfigDAO) Delete(ctx context.Context, id int64) error {
 	result := b.db.WithContext(ctx).
 		Where("id = ?", id).
 		Delete(&BusinessConfig{})
-	if result.Error != nil {
-		return result.Error
-	}
-
-	// 检查是否有记录被删除
-	if result.RowsAffected == 0 {
-		return egorm.ErrRecordNotFound
-	}
-
-	return nil
+	return result.Error
 }
 
-// SaveConfig 保存业务配置（新增或更新非零字段）
+// SaveConfig 保存业务配置
 func (b *businessConfigDAO) SaveConfig(ctx context.Context, config BusinessConfig) error {
 	now := time.Now().UnixMilli()
 	config.Ctime = now
 	config.Utime = now
 	// 使用upsert语句，如果记录存在则更新，不存在则插入
 	db := b.db.WithContext(ctx)
-
-	// 执行upsert操作，使用OnConflict子句
 	result := db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "id"}},           // 根据ID判断冲突
 		DoUpdates: clause.AssignmentColumns(updateColumns), // 只更新指定的非空列
@@ -109,9 +92,6 @@ func (b *businessConfigDAO) SaveConfig(ctx context.Context, config BusinessConfi
 
 	if result.Error != nil {
 		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return egorm.ErrRecordNotFound
 	}
 	return nil
 }

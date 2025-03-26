@@ -11,7 +11,7 @@ import (
 	"github.com/google/wire"
 )
 
-func InitService() *Module {
+func InitModule() *Module {
 	wire.Build(
 		testioc.InitDB,
 		InitBusinessConfigDAO,

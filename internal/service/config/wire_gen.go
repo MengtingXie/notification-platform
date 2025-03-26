@@ -16,7 +16,7 @@ import (
 
 // Injectors from wire.go:
 
-func InitService() *Module {
+func InitModule() *Module {
 	v := ioc.InitDB()
 	businessConfigDAO := InitBusinessConfigDAO(v)
 	businessConfigRepository := repository.NewBusinessConfigRepository(businessConfigDAO)

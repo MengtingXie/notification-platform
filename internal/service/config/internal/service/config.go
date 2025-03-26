@@ -58,7 +58,7 @@ func (b *businessConfigService) GetByID(ctx context.Context, id int64) (domain.B
 	// 调用仓库层方法
 	config, err := b.repo.GetByID(ctx, id)
 	if err != nil {
-		if err == egorm.ErrRecordNotFound {
+		if errors.Is(err, egorm.ErrRecordNotFound) {
 			return domain.BusinessConfig{}, ErrConfigNotFound
 		}
 		return domain.BusinessConfig{}, err

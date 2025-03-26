@@ -10,8 +10,6 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/integration/startup"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/service"
-	"github.com/ego-component/egorm"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
@@ -24,7 +22,7 @@ type BusinessConfigTestSuite struct {
 }
 
 func (s *BusinessConfigTestSuite) SetupSuite() {
-	module := startup.InitService()
+	module := startup.InitModule()
 	s.svc = module.Svc
 }
 
@@ -100,66 +98,85 @@ func (s *BusinessConfigTestSuite) createConfigAndGetID(t *testing.T) int64 {
 func (s *BusinessConfigTestSuite) TestServiceSaveConfig() {
 	t := s.T()
 	ctx := context.Background()
+	testcases := []struct {
+		name    string
+		before  func(t *testing.T)
+		req     domain.BusinessConfig
+		after   func(t *testing.T)
+		wantErr error
+	}{
+		{
+			name:   "新增",
+			before: func(t *testing.T) {},
+			req:    s.createTestConfig(),
+			after: func(t *testing.T) {
+				// 验证创建结果
+				config, err := s.svc.GetByID(ctx, 5)
+				assert.NoError(t, err, "查询单个业务配置应成功")
+				assertBusinessConfig(t, s.createTestConfig(), config)
 
-	t.Run("Create", func(t *testing.T) {
-		// 创建测试数据
-		testConfig := s.createTestConfig()
-
-		// 测试SaveNonZeroConfig - 创建
-		err := s.svc.SaveConfig(ctx, testConfig)
-		assert.NoError(t, err, "创建业务配置应成功")
-		// 验证创建结果
-		config, err := s.svc.GetByID(ctx, 5)
-		assert.NoError(t, err, "查询单个业务配置应成功")
-		assert.Equal(t, testConfig.OwnerID, config.OwnerID)
-		assert.Equal(t, testConfig.OwnerType, config.OwnerType)
-		assert.Equal(t, testConfig.ChannelConfig, config.ChannelConfig)
-		assert.Equal(t, testConfig.RateLimit, config.RateLimit)
-
-		// 清理：删除创建的配置
-		err = s.svc.Delete(ctx, 5)
-		assert.NoError(t, err, "删除业务配置应成功")
-	})
-
-	t.Run("Update", func(t *testing.T) {
-		// 先创建配置
-		testConfig := s.createTestConfig()
-		err := s.svc.SaveConfig(ctx, testConfig)
-		assert.NoError(t, err, "创建业务配置应成功")
-
-		newconfig := domain.BusinessConfig{
-			ID:            5,
-			OwnerID:       1002,
-			OwnerType:     "person",
-			ChannelConfig: `{"newchannelconfig": "key"}`,
-			TxnConfig:     `{"newtxnconfig": "key"}`,
-			RateLimit:     3000,
-			Quota:         `{"newquota": "key"}`,
-			RetryPolicy:   `{"newretryconfig": "key"}`,
-		}
-
-		err = s.svc.SaveConfig(ctx, newconfig)
-		assert.NoError(t, err, "更新业务配置应成功")
-
-		// 验证更新结果
-		updatedConfig, err := s.svc.GetByID(ctx, 5)
-		require.True(t, updatedConfig.Utime > 0)
-		require.True(t, updatedConfig.Ctime > 0)
-		updatedConfig.Ctime = 0
-		updatedConfig.Utime = 0
-		assert.Equal(t, newconfig, updatedConfig)
-		// 清理：删除创建的配置
-		err = s.svc.Delete(ctx, 5)
-		assert.NoError(t, err, "删除业务配置应成功")
-	})
-
-	t.Run("id为0", func(t *testing.T) {
-		invalidConfig := domain.BusinessConfig{
-			ID: 0, // 无效ID
-		}
-		err := s.svc.SaveConfig(ctx, invalidConfig)
-		assert.Equal(t, service.ErrIDNotSet, err)
-	})
+				// 清理：删除创建的配置
+				err = s.svc.Delete(ctx, 5)
+				assert.NoError(t, err, "删除业务配置应成功")
+			},
+		},
+		{
+			name: "更新",
+			before: func(t *testing.T) {
+				testConfig := s.createTestConfig()
+				err := s.svc.SaveConfig(ctx, testConfig)
+				assert.NoError(t, err, "创建业务配置应成功")
+			},
+			req: domain.BusinessConfig{
+				ID:            5,
+				OwnerID:       1002,
+				OwnerType:     "person",
+				ChannelConfig: `{"newchannelconfig": "key"}`,
+				TxnConfig:     `{"newtxnconfig": "key"}`,
+				RateLimit:     3000,
+				Quota:         `{"newquota": "key"}`,
+				RetryPolicy:   `{"newretryconfig": "key"}`,
+			},
+			after: func(t *testing.T) {
+				config, err := s.svc.GetByID(ctx, 5)
+				assert.NoError(t, err)
+				assertBusinessConfig(t, domain.BusinessConfig{
+					ID:            5,
+					OwnerID:       1002,
+					OwnerType:     "person",
+					ChannelConfig: `{"newchannelconfig": "key"}`,
+					TxnConfig:     `{"newtxnconfig": "key"}`,
+					RateLimit:     3000,
+					Quota:         `{"newquota": "key"}`,
+					RetryPolicy:   `{"newretryconfig": "key"}`,
+				}, config)
+				// 清理：删除创建的配置
+				err = s.svc.Delete(ctx, 5)
+				assert.NoError(t, err, "删除业务配置应成功")
+			},
+		},
+		{
+			name:   "id为0",
+			before: func(t *testing.T) {},
+			req: domain.BusinessConfig{
+				ID: 0,
+			},
+			after:   func(t *testing.T) {},
+			wantErr: service.ErrIDNotSet,
+		},
+	}
+	for _, tc := range testcases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			tc.before(t)
+			err := s.svc.SaveConfig(ctx, tc.req)
+			assert.Equal(t, tc.wantErr, err)
+			if err != nil {
+				return
+			}
+			tc.after(t)
+		})
+	}
 }
 
 // TestBusinessConfigRead 测试读取业务配置
@@ -251,14 +268,6 @@ func (s *BusinessConfigTestSuite) TestServiceDelete() {
 				_, err := s.svc.GetByID(context.Background(), 5)
 				assert.Equal(t, service.ErrConfigNotFound, err, "应返回配置不存在错误")
 			},
-		},
-		{
-			name: "删除id不存在的数据",
-			id:   99999,
-			before: func(t *testing.T) {
-			},
-			after:   func(t *testing.T) {},
-			wantErr: egorm.ErrRecordNotFound,
 		},
 	}
 	for _, tc := range testcases {

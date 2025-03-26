@@ -9,7 +9,7 @@ package startup
 import (
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/repository"
-	dao2 "gitee.com/flycash/notification-platform/internal/service/config/internal/repository/dao"
+	"gitee.com/flycash/notification-platform/internal/service/config/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/service"
 	"gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/ego-component/egorm"
@@ -17,7 +17,7 @@ import (
 
 // Injectors from wire.go:
 
-func InitService() *config.Module {
+func InitModule() *config.Module {
 	v := ioc.InitDB()
 	businessConfigDAO := InitBusinessConfigDAO(v)
 	businessConfigRepository := repository.NewBusinessConfigRepository(businessConfigDAO)
@@ -30,10 +30,10 @@ func InitService() *config.Module {
 
 // wire.go:
 
-func InitBusinessConfigDAO(db *egorm.Component) dao2.BusinessConfigDAO {
-	err := dao2.InitTables(db)
+func InitBusinessConfigDAO(db *egorm.Component) dao.BusinessConfigDAO {
+	err := dao.InitTables(db)
 	if err != nil {
 		panic(err)
 	}
-	return dao2.NewBusinessConfigDAO(db)
+	return dao.NewBusinessConfigDAO(db)
 }
