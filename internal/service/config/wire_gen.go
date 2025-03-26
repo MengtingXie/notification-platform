@@ -4,10 +4,9 @@
 //go:build !wireinject
 // +build !wireinject
 
-package mocks
+package config
 
 import (
-	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/service"
@@ -17,12 +16,12 @@ import (
 
 // Injectors from wire.go:
 
-func InitService() *config.Module {
+func InitService() *Module {
 	v := ioc.InitDB()
 	businessConfigDAO := InitBusinessConfigDAO(v)
 	businessConfigRepository := repository.NewBusinessConfigRepository(businessConfigDAO)
 	businessConfigService := service.NewBusinessConfigService(businessConfigRepository)
-	module := &config.Module{
+	module := &Module{
 		Svc: businessConfigService,
 	}
 	return module

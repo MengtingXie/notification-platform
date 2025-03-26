@@ -1,9 +1,8 @@
 //go:build wireinject
 
-package mocks
+package config
 
 import (
-	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/repository"
 	dao2 "gitee.com/flycash/notification-platform/internal/service/config/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/service"
@@ -12,15 +11,15 @@ import (
 	"github.com/google/wire"
 )
 
-func InitService() *config.Module {
+func InitService() *Module {
 	wire.Build(
 		testioc.InitDB,
 		InitBusinessConfigDAO,
 		repository.NewBusinessConfigRepository,
 		service.NewBusinessConfigService,
-		wire.Struct(new(config.Module), "*"),
+		wire.Struct(new(Module), "*"),
 	)
-	return new(config.Module)
+	return new(Module)
 }
 
 func InitBusinessConfigDAO(db *egorm.Component) dao2.BusinessConfigDAO {
