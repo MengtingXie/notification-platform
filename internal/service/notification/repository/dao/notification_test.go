@@ -14,6 +14,14 @@ import (
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
 )
 
+const (
+	notificationChannelEmail = "EMAIL"
+)
+
+func TestNotificationDAOSuite(t *testing.T) {
+	suite.Run(t, new(NotificationDAOTestSuite))
+}
+
 type NotificationDAOTestSuite struct {
 	suite.Suite
 	db  *gorm.DB
@@ -38,16 +46,17 @@ func (s *NotificationDAOTestSuite) TestCreate() {
 	ctx := context.Background()
 
 	notification := Notification{
-		ID:             1,
-		BizID:          "test_biz_id_1",
-		Receiver:       "user@example.com",
-		Channel:        NotificationChannelEmail,
-		TemplateID:     101,
-		Content:        "测试内容",
-		Status:         NotificationStatusPending,
-		RetryCount:     0,
-		ScheduledSTime: time.Now().Unix(),
-		ScheduledETime: time.Now().Add(time.Hour).Unix(),
+		ID:                1,
+		BizID:             123,
+		Key:               "test_key_1",
+		Receiver:          "user@example.com",
+		Channel:           notificationChannelEmail,
+		TemplateID:        101,
+		TemplateVersionID: 1001,
+		Status:            notificationStatusPending,
+		RetryCount:        0,
+		ScheduledSTime:    time.Now().Unix(),
+		ScheduledETime:    time.Now().Add(time.Hour).Unix(),
 	}
 
 	err := s.dao.Create(ctx, notification)
@@ -58,8 +67,11 @@ func (s *NotificationDAOTestSuite) TestCreate() {
 	err = s.db.First(&result, "id = ?", notification.ID).Error
 	assert.NoError(t, err)
 	assert.Equal(t, notification.BizID, result.BizID)
+	assert.Equal(t, notification.Key, result.Key)
 	assert.Equal(t, notification.Receiver, result.Receiver)
 	assert.Equal(t, notification.Channel, result.Channel)
+	assert.Equal(t, notification.TemplateID, result.TemplateID)
+	assert.Equal(t, notification.TemplateVersionID, result.TemplateVersionID)
 	assert.Equal(t, notification.Status, result.Status)
 	assert.NotZero(t, result.Ctime)
 	assert.NotZero(t, result.Utime)
@@ -71,26 +83,28 @@ func (s *NotificationDAOTestSuite) TestBatchCreate() {
 
 	notifications := []Notification{
 		{
-			ID:             2,
-			BizID:          "test_biz_id_2",
-			Receiver:       "user1@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     102,
-			Content:        "用户1测试内容",
-			Status:         NotificationStatusPending,
-			ScheduledSTime: time.Now().Unix(),
-			ScheduledETime: time.Now().Add(time.Hour).Unix(),
+			ID:                2,
+			BizID:             234,
+			Key:               "test_key_2",
+			Receiver:          "user1@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        102,
+			TemplateVersionID: 1002,
+			Status:            notificationStatusPending,
+			ScheduledSTime:    time.Now().Unix(),
+			ScheduledETime:    time.Now().Add(time.Hour).Unix(),
 		},
 		{
-			ID:             3,
-			BizID:          "test_biz_id_3",
-			Receiver:       "user2@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     102,
-			Content:        "用户2测试内容",
-			Status:         NotificationStatusPending,
-			ScheduledSTime: time.Now().Unix(),
-			ScheduledETime: time.Now().Add(time.Hour).Unix(),
+			ID:                3,
+			BizID:             345,
+			Key:               "test_key_3",
+			Receiver:          "user2@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        102,
+			TemplateVersionID: 1002,
+			Status:            notificationStatusPending,
+			ScheduledSTime:    time.Now().Unix(),
+			ScheduledETime:    time.Now().Add(time.Hour).Unix(),
 		},
 	}
 
@@ -105,10 +119,11 @@ func (s *NotificationDAOTestSuite) TestBatchCreate() {
 
 		assert.Equal(t, expected.ID, actual.ID)
 		assert.Equal(t, expected.BizID, actual.BizID)
+		assert.Equal(t, expected.Key, actual.Key)
 		assert.Equal(t, expected.Receiver, actual.Receiver)
 		assert.Equal(t, expected.Channel, actual.Channel)
 		assert.Equal(t, expected.TemplateID, actual.TemplateID)
-		assert.Equal(t, expected.Content, actual.Content)
+		assert.Equal(t, expected.TemplateVersionID, actual.TemplateVersionID)
 		assert.Equal(t, expected.Status, actual.Status)
 		assert.Equal(t, expected.ScheduledSTime, actual.ScheduledSTime)
 		assert.Equal(t, expected.ScheduledETime, actual.ScheduledETime)
@@ -124,31 +139,32 @@ func (s *NotificationDAOTestSuite) TestUpdateStatus() {
 	// 准备测试数据
 	now := time.Now().Add(-5 * time.Second)
 	notification := Notification{
-		ID:             4,
-		BizID:          "test_biz_id_4",
-		Receiver:       "user@example.com",
-		Channel:        NotificationChannelEmail,
-		TemplateID:     104,
-		Content:        "状态更新测试",
-		Status:         NotificationStatusPending,
-		ScheduledSTime: now.Unix(),
-		ScheduledETime: now.Add(time.Hour).Unix(),
-		Ctime:          now.Unix(),
-		Utime:          now.Unix(),
+		ID:                4,
+		BizID:             456,
+		Key:               "test_key_4",
+		Receiver:          "user@example.com",
+		Channel:           notificationChannelEmail,
+		TemplateID:        104,
+		TemplateVersionID: 1004,
+		Status:            notificationStatusPending,
+		ScheduledSTime:    now.Unix(),
+		ScheduledETime:    now.Add(time.Hour).Unix(),
+		Ctime:             now.Unix(),
+		Utime:             now.Unix(),
 	}
 
 	err := s.db.Create(&notification).Error
 	assert.NoError(t, err)
 
 	// 测试更新状态
-	err = s.dao.UpdateStatus(ctx, notification.ID, notification.BizID, NotificationStatusSucceeded)
+	err = s.dao.UpdateStatus(ctx, notification.ID, notification.BizID, notificationStatusSucceeded)
 	assert.NoError(t, err)
 
 	// 验证状态已更新
 	var result Notification
 	err = s.db.First(&result, notification.ID).Error
 	assert.NoError(t, err)
-	assert.Equal(t, NotificationStatusSucceeded, result.Status)
+	assert.Equal(t, notificationStatusSucceeded, result.Status)
 	assert.Greater(t, result.Utime, notification.Utime)
 }
 
@@ -158,17 +174,18 @@ func (s *NotificationDAOTestSuite) TestFindByID() {
 
 	// 准备测试数据
 	notification := Notification{
-		ID:             5,
-		BizID:          "test_biz_id_5",
-		Receiver:       "user@example.com",
-		Channel:        NotificationChannelEmail,
-		TemplateID:     105,
-		Content:        "ID查询测试",
-		Status:         NotificationStatusPending,
-		ScheduledSTime: time.Now().Unix(),
-		ScheduledETime: time.Now().Add(time.Hour).Unix(),
-		Ctime:          time.Now().Unix(),
-		Utime:          time.Now().Unix(),
+		ID:                5,
+		BizID:             567,
+		Key:               "test_key_5",
+		Receiver:          "user@example.com",
+		Channel:           notificationChannelEmail,
+		TemplateID:        105,
+		TemplateVersionID: 1005,
+		Status:            notificationStatusPending,
+		ScheduledSTime:    time.Now().Unix(),
+		ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+		Ctime:             time.Now().Unix(),
+		Utime:             time.Now().Unix(),
 	}
 
 	err := s.db.Create(&notification).Error
@@ -180,14 +197,15 @@ func (s *NotificationDAOTestSuite) TestFindByID() {
 	assert.NotEqual(t, Notification{}, result) // 确保不是空结构体
 	assert.Equal(t, notification.ID, result.ID)
 	assert.Equal(t, notification.BizID, result.BizID)
-	assert.Equal(t, notification.Content, result.Content)
+	assert.Equal(t, notification.Key, result.Key)
 
 	assert.Equal(t, notification.ID, result.ID)
 	assert.Equal(t, notification.BizID, result.BizID)
+	assert.Equal(t, notification.Key, result.Key)
 	assert.Equal(t, notification.Receiver, result.Receiver)
 	assert.Equal(t, notification.Channel, result.Channel)
 	assert.Equal(t, notification.TemplateID, result.TemplateID)
-	assert.Equal(t, notification.Content, result.Content)
+	assert.Equal(t, notification.TemplateVersionID, result.TemplateVersionID)
 	assert.Equal(t, notification.Status, result.Status)
 	assert.Equal(t, notification.ScheduledSTime, result.ScheduledSTime)
 	assert.Equal(t, notification.ScheduledETime, result.ScheduledETime)
@@ -205,33 +223,35 @@ func (s *NotificationDAOTestSuite) TestFindByBizID() {
 	ctx := context.Background()
 
 	// 准备测试数据 - 同一个bizID的多条记录
-	bizID := "test_biz_id_6"
+	bizID := int64(678)
 	notifications := []Notification{
 		{
-			ID:             6,
-			BizID:          bizID,
-			Receiver:       "user1@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     106,
-			Content:        "BizID查询测试1",
-			Status:         NotificationStatusPending,
-			ScheduledSTime: time.Now().Unix(),
-			ScheduledETime: time.Now().Add(time.Hour).Unix(),
-			Ctime:          time.Now().Unix(),
-			Utime:          time.Now().Unix(),
+			ID:                6,
+			BizID:             bizID,
+			Key:               "test_key_6",
+			Receiver:          "user1@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        106,
+			TemplateVersionID: 1006,
+			Status:            notificationStatusPending,
+			ScheduledSTime:    time.Now().Unix(),
+			ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+			Ctime:             time.Now().Unix(),
+			Utime:             time.Now().Unix(),
 		},
 		{
-			ID:             7,
-			BizID:          bizID,
-			Receiver:       "user2@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     106,
-			Content:        "BizID查询测试2",
-			Status:         NotificationStatusPending,
-			ScheduledSTime: time.Now().Unix(),
-			ScheduledETime: time.Now().Add(time.Hour).Unix(),
-			Ctime:          time.Now().Unix(),
-			Utime:          time.Now().Unix(),
+			ID:                7,
+			BizID:             bizID,
+			Key:               "test_key_7",
+			Receiver:          "user2@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        106,
+			TemplateVersionID: 1006,
+			Status:            notificationStatusPending,
+			ScheduledSTime:    time.Now().Unix(),
+			ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+			Ctime:             time.Now().Unix(),
+			Utime:             time.Now().Unix(),
 		},
 	}
 
@@ -254,10 +274,11 @@ func (s *NotificationDAOTestSuite) TestFindByBizID() {
 		result, ok := resultMap[expected.ID]
 		assert.True(t, ok, "未找到期望的记录ID: %d", expected.ID)
 		assert.Equal(t, expected.BizID, result.BizID)
+		assert.Equal(t, expected.Key, result.Key)
 		assert.Equal(t, expected.Receiver, result.Receiver)
 		assert.Equal(t, expected.Channel, result.Channel)
 		assert.Equal(t, expected.TemplateID, result.TemplateID)
-		assert.Equal(t, expected.Content, result.Content)
+		assert.Equal(t, expected.TemplateVersionID, result.TemplateVersionID)
 		assert.Equal(t, expected.Status, result.Status)
 		assert.Equal(t, expected.ScheduledSTime, result.ScheduledSTime)
 		assert.Equal(t, expected.ScheduledETime, result.ScheduledETime)
@@ -266,7 +287,7 @@ func (s *NotificationDAOTestSuite) TestFindByBizID() {
 	}
 
 	// 测试查询不存在记录
-	results, err = s.dao.FindByBizID(ctx, "not_exist_biz_id")
+	results, err = s.dao.FindByBizID(ctx, 9999)
 	assert.NoError(t, err)
 	assert.Len(t, results, 0) // 应该返回空切片
 }
@@ -279,43 +300,46 @@ func (s *NotificationDAOTestSuite) TestListByStatus() {
 	now := time.Now().Unix()
 	notifications := []Notification{
 		{
-			ID:             9,
-			BizID:          "test_biz_id_9",
-			Receiver:       "user1@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     109,
-			Content:        "状态查询测试1",
-			Status:         NotificationStatusPending,
-			ScheduledSTime: now,
-			ScheduledETime: now + 3600,
-			Ctime:          now,
-			Utime:          now,
+			ID:                9,
+			BizID:             789,
+			Key:               "test_key_9",
+			Receiver:          "user1@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        109,
+			TemplateVersionID: 1009,
+			Status:            notificationStatusPending,
+			ScheduledSTime:    now,
+			ScheduledETime:    now + 3600,
+			Ctime:             now,
+			Utime:             now,
 		},
 		{
-			ID:             10,
-			BizID:          "test_biz_id_10",
-			Receiver:       "user2@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     110,
-			Content:        "状态查询测试2",
-			Status:         NotificationStatusSucceeded,
-			ScheduledSTime: now,
-			ScheduledETime: now + 3600,
-			Ctime:          now,
-			Utime:          now,
+			ID:                10,
+			BizID:             890,
+			Key:               "test_key_10",
+			Receiver:          "user2@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        110,
+			TemplateVersionID: 1010,
+			Status:            notificationStatusSucceeded,
+			ScheduledSTime:    now,
+			ScheduledETime:    now + 3600,
+			Ctime:             now,
+			Utime:             now,
 		},
 		{
-			ID:             11,
-			BizID:          "test_biz_id_11",
-			Receiver:       "user3@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     111,
-			Content:        "状态查询测试3",
-			Status:         NotificationStatusPending,
-			ScheduledSTime: now,
-			ScheduledETime: now + 3600,
-			Ctime:          now,
-			Utime:          now,
+			ID:                11,
+			BizID:             901,
+			Key:               "test_key_11",
+			Receiver:          "user3@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        111,
+			TemplateVersionID: 1011,
+			Status:            notificationStatusPending,
+			ScheduledSTime:    now,
+			ScheduledETime:    now + 3600,
+			Ctime:             now,
+			Utime:             now,
 		},
 	}
 
@@ -323,12 +347,12 @@ func (s *NotificationDAOTestSuite) TestListByStatus() {
 	assert.NoError(t, err)
 
 	// 测试查询 - 验证PENDING状态的记录
-	results, err := s.dao.ListByStatus(ctx, NotificationStatusPending, 10)
+	results, err := s.dao.ListByStatus(ctx, notificationStatusPending, 10)
 	assert.NoError(t, err)
 	assert.Len(t, results, 2)
 
 	// 测试查询 - 验证SUCCEEDED状态的记录
-	results, err = s.dao.ListByStatus(ctx, NotificationStatusSucceeded, 10)
+	results, err = s.dao.ListByStatus(ctx, notificationStatusSucceeded, 10)
 	assert.NoError(t, err)
 	assert.Len(t, results, 1)
 }
@@ -342,30 +366,32 @@ func (s *NotificationDAOTestSuite) TestListByScheduleTime() {
 	laterTime := now + 1800
 	notifications := []Notification{
 		{
-			ID:             12,
-			BizID:          "test_biz_id_12",
-			Receiver:       "user1@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     112,
-			Content:        "时间查询测试1",
-			Status:         NotificationStatusPending,
-			ScheduledSTime: now,
-			ScheduledETime: now + 3600,
-			Ctime:          now,
-			Utime:          now,
+			ID:                12,
+			BizID:             1012,
+			Key:               "test_key_12",
+			Receiver:          "user1@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        112,
+			TemplateVersionID: 1012,
+			Status:            notificationStatusPending,
+			ScheduledSTime:    now,
+			ScheduledETime:    now + 3600,
+			Ctime:             now,
+			Utime:             now,
 		},
 		{
-			ID:             13,
-			BizID:          "test_biz_id_13",
-			Receiver:       "user2@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     113,
-			Content:        "时间查询测试2",
-			Status:         NotificationStatusPending,
-			ScheduledSTime: laterTime,
-			ScheduledETime: laterTime + 3600,
-			Ctime:          now,
-			Utime:          now,
+			ID:                13,
+			BizID:             1013,
+			Key:               "test_key_13",
+			Receiver:          "user2@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        113,
+			TemplateVersionID: 1013,
+			Status:            notificationStatusPending,
+			ScheduledSTime:    laterTime,
+			ScheduledETime:    laterTime + 3600,
+			Ctime:             now,
+			Utime:             now,
 		},
 	}
 
@@ -380,10 +406,11 @@ func (s *NotificationDAOTestSuite) TestListByScheduleTime() {
 	// 验证结果的完整性
 	assert.Equal(t, notifications[0].ID, results[0].ID)
 	assert.Equal(t, notifications[0].BizID, results[0].BizID)
+	assert.Equal(t, notifications[0].Key, results[0].Key)
 	assert.Equal(t, notifications[0].Receiver, results[0].Receiver)
 	assert.Equal(t, notifications[0].Channel, results[0].Channel)
 	assert.Equal(t, notifications[0].TemplateID, results[0].TemplateID)
-	assert.Equal(t, notifications[0].Content, results[0].Content)
+	assert.Equal(t, notifications[0].TemplateVersionID, results[0].TemplateVersionID)
 	assert.Equal(t, notifications[0].Status, results[0].Status)
 	assert.Equal(t, notifications[0].ScheduledSTime, results[0].ScheduledSTime)
 	assert.Equal(t, notifications[0].ScheduledETime, results[0].ScheduledETime)
@@ -402,10 +429,11 @@ func (s *NotificationDAOTestSuite) TestListByScheduleTime() {
 		expected := notifications[i]
 		assert.Equal(t, expected.ID, result.ID)
 		assert.Equal(t, expected.BizID, result.BizID)
+		assert.Equal(t, expected.Key, result.Key)
 		assert.Equal(t, expected.Receiver, result.Receiver)
 		assert.Equal(t, expected.Channel, result.Channel)
 		assert.Equal(t, expected.TemplateID, result.TemplateID)
-		assert.Equal(t, expected.Content, result.Content)
+		assert.Equal(t, expected.TemplateVersionID, result.TemplateVersionID)
 		assert.Equal(t, expected.Status, result.Status)
 		assert.Equal(t, expected.ScheduledSTime, result.ScheduledSTime)
 		assert.Equal(t, expected.ScheduledETime, result.ScheduledETime)
@@ -420,130 +448,139 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	now := time.Now().Add(-30 * time.Second).Unix()
 	notifications := []Notification{
 		{
-			ID:             201,
-			BizID:          "batch_update_1",
-			Receiver:       "user1@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     201,
-			Content:        "批量更新测试1",
-			Status:         NotificationStatusPending,
-			RetryCount:     0,
-			ScheduledSTime: now,
-			ScheduledETime: now + 3600,
-			Ctime:          now,
-			Utime:          now,
+			ID:                201,
+			BizID:             1201,
+			Key:               "batch_update_key_1",
+			Receiver:          "user1@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        201,
+			TemplateVersionID: 2001,
+			Status:            notificationStatusPending,
+			RetryCount:        0,
+			ScheduledSTime:    now,
+			ScheduledETime:    now + 3600,
+			Ctime:             now,
+			Utime:             now,
 		},
 		{
-			ID:             202,
-			BizID:          "batch_update_2",
-			Receiver:       "user2@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     202,
-			Content:        "批量更新测试2",
-			Status:         NotificationStatusPending,
-			RetryCount:     0,
-			ScheduledSTime: now,
-			ScheduledETime: now + 3600,
-			Ctime:          now,
-			Utime:          now,
+			ID:                202,
+			BizID:             1202,
+			Key:               "batch_update_key_2",
+			Receiver:          "user2@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        202,
+			TemplateVersionID: 2002,
+			Status:            notificationStatusPending,
+			RetryCount:        0,
+			ScheduledSTime:    now,
+			ScheduledETime:    now + 3600,
+			Ctime:             now,
+			Utime:             now,
 		},
 		{
-			ID:             203,
-			BizID:          "batch_update_3",
-			Receiver:       "user3@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     203,
-			Content:        "批量更新测试3",
-			Status:         NotificationStatusPending,
-			RetryCount:     0,
-			ScheduledSTime: now,
-			ScheduledETime: now + 3600,
-			Ctime:          now,
-			Utime:          now,
+			ID:                203,
+			BizID:             1203,
+			Key:               "batch_update_key_3",
+			Receiver:          "user3@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        203,
+			TemplateVersionID: 2003,
+			Status:            notificationStatusPending,
+			RetryCount:        0,
+			ScheduledSTime:    now,
+			ScheduledETime:    now + 3600,
+			Ctime:             now,
+			Utime:             now,
 		},
 		{
-			ID:             204,
-			BizID:          "batch_update_4",
-			Receiver:       "user4@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     204,
-			Content:        "批量更新测试4",
-			Status:         NotificationStatusPending,
-			RetryCount:     1,
-			ScheduledSTime: now,
-			ScheduledETime: now + 3600,
-			Ctime:          now,
-			Utime:          now,
+			ID:                204,
+			BizID:             1204,
+			Key:               "batch_update_key_4",
+			Receiver:          "user4@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        204,
+			TemplateVersionID: 2004,
+			Status:            notificationStatusPending,
+			RetryCount:        1,
+			ScheduledSTime:    now,
+			ScheduledETime:    now + 3600,
+			Ctime:             now,
+			Utime:             now,
 		},
 		{
-			ID:             205,
-			BizID:          "batch_update_5",
-			Receiver:       "user5@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     205,
-			Content:        "批量更新测试5",
-			Status:         NotificationStatusPending,
-			RetryCount:     1,
-			ScheduledSTime: now,
-			ScheduledETime: now + 3600,
-			Ctime:          now,
-			Utime:          now,
+			ID:                205,
+			BizID:             1205,
+			Key:               "batch_update_key_5",
+			Receiver:          "user5@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        205,
+			TemplateVersionID: 2005,
+			Status:            notificationStatusPending,
+			RetryCount:        1,
+			ScheduledSTime:    now,
+			ScheduledETime:    now + 3600,
+			Ctime:             now,
+			Utime:             now,
 		},
 		{
-			ID:             206,
-			BizID:          "batch_update_6",
-			Receiver:       "user6@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     206,
-			Content:        "批量更新测试6",
-			Status:         NotificationStatusPending,
-			RetryCount:     1,
-			ScheduledSTime: now,
-			ScheduledETime: now + 3600,
-			Ctime:          now,
-			Utime:          now,
+			ID:                206,
+			BizID:             1206,
+			Key:               "batch_update_key_6",
+			Receiver:          "user6@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        206,
+			TemplateVersionID: 2006,
+			Status:            notificationStatusPending,
+			RetryCount:        1,
+			ScheduledSTime:    now,
+			ScheduledETime:    now + 3600,
+			Ctime:             now,
+			Utime:             now,
 		},
 		{
-			ID:             207,
-			BizID:          "batch_update_7",
-			Receiver:       "user7@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     207,
-			Content:        "批量更新测试7",
-			Status:         NotificationStatusPending,
-			RetryCount:     2,
-			ScheduledSTime: now,
-			ScheduledETime: now + 3600,
-			Ctime:          now,
-			Utime:          now,
+			ID:                207,
+			BizID:             1207,
+			Key:               "batch_update_key_7",
+			Receiver:          "user7@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        207,
+			TemplateVersionID: 2007,
+			Status:            notificationStatusPending,
+			RetryCount:        2,
+			ScheduledSTime:    now,
+			ScheduledETime:    now + 3600,
+			Ctime:             now,
+			Utime:             now,
 		},
 		{
-			ID:             208,
-			BizID:          "batch_update_8",
-			Receiver:       "user8@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     208,
-			Content:        "批量更新测试8",
-			Status:         NotificationStatusPending,
-			RetryCount:     2,
-			ScheduledSTime: now,
-			ScheduledETime: now + 3600,
-			Ctime:          now,
-			Utime:          now,
+			ID:                208,
+			BizID:             1208,
+			Key:               "batch_update_key_8",
+			Receiver:          "user8@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        208,
+			TemplateVersionID: 2008,
+			Status:            notificationStatusPending,
+			RetryCount:        2,
+			ScheduledSTime:    now,
+			ScheduledETime:    now + 3600,
+			Ctime:             now,
+			Utime:             now,
 		},
 		{
-			ID:             209,
-			BizID:          "batch_update_9",
-			Receiver:       "user9@example.com",
-			Channel:        NotificationChannelEmail,
-			TemplateID:     209,
-			Content:        "批量更新测试9",
-			Status:         NotificationStatusPending,
-			RetryCount:     3,
-			ScheduledSTime: now,
-			ScheduledETime: now + 3600,
-			Ctime:          now,
-			Utime:          now,
+			ID:                209,
+			BizID:             1209,
+			Key:               "batch_update_key_9",
+			Receiver:          "user9@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        209,
+			TemplateVersionID: 2009,
+			Status:            notificationStatusPending,
+			RetryCount:        3,
+			ScheduledSTime:    now,
+			ScheduledETime:    now + 3600,
+			Ctime:             now,
+			Utime:             now,
 		},
 	}
 
@@ -571,13 +608,12 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 		}
 
 		// 验证状态已更新，其他字段保持不变
-		assert.Equal(t, NotificationStatusSucceeded, result.Status)
+		assert.Equal(t, notificationStatusSucceeded, result.Status)
 		assert.Equal(t, original.RetryCount, result.RetryCount)
 		assert.Equal(t, original.BizID, result.BizID)
 		assert.Equal(t, original.Receiver, result.Receiver)
 		assert.Equal(t, original.Channel, result.Channel)
 		assert.Equal(t, original.TemplateID, result.TemplateID)
-		assert.Equal(t, original.Content, result.Content)
 		assert.Equal(t, original.ScheduledSTime, result.ScheduledSTime)
 		assert.Equal(t, original.ScheduledETime, result.ScheduledETime)
 		assert.Greater(t, result.Utime, original.Utime)
@@ -608,13 +644,12 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	}
 
 	// 验证状态已更新，重试次数保持不变，其他字段保持不变
-	assert.Equal(t, NotificationStatusFailed, result.Status)
+	assert.Equal(t, notificationStatusFailed, result.Status)
 	assert.Equal(t, original.RetryCount, result.RetryCount)
 	assert.Equal(t, original.BizID, result.BizID)
 	assert.Equal(t, original.Receiver, result.Receiver)
 	assert.Equal(t, original.Channel, result.Channel)
 	assert.Equal(t, original.TemplateID, result.TemplateID)
-	assert.Equal(t, original.Content, result.Content)
 	assert.Equal(t, original.ScheduledSTime, result.ScheduledSTime)
 	assert.Equal(t, original.ScheduledETime, result.ScheduledETime)
 	assert.Greater(t, result.Utime, original.Utime)
@@ -644,13 +679,12 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	}
 
 	// 验证状态和重试次数已更新，其他字段保持不变
-	assert.Equal(t, NotificationStatusFailed, result2.Status)
+	assert.Equal(t, notificationStatusFailed, result2.Status)
 	assert.Equal(t, int8(2), result2.RetryCount) // 更新为新的重试次数
 	assert.Equal(t, original.BizID, result2.BizID)
 	assert.Equal(t, original.Receiver, result2.Receiver)
 	assert.Equal(t, original.Channel, result2.Channel)
 	assert.Equal(t, original.TemplateID, result2.TemplateID)
-	assert.Equal(t, original.Content, result2.Content)
 	assert.Equal(t, original.ScheduledSTime, result2.ScheduledSTime)
 	assert.Equal(t, original.ScheduledETime, result2.ScheduledETime)
 	assert.Greater(t, result2.Utime, original.Utime)
@@ -674,7 +708,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	var result3 Notification
 	err = s.db.Session(&gorm.Session{}).Where("id = ?", 206).First(&result3).Error
 	assert.NoError(t, err)
-	assert.Equal(t, NotificationStatusSucceeded, result3.Status)
+	assert.Equal(t, notificationStatusSucceeded, result3.Status)
 
 	// 查找原始记录进行比较
 	for _, n := range notifications {
@@ -687,13 +721,12 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	assert.Equal(t, original.BizID, result3.BizID)
 	assert.Equal(t, original.Receiver, result3.Receiver)
 	assert.Equal(t, original.Channel, result3.Channel)
-	assert.Equal(t, original.Content, result3.Content)
 
 	// 验证失败状态不更新重试次数
 	var result4 Notification
 	err = s.db.Session(&gorm.Session{}).Where("id = ?", 207).First(&result4).Error
 	assert.NoError(t, err)
-	assert.Equal(t, NotificationStatusFailed, result4.Status)
+	assert.Equal(t, notificationStatusFailed, result4.Status)
 
 	// 查找原始记录进行比较
 	for _, n := range notifications {
@@ -706,13 +739,12 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	assert.Equal(t, original.BizID, result4.BizID)
 	assert.Equal(t, original.Receiver, result4.Receiver)
 	assert.Equal(t, original.Channel, result4.Channel)
-	assert.Equal(t, original.Content, result4.Content)
 
 	// 验证失败状态更新重试次数
 	var result5 Notification
 	err = s.db.Session(&gorm.Session{}).Where("id = ?", 208).First(&result5).Error
 	assert.NoError(t, err)
-	assert.Equal(t, NotificationStatusFailed, result5.Status)
+	assert.Equal(t, notificationStatusFailed, result5.Status)
 
 	// 查找原始记录进行比较
 	for _, n := range notifications {
@@ -725,13 +757,8 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	assert.Equal(t, original.BizID, result5.BizID)
 	assert.Equal(t, original.Receiver, result5.Receiver)
 	assert.Equal(t, original.Channel, result5.Channel)
-	assert.Equal(t, original.Content, result5.Content)
 
 	// 场景5: 空的参数列表
 	err = s.dao.BatchUpdateStatusSucceededOrFailed(ctx, []uint64{}, []Notification{})
 	assert.NoError(t, err)
-}
-
-func TestNotificationDAOSuite(t *testing.T) {
-	suite.Run(t, new(NotificationDAOTestSuite))
 }

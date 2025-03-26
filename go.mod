@@ -9,6 +9,7 @@ require (
 	github.com/ego-component/egorm v1.1.4
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/google/wire v0.6.0
+	github.com/gotomicro/ego v1.0.3
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/sony/sonyflake v1.2.0
 	github.com/stretchr/testify v1.10.0
@@ -16,7 +17,6 @@ require (
 	go.uber.org/mock v0.3.0
 	google.golang.org/grpc v1.71.0
 	google.golang.org/protobuf v1.36.5
-	gorm.io/driver/mysql v1.5.7
 	gorm.io/gorm v1.25.12
 )
 
@@ -37,7 +37,6 @@ require (
 	github.com/golang-sql/sqlexp v0.1.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/pprof v0.0.0-20200708004538-1a94d8640e99 // indirect
-	github.com/gotomicro/ego v1.0.3 // indirect
 	github.com/gotomicro/logrotate v0.0.0-20211108024517-45d1f9a03ff5 // indirect
 	github.com/hashicorp/go-version v1.4.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
@@ -81,6 +80,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250115164207-1a7da9e5054f // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gorm.io/driver/clickhouse v0.3.2 // indirect
+	gorm.io/driver/mysql v1.5.7 // indirect
 	gorm.io/driver/postgres v1.3.5 // indirect
 	gorm.io/driver/sqlserver v1.5.1 // indirect
 	gorm.io/hints v1.1.2 // indirect

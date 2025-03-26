@@ -20,7 +20,7 @@ type NotificationRepository interface {
 	BatchCreate(ctx context.Context, ns []domain.Notification) error
 
 	// UpdateStatus 更新通知状态
-	UpdateStatus(ctx context.Context, id uint64, bizID string, status domain.Status) error
+	UpdateStatus(ctx context.Context, id uint64, bizID int64, status domain.Status) error
 
 	// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
 	BatchUpdateStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error
@@ -29,7 +29,7 @@ type NotificationRepository interface {
 	FindByID(ctx context.Context, id uint64) (domain.Notification, error)
 
 	// FindByBizID 根据业务ID查找通知
-	FindByBizID(ctx context.Context, bizID string) ([]domain.Notification, error)
+	FindByBizID(ctx context.Context, bizID int64) ([]domain.Notification, error)
 
 	// ListByStatus 根据状态获取通知列表
 	ListByStatus(ctx context.Context, status domain.Status, limit int) ([]domain.Notification, error)
@@ -70,8 +70,8 @@ func (r *notificationRepo) BatchCreate(ctx context.Context, ns []domain.Notifica
 }
 
 // UpdateStatus 更新通知状态
-func (r *notificationRepo) UpdateStatus(ctx context.Context, id uint64, bizID string, status domain.Status) error {
-	return r.dao.UpdateStatus(ctx, id, bizID, dao.NotificationStatus(status))
+func (r *notificationRepo) UpdateStatus(ctx context.Context, id uint64, bizID int64, status domain.Status) error {
+	return r.dao.UpdateStatus(ctx, id, bizID, string(status))
 }
 
 // BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
@@ -96,11 +96,28 @@ func (r *notificationRepo) FindByID(ctx context.Context, id uint64) (domain.Noti
 	if err != nil {
 		return domain.Notification{}, err
 	}
-	return domain.FromDAONotification(n), nil
+	return r.toDomain(n), nil
+}
+
+// toDomain 从DAO模型转换为领域模型
+func (r *notificationRepo) toDomain(n dao.Notification) domain.Notification {
+	return domain.Notification{
+		ID:                n.ID,
+		BizID:             n.BizID,
+		Key:               n.Key,
+		Receiver:          n.Receiver,
+		Channel:           domain.Channel(n.Channel),
+		TemplateID:        n.TemplateID,
+		TemplateVersionID: n.TemplateVersionID,
+		Status:            domain.Status(n.Status),
+		RetryCount:        n.RetryCount,
+		ScheduledSTime:    n.ScheduledSTime,
+		ScheduledETime:    n.ScheduledETime,
+	}
 }
 
 // FindByBizID 根据业务ID查找通知
-func (r *notificationRepo) FindByBizID(ctx context.Context, bizID string) ([]domain.Notification, error) {
+func (r *notificationRepo) FindByBizID(ctx context.Context, bizID int64) ([]domain.Notification, error) {
 	ns, err := r.dao.FindByBizID(ctx, bizID)
 	if err != nil {
 		return nil, err
@@ -108,21 +125,21 @@ func (r *notificationRepo) FindByBizID(ctx context.Context, bizID string) ([]dom
 
 	result := make([]domain.Notification, len(ns))
 	for i := range ns {
-		result[i] = domain.FromDAONotification(ns[i])
+		result[i] = r.toDomain(ns[i])
 	}
 	return result, nil
 }
 
 // ListByStatus 根据状态获取通知列表
 func (r *notificationRepo) ListByStatus(ctx context.Context, status domain.Status, limit int) ([]domain.Notification, error) {
-	ns, err := r.dao.ListByStatus(ctx, dao.NotificationStatus(status), limit)
+	ns, err := r.dao.ListByStatus(ctx, string(status), limit)
 	if err != nil {
 		return nil, err
 	}
 
 	result := make([]domain.Notification, len(ns))
 	for i := range ns {
-		result[i] = domain.FromDAONotification(ns[i])
+		result[i] = r.toDomain(ns[i])
 	}
 	return result, nil
 }
@@ -136,7 +153,7 @@ func (r *notificationRepo) ListByScheduleTime(ctx context.Context, startTime, en
 
 	result := make([]domain.Notification, len(ns))
 	for i := range ns {
-		result[i] = domain.FromDAONotification(ns[i])
+		result[i] = r.toDomain(ns[i])
 	}
 	return result, nil
 }

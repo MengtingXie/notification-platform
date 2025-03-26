@@ -13,12 +13,18 @@ import (
 
 var ErrNotificationDuplicate = errors.New("通知记录主键冲突")
 
+const (
+	notificationStatusPending   = "PENDING"
+	notificationStatusSucceeded = "SUCCEEDED"
+	notificationStatusFailed    = "FAILED"
+)
+
 type NotificationDAO interface {
 	// Create 创建单条通知记录
 	Create(ctx context.Context, data Notification) error
 
 	// UpdateStatus 更新通知状态
-	UpdateStatus(ctx context.Context, id uint64, bizID string, status NotificationStatus) error
+	UpdateStatus(ctx context.Context, id uint64, bizID int64, status string) error
 
 	// BatchCreate 批量创建通知记录
 	BatchCreate(ctx context.Context, dataList []Notification) error
@@ -32,10 +38,10 @@ type NotificationDAO interface {
 	FindByID(ctx context.Context, id uint64) (Notification, error)
 
 	// FindByBizID 根据业务ID查询通知列表
-	FindByBizID(ctx context.Context, bizID string) ([]Notification, error)
+	FindByBizID(ctx context.Context, bizID int64) ([]Notification, error)
 
 	// ListByStatus 根据状态查询通知列表
-	ListByStatus(ctx context.Context, status NotificationStatus, limit int) ([]Notification, error)
+	ListByStatus(ctx context.Context, status string, limit int) ([]Notification, error)
 
 	// ListByScheduleTime 根据计划发送时间查询通知
 	ListByScheduleTime(ctx context.Context, startTime, endTime int64, limit int) ([]Notification, error)
@@ -43,20 +49,19 @@ type NotificationDAO interface {
 
 // Notification 通知记录表
 type Notification struct {
-	// Key   string `gorm:"primary_key;comment:'业务方内唯一'"`
-	ID    uint64 `gorm:"primaryKey;comment:'雪花算法ID'"`
-	BizID string `gorm:"type:VARCHAR(64);NOT NULL;index:idx_biz_status,priority:1;comment:'业务方唯一标识'"`
-	// TaskID         string              `gorm:"type:VARCHAR(64);index:idx_task_id;comment:'批量任务ID'"`
-	Receiver       string              `gorm:"type:VARCHAR(256);NOT NULL;comment:'接收者(手机/邮箱/用户ID)'"`
-	Channel        NotificationChannel `gorm:"type:ENUM('SMS','EMAIL','IN_APP');NOT NULL;comment:'发送渠道'"`
-	TemplateID     int64               `gorm:"type:BIGINT;NOT NULL;comment:'关联模板ID'"`
-	Content        string              `gorm:"type:TEXT;NOT NULL;comment:'渲染后的内容(加密存储)'"`
-	Status         NotificationStatus  `gorm:"type:ENUM('PREPARE','CANCELED','PENDING','SUCCEEDED','FAILED');DEFAULT:'PENDING';index:idx_biz_status,priority:2;comment:'发送状态'"`
-	RetryCount     int8                `gorm:"type:TINYINT;DEFAULT:0;comment:'当前重试次数'"`
-	ScheduledSTime int64               `gorm:"index:idx_scheduled;comment:'计划发送开始时间'"`
-	ScheduledETime int64               `gorm:"comment:'计划发送结束时间'"`
-	Ctime          int64
-	Utime          int64
+	ID                uint64 `gorm:"primaryKey;comment:'雪花算法ID'"`
+	BizID             int64  `gorm:"type:BIGINT;NOT NULL;index:idx_biz_id_status,priority:1;uniqueIndex:idx_biz_id_key,priority:1;comment:'业务配表ID，业务方可能有多个业务每个业务配置不同'"`
+	Key               string `gorm:"type:VARCHAR(256);NOT NULL;uniqueIndex:idx_biz_id_key,priority:2;comment:'业务内唯一标识，区分同一个业务内的不同通知'"`
+	Receiver          string `gorm:"type:VARCHAR(256);NOT NULL;comment:'接收者(手机/邮箱/用户ID)'"`
+	Channel           string `gorm:"type:ENUM('SMS','EMAIL','IN_APP');NOT NULL;comment:'发送渠道'"`
+	TemplateID        int64  `gorm:"type:BIGINT;NOT NULL;comment:'模板ID'"`
+	TemplateVersionID int64  `gorm:"type:BIGINT;NOT NULL;comment:'模板版本ID'"`
+	Status            string `gorm:"type:ENUM('PREPARE','CANCELED','PENDING','SUCCEEDED','FAILED');DEFAULT:'PENDING';index:idx_biz_id_status,priority:2;comment:'发送状态'"`
+	RetryCount        int8   `gorm:"type:TINYINT;DEFAULT:0;comment:'当前重试次数'"`
+	ScheduledSTime    int64  `gorm:"index:idx_scheduled,priority:1;comment:'计划发送开始时间'"`
+	ScheduledETime    int64  `gorm:"index:idx_scheduled,priority:2;comment:'计划发送结束时间'"`
+	Ctime             int64
+	Utime             int64
 }
 
 type notificationDAO struct {
@@ -98,7 +103,7 @@ func (n *notificationDAO) BatchCreate(ctx context.Context, dataList []Notificati
 }
 
 // UpdateStatus 更新通知状态
-func (n *notificationDAO) UpdateStatus(ctx context.Context, id uint64, bizID string, status NotificationStatus) error {
+func (n *notificationDAO) UpdateStatus(ctx context.Context, id uint64, bizID int64, status string) error {
 	result := n.db.WithContext(ctx).Model(&Notification{}).
 		Where("id = ? AND biz_id = ?", id, bizID).
 		Updates(map[string]interface{}{
@@ -122,7 +127,7 @@ func (n *notificationDAO) FindByID(ctx context.Context, id uint64) (Notification
 }
 
 // FindByBizID 根据业务ID查询通知列表
-func (n *notificationDAO) FindByBizID(ctx context.Context, bizID string) ([]Notification, error) {
+func (n *notificationDAO) FindByBizID(ctx context.Context, bizID int64) ([]Notification, error) {
 	var notifications []Notification
 	err := n.db.WithContext(ctx).Where("biz_id = ?", bizID).Find(&notifications).Error
 	if err != nil {
@@ -132,7 +137,7 @@ func (n *notificationDAO) FindByBizID(ctx context.Context, bizID string) ([]Noti
 }
 
 // ListByStatus 根据状态查询通知列表
-func (n *notificationDAO) ListByStatus(ctx context.Context, status NotificationStatus, limit int) ([]Notification, error) {
+func (n *notificationDAO) ListByStatus(ctx context.Context, status string, limit int) ([]Notification, error) {
 	var notifications []Notification
 	query := n.db.WithContext(ctx).Where("status = ?", status)
 
@@ -183,7 +188,7 @@ func (n *notificationDAO) BatchUpdateStatusSucceededOrFailed(ctx context.Context
 			// 直接构建完整SQL，不使用参数绑定
 			successSQL := fmt.Sprintf(
 				"UPDATE `notifications` SET `status` = '%s', `utime` = %d WHERE `id` IN (%s)",
-				NotificationStatusSucceeded,
+				notificationStatusSucceeded,
 				now,
 				strings.Join(idStrs, ", "),
 			)
@@ -198,7 +203,7 @@ func (n *notificationDAO) BatchUpdateStatusSucceededOrFailed(ctx context.Context
 				// 更新状态和重试次数
 				failedSQL = fmt.Sprintf(
 					"UPDATE `notifications` SET `status` = '%s', `retry_count` = %d, `utime` = %d WHERE `id` = %d",
-					NotificationStatusFailed,
+					"FAILED",
 					n.RetryCount,
 					now,
 					n.ID,
@@ -207,7 +212,7 @@ func (n *notificationDAO) BatchUpdateStatusSucceededOrFailed(ctx context.Context
 				// 只更新状态
 				failedSQL = fmt.Sprintf(
 					"UPDATE `notifications` SET `status` = '%s', `utime` = %d WHERE `id` = %d",
-					NotificationStatusFailed,
+					notificationStatusFailed,
 					now,
 					n.ID,
 				)

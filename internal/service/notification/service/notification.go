@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"gitee.com/flycash/notification-platform/internal/service/notification/domain"
 	"gitee.com/flycash/notification-platform/internal/service/notification/repository"
@@ -33,10 +32,10 @@ type NotificationService interface {
 	GetNotificationByID(ctx context.Context, id uint64) (domain.Notification, error)
 
 	// GetNotificationsByBizID 根据业务ID获取通知记录列表
-	GetNotificationsByBizID(ctx context.Context, bizID string) ([]domain.Notification, error)
+	GetNotificationsByBizID(ctx context.Context, bizID int64) ([]domain.Notification, error)
 
 	// UpdateNotificationStatus 更新通知状态
-	UpdateNotificationStatus(ctx context.Context, id uint64, bizID string, status domain.Status) error
+	UpdateNotificationStatus(ctx context.Context, id uint64, bizID int64, status domain.Status) error
 
 	// BatchUpdateNotificationStatusSucceededOrFailed 批量更新通知状态为成功或失败
 	BatchUpdateNotificationStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error
@@ -61,14 +60,6 @@ func (s *notificationService) CreateNotification(ctx context.Context, notificati
 		return domain.Notification{}, err
 	}
 
-	// 设置初始状态和创建/更新时间
-	if notification.Status == "" {
-		notification.Status = domain.StatusPending
-	}
-	now := time.Now()
-	notification.Ctime = now.Unix()
-	notification.Utime = now.Unix()
-
 	err := s.repo.Create(ctx, notification)
 	if err != nil {
 		return domain.Notification{}, fmt.Errorf("创建通知记录失败: %w", err)
@@ -79,8 +70,11 @@ func (s *notificationService) CreateNotification(ctx context.Context, notificati
 
 // validateNotification 验证通知参数
 func (s *notificationService) validateNotification(n domain.Notification) error {
-	if n.BizID == "" {
-		return fmt.Errorf("%w: BizID = %q", ErrInvalidParameter, n.BizID)
+	if n.BizID <= 0 {
+		return fmt.Errorf("%w: BizID = %d", ErrInvalidParameter, n.BizID)
+	}
+	if n.Key == "" {
+		return fmt.Errorf("%w: Key = %q", ErrInvalidParameter, n.Key)
 	}
 	if n.Receiver == "" {
 		return fmt.Errorf("%w: Receiver = %q", ErrInvalidParameter, n.Receiver)
@@ -91,8 +85,8 @@ func (s *notificationService) validateNotification(n domain.Notification) error 
 	if n.TemplateID <= 0 {
 		return fmt.Errorf("%w: TemplateID = %d", ErrInvalidParameter, n.TemplateID)
 	}
-	if n.Content == "" {
-		return fmt.Errorf("%w: Content = %q", ErrInvalidParameter, n.Content)
+	if n.TemplateVersionID <= 0 {
+		return fmt.Errorf("%w: TemplateVersionID = %d", ErrInvalidParameter, n.TemplateVersionID)
 	}
 	if n.ScheduledSTime == 0 {
 		return fmt.Errorf("%w: ScheduledSTime = %d", ErrInvalidParameter, n.ScheduledSTime)
@@ -134,10 +128,6 @@ func (s *notificationService) BatchSendNotifications(ctx context.Context, notifi
 		if err := s.validateNotification(notifications[i]); err != nil {
 			return []domain.Notification{}, err
 		}
-		// 设置初始状态和时间
-		now := time.Now()
-		notifications[i].Ctime = now.Unix()
-		notifications[i].Utime = now.Unix()
 	}
 
 	// 批量保存到仓储
@@ -184,7 +174,7 @@ func (s *notificationService) GetNotificationByID(ctx context.Context, id uint64
 }
 
 // GetNotificationsByBizID 根据业务ID获取通知列表
-func (s *notificationService) GetNotificationsByBizID(ctx context.Context, bizID string) ([]domain.Notification, error) {
+func (s *notificationService) GetNotificationsByBizID(ctx context.Context, bizID int64) ([]domain.Notification, error) {
 	ns, err := s.repo.FindByBizID(ctx, bizID)
 	if err != nil {
 		return nil, fmt.Errorf("查询通知列表失败: %w", err)
@@ -193,7 +183,7 @@ func (s *notificationService) GetNotificationsByBizID(ctx context.Context, bizID
 }
 
 // UpdateNotificationStatus 更新通知状态
-func (s *notificationService) UpdateNotificationStatus(ctx context.Context, id uint64, bizID string, status domain.Status) error {
+func (s *notificationService) UpdateNotificationStatus(ctx context.Context, id uint64, bizID int64, status domain.Status) error {
 	err := s.repo.UpdateStatus(ctx, id, bizID, status)
 	if err != nil {
 		return fmt.Errorf("更新通知状态失败: %w, id = %v, bizID = %v, status = %v", err, id, bizID, status)

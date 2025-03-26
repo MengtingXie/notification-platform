@@ -158,7 +158,7 @@ func (c *MockNotificationServiceCreateNotificationCall) DoAndReturn(f func(conte
 }
 
 // GetNotificationByID mocks base method.
-func (m *MockNotificationService) GetNotificationByID(ctx context.Context, id int64) (domain.Notification, error) {
+func (m *MockNotificationService) GetNotificationByID(ctx context.Context, id uint64) (domain.Notification, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNotificationByID", ctx, id)
 	ret0, _ := ret[0].(domain.Notification)
@@ -185,19 +185,19 @@ func (c *MockNotificationServiceGetNotificationByIDCall) Return(arg0 domain.Noti
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockNotificationServiceGetNotificationByIDCall) Do(f func(context.Context, int64) (domain.Notification, error)) *MockNotificationServiceGetNotificationByIDCall {
+func (c *MockNotificationServiceGetNotificationByIDCall) Do(f func(context.Context, uint64) (domain.Notification, error)) *MockNotificationServiceGetNotificationByIDCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockNotificationServiceGetNotificationByIDCall) DoAndReturn(f func(context.Context, int64) (domain.Notification, error)) *MockNotificationServiceGetNotificationByIDCall {
+func (c *MockNotificationServiceGetNotificationByIDCall) DoAndReturn(f func(context.Context, uint64) (domain.Notification, error)) *MockNotificationServiceGetNotificationByIDCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // GetNotificationsByBizID mocks base method.
-func (m *MockNotificationService) GetNotificationsByBizID(ctx context.Context, bizID string) ([]domain.Notification, error) {
+func (m *MockNotificationService) GetNotificationsByBizID(ctx context.Context, bizID int64) ([]domain.Notification, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNotificationsByBizID", ctx, bizID)
 	ret0, _ := ret[0].([]domain.Notification)
@@ -224,13 +224,13 @@ func (c *MockNotificationServiceGetNotificationsByBizIDCall) Return(arg0 []domai
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockNotificationServiceGetNotificationsByBizIDCall) Do(f func(context.Context, string) ([]domain.Notification, error)) *MockNotificationServiceGetNotificationsByBizIDCall {
+func (c *MockNotificationServiceGetNotificationsByBizIDCall) Do(f func(context.Context, int64) ([]domain.Notification, error)) *MockNotificationServiceGetNotificationsByBizIDCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockNotificationServiceGetNotificationsByBizIDCall) DoAndReturn(f func(context.Context, string) ([]domain.Notification, error)) *MockNotificationServiceGetNotificationsByBizIDCall {
+func (c *MockNotificationServiceGetNotificationsByBizIDCall) DoAndReturn(f func(context.Context, int64) ([]domain.Notification, error)) *MockNotificationServiceGetNotificationsByBizIDCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -275,7 +275,7 @@ func (c *MockNotificationServiceSendNotificationCall) DoAndReturn(f func(context
 }
 
 // UpdateNotificationStatus mocks base method.
-func (m *MockNotificationService) UpdateNotificationStatus(ctx context.Context, id int64, bizID string, status domain.Status) error {
+func (m *MockNotificationService) UpdateNotificationStatus(ctx context.Context, id uint64, bizID int64, status domain.Status) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateNotificationStatus", ctx, id, bizID, status)
 	ret0, _ := ret[0].(error)
@@ -301,13 +301,13 @@ func (c *MockNotificationServiceUpdateNotificationStatusCall) Return(arg0 error)
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockNotificationServiceUpdateNotificationStatusCall) Do(f func(context.Context, int64, string, domain.Status) error) *MockNotificationServiceUpdateNotificationStatusCall {
+func (c *MockNotificationServiceUpdateNotificationStatusCall) Do(f func(context.Context, uint64, int64, domain.Status) error) *MockNotificationServiceUpdateNotificationStatusCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockNotificationServiceUpdateNotificationStatusCall) DoAndReturn(f func(context.Context, int64, string, domain.Status) error) *MockNotificationServiceUpdateNotificationStatusCall {
+func (c *MockNotificationServiceUpdateNotificationStatusCall) DoAndReturn(f func(context.Context, uint64, int64, domain.Status) error) *MockNotificationServiceUpdateNotificationStatusCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

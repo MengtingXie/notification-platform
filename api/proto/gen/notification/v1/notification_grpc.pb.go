@@ -126,7 +126,7 @@ const (
 	NotificationService_SendNotificationAsync_FullMethodName       = "/notification.v1.NotificationService/SendNotificationAsync"
 	NotificationService_BatchSendNotifications_FullMethodName      = "/notification.v1.NotificationService/BatchSendNotifications"
 	NotificationService_BatchSendNotificationsAsync_FullMethodName = "/notification.v1.NotificationService/BatchSendNotificationsAsync"
-	NotificationService_QueryNotification_FullMethodName           = "/notification.v1.NotificationService/QueryNotification"
+	NotificationService_BatchQueryNotifications_FullMethodName     = "/notification.v1.NotificationService/BatchQueryNotifications"
 )
 
 // NotificationServiceClient is the client API for NotificationService service.
@@ -141,8 +141,8 @@ type NotificationServiceClient interface {
 	BatchSendNotifications(ctx context.Context, in *BatchSendNotificationsRequest, opts ...grpc.CallOption) (*BatchSendNotificationsResponse, error)
 	// 异步批量发送
 	BatchSendNotificationsAsync(ctx context.Context, in *BatchSendNotificationsAsyncRequest, opts ...grpc.CallOption) (*BatchSendNotificationsAsyncResponse, error)
-	// 同步查询通知
-	QueryNotification(ctx context.Context, in *QueryNotificationRequest, opts ...grpc.CallOption) (*QueryNotificationResponse, error)
+	// 同步批量查询
+	BatchQueryNotifications(ctx context.Context, in *BatchQueryNotificationsRequest, opts ...grpc.CallOption) (*BatchQueryNotificationsResponse, error)
 }
 
 type notificationServiceClient struct {
@@ -193,10 +193,10 @@ func (c *notificationServiceClient) BatchSendNotificationsAsync(ctx context.Cont
 	return out, nil
 }
 
-func (c *notificationServiceClient) QueryNotification(ctx context.Context, in *QueryNotificationRequest, opts ...grpc.CallOption) (*QueryNotificationResponse, error) {
+func (c *notificationServiceClient) BatchQueryNotifications(ctx context.Context, in *BatchQueryNotificationsRequest, opts ...grpc.CallOption) (*BatchQueryNotificationsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(QueryNotificationResponse)
-	err := c.cc.Invoke(ctx, NotificationService_QueryNotification_FullMethodName, in, out, cOpts...)
+	out := new(BatchQueryNotificationsResponse)
+	err := c.cc.Invoke(ctx, NotificationService_BatchQueryNotifications_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -215,8 +215,8 @@ type NotificationServiceServer interface {
 	BatchSendNotifications(context.Context, *BatchSendNotificationsRequest) (*BatchSendNotificationsResponse, error)
 	// 异步批量发送
 	BatchSendNotificationsAsync(context.Context, *BatchSendNotificationsAsyncRequest) (*BatchSendNotificationsAsyncResponse, error)
-	// 同步查询通知
-	QueryNotification(context.Context, *QueryNotificationRequest) (*QueryNotificationResponse, error)
+	// 同步批量查询
+	BatchQueryNotifications(context.Context, *BatchQueryNotificationsRequest) (*BatchQueryNotificationsResponse, error)
 }
 
 // UnimplementedNotificationServiceServer should be embedded to have
@@ -242,8 +242,8 @@ func (UnimplementedNotificationServiceServer) BatchSendNotificationsAsync(contex
 	return nil, status.Errorf(codes.Unimplemented, "method BatchSendNotificationsAsync not implemented")
 }
 
-func (UnimplementedNotificationServiceServer) QueryNotification(context.Context, *QueryNotificationRequest) (*QueryNotificationResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method QueryNotification not implemented")
+func (UnimplementedNotificationServiceServer) BatchQueryNotifications(context.Context, *BatchQueryNotificationsRequest) (*BatchQueryNotificationsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BatchQueryNotifications not implemented")
 }
 func (UnimplementedNotificationServiceServer) testEmbeddedByValue() {}
 
@@ -337,20 +337,20 @@ func _NotificationService_BatchSendNotificationsAsync_Handler(srv interface{}, c
 	return interceptor(ctx, in, info, handler)
 }
 
-func _NotificationService_QueryNotification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryNotificationRequest)
+func _NotificationService_BatchQueryNotifications_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BatchQueryNotificationsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(NotificationServiceServer).QueryNotification(ctx, in)
+		return srv.(NotificationServiceServer).BatchQueryNotifications(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: NotificationService_QueryNotification_FullMethodName,
+		FullMethod: NotificationService_BatchQueryNotifications_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NotificationServiceServer).QueryNotification(ctx, req.(*QueryNotificationRequest))
+		return srv.(NotificationServiceServer).BatchQueryNotifications(ctx, req.(*BatchQueryNotificationsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -379,8 +379,8 @@ var NotificationService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NotificationService_BatchSendNotificationsAsync_Handler,
 		},
 		{
-			MethodName: "QueryNotification",
-			Handler:    _NotificationService_QueryNotification_Handler,
+			MethodName: "BatchQueryNotifications",
+			Handler:    _NotificationService_BatchQueryNotifications_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
