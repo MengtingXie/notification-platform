@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ego-component/egorm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"gorm.io/gorm"
@@ -24,7 +25,7 @@ func TestNotificationDAOSuite(t *testing.T) {
 
 type NotificationDAOTestSuite struct {
 	suite.Suite
-	db  *gorm.DB
+	db  *egorm.Component
 	dao NotificationDAO
 }
 
@@ -157,7 +158,7 @@ func (s *NotificationDAOTestSuite) TestUpdateStatus() {
 	assert.NoError(t, err)
 
 	// 测试更新状态
-	err = s.dao.UpdateStatus(ctx, notification.ID, notification.BizID, notificationStatusSucceeded)
+	err = s.dao.UpdateStatus(ctx, notification.ID, notificationStatusSucceeded)
 	assert.NoError(t, err)
 
 	// 验证状态已更新
