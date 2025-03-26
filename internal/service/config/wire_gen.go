@@ -10,29 +10,26 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/service"
-	"gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/ego-component/egorm"
+	"gorm.io/gorm"
 )
 
 // Injectors from wire.go:
 
-func InitService() *Module {
-	v := ioc.InitDB()
-	businessConfigDAO := InitBusinessConfigDAO(v)
+func InitService(db *gorm.DB) *Module {
+	error2 := initTables(db)
+	businessConfigDAO := dao.NewBusinessConfigDAO(db)
 	businessConfigRepository := repository.NewBusinessConfigRepository(businessConfigDAO)
 	businessConfigService := service.NewBusinessConfigService(businessConfigRepository)
 	module := &Module{
-		Svc: businessConfigService,
+		ignoredInitTablesErr: error2,
+		Svc:                  businessConfigService,
 	}
 	return module
 }
 
 // wire.go:
 
-func InitBusinessConfigDAO(db *egorm.Component) dao.BusinessConfigDAO {
-	err := dao.InitTables(db)
-	if err != nil {
-		panic(err)
-	}
-	return dao.NewBusinessConfigDAO(db)
+func initTables(db *egorm.Component) error {
+	return dao.InitTables(db)
 }

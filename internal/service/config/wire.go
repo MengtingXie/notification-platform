@@ -6,15 +6,14 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/repository"
 	dao2 "gitee.com/flycash/notification-platform/internal/service/config/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/service"
-	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/ego-component/egorm"
 	"github.com/google/wire"
 )
 
-func InitService() *Module {
+func InitService(db *egorm.Component) *Module {
 	wire.Build(
-		testioc.InitDB,
-		InitBusinessConfigDAO,
+		initTables,
+		dao2.NewBusinessConfigDAO,
 		repository.NewBusinessConfigRepository,
 		service.NewBusinessConfigService,
 		wire.Struct(new(Module), "*"),
@@ -22,10 +21,6 @@ func InitService() *Module {
 	return new(Module)
 }
 
-func InitBusinessConfigDAO(db *egorm.Component) dao2.BusinessConfigDAO {
-	err := dao2.InitTables(db)
-	if err != nil {
-		panic(err)
-	}
-	return dao2.NewBusinessConfigDAO(db)
+func initTables(db *egorm.Component) error {
+	return dao2.InitTables(db)
 }

@@ -25,7 +25,7 @@ type BusinessConfig struct {
 
 // TableName 重命名表
 func (BusinessConfig) TableName() string {
-	return "business_config"
+	return "business_configs"
 }
 
 type BusinessConfigDAO interface {

@@ -5,5 +5,6 @@ import (
 )
 
 type Module struct {
-	Svc service.BusinessConfigService
+	ignoredInitTablesErr error
+	Svc                  service.BusinessConfigService
 }
