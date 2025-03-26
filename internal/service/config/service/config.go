@@ -13,14 +13,15 @@ import (
 var (
 	ErrInvalidParameter = errors.New("无效的参数")
 	ErrConfigNotFound   = errors.New("业务配置不存在")
+	ErrIDNotSet         = errors.New("业务id没有设置")
 )
 
 type BusinessConfigService interface {
 	GetByIDs(ctx context.Context, ids []int64) (map[int64]domain.BusinessConfig, error)
 	GetByID(ctx context.Context, id int64) (domain.BusinessConfig, error)
 	Delete(ctx context.Context, id int64) error
-	// SaveNonZeroConfig 保存非零字段
-	SaveNonZeroConfig(ctx context.Context, config domain.BusinessConfig) error
+	// SaveConfig 保存非零字段
+	SaveConfig(ctx context.Context, config domain.BusinessConfig) error
 }
 
 type businessConfigService struct {
@@ -76,12 +77,11 @@ func (b *businessConfigService) Delete(ctx context.Context, id int64) error {
 }
 
 // SaveNonZeroConfig 保存业务配置（仅保存非零字段）
-func (b *businessConfigService) SaveNonZeroConfig(ctx context.Context, config domain.BusinessConfig) error {
+func (b *businessConfigService) SaveConfig(ctx context.Context, config domain.BusinessConfig) error {
 	// 参数校验
-	if config.ID < 0 || (config.ID == 0 && (config.OwnerID == 0 || config.OwnerType == "")) {
-		return ErrInvalidParameter
+	if config.ID <= 0 {
+		return ErrIDNotSet
 	}
-
 	// 调用仓库层保存方法
-	return b.repo.SaveNonZeroConfig(ctx, config)
+	return b.repo.SaveConfig(ctx, config)
 }

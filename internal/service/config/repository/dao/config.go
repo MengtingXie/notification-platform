@@ -2,21 +2,23 @@ package dao
 
 import (
 	"context"
+	"database/sql"
+	"time"
 
-	"gitee.com/flycash/notification-platform/internal/pkg/dao"
 	"github.com/ego-component/egorm"
+	"gorm.io/gorm/clause"
 )
 
 // BusinessConfig 业务配置表
 type BusinessConfig struct {
-	ID            int64    `gorm:"primaryKey;type:BIGINT;comment:'业务标识'"`
-	OwnerID       int64    `gorm:"type:BIGINT;comment:'业务方'"`
-	OwnerType     string   `gorm:"type:ENUM('person', 'organization');comment:'业务方类型：person-个人,organization-组织'"`
-	ChannelConfig dao.JSON `gorm:"type:JSON;NOT NULL;comment:'{\"allowed_channels\":[\"SMS\",\"EMAIL\"], \"default\":\"SMS\"}'"`
-	TxnConfig     dao.JSON `gorm:"type:JSON;NOT NULL;default:'{}';comment:'事务配置'"`
-	RateLimit     int      `gorm:"type:INT;DEFAULT:1000;comment:'每秒最大请求数'"`
-	Quota         dao.JSON `gorm:"type:JSON;comment:'{\"monthly\":{\"SMS\":100000,\"EMAIL\":500000}}'"`
-	RetryPolicy   dao.JSON `gorm:"type:JSON;comment:'{\"max_attempts\":3, \"backoff\":\"EXPONENTIAL\"}'"`
+	ID            int64          `gorm:"primaryKey;type:BIGINT;comment:'业务标识'"`
+	OwnerID       int64          `gorm:"type:BIGINT;comment:'业务方'"`
+	OwnerType     string         `gorm:"type:ENUM('person', 'organization');comment:'业务方类型：person-个人,organization-组织'"`
+	ChannelConfig sql.NullString `gorm:"type:JSON;comment:'{\"allowed_channels\":[\"SMS\",\"EMAIL\"], \"default\":\"SMS\"}'"`
+	TxnConfig     sql.NullString `gorm:"type:JSON;comment:'事务配置'"`
+	RateLimit     int            `gorm:"type:INT;DEFAULT:1000;comment:'每秒最大请求数'"`
+	Quota         sql.NullString `gorm:"type:JSON;comment:'{\"monthly\":{\"SMS\":100000,\"EMAIL\":500000}}'"`
+	RetryPolicy   sql.NullString `gorm:"type:JSON;comment:'{\"max_attempts\":3, \"backoff\":\"EXPONENTIAL\"}'"`
 	Ctime         int64
 	Utime         int64
 }
@@ -30,8 +32,8 @@ type BusinessConfigDAO interface {
 	GetByIDs(ctx context.Context, id []int64) (map[int64]BusinessConfig, error)
 	GetByID(ctx context.Context, id int64) (BusinessConfig, error)
 	Delete(ctx context.Context, id int64) error
-	// SaveNonZeroConfig 保存非零字段
-	SaveNonZeroConfig(ctx context.Context, config BusinessConfig) error
+	// SaveConfig 保存非零字段
+	SaveConfig(ctx context.Context, config BusinessConfig) error
 }
 
 // Implementation of the BusinessConfigDAO interface
@@ -45,6 +47,7 @@ func NewBusinessConfigDAO(db *egorm.Component) BusinessConfigDAO {
 		db: db,
 	}
 }
+
 func (b *businessConfigDAO) GetByID(ctx context.Context, id int64) (BusinessConfig, error) {
 	var config BusinessConfig
 
@@ -90,22 +93,36 @@ func (b *businessConfigDAO) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-// SaveNonZeroConfig 保存业务配置（新增或更新非零字段）
-func (b *businessConfigDAO) SaveNonZeroConfig(ctx context.Context, config BusinessConfig) error {
-	// 判断是新增还是更新操作
-	if config.ID == 0 {
-		// 新增记录
-		return b.db.WithContext(ctx).Create(&config).Error
-	} else {
-		// 更新记录 - 使用Updates方法会自动过滤零值字段
-		result := b.db.WithContext(ctx).Model(&BusinessConfig{}).Where("id = ?", config.ID).Updates(config)
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected == 0 {
-			return egorm.ErrRecordNotFound
-		}
+// SaveConfig 保存业务配置（新增或更新非零字段）
+func (b *businessConfigDAO) SaveConfig(ctx context.Context, config BusinessConfig) error {
+	now := time.Now().UnixMilli()
+	config.Ctime = now
+	config.Utime = now
+	// 使用upsert语句，如果记录存在则更新，不存在则插入
+	db := b.db.WithContext(ctx)
 
-		return nil
+	// 执行upsert操作，使用OnConflict子句
+	result := db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "id"}},           // 根据ID判断冲突
+		DoUpdates: clause.AssignmentColumns(updateColumns), // 只更新指定的非空列
+	}).Create(&config)
+
+	if result.Error != nil {
+		return result.Error
 	}
+	if result.RowsAffected == 0 {
+		return egorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+var updateColumns = []string{
+	"owner_id",
+	"owner_type",
+	"channel_config",
+	"quota",
+	"txn_config",
+	"rate_limit",
+	"retry_policy",
+	"utime",
 }

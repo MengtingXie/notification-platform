@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 
 	"gitee.com/flycash/notification-platform/internal/service/config/domain"
 	daopkg "gitee.com/flycash/notification-platform/internal/service/config/repository/dao"
@@ -13,11 +15,7 @@ type BusinessConfigRepository interface {
 	GetByID(ctx context.Context, id int64) (domain.BusinessConfig, error)
 	Delete(ctx context.Context, id int64) error
 	// SaveNonZeroConfig 保存非零字段
-	SaveNonZeroConfig(ctx context.Context, config domain.BusinessConfig) error
-	// GetByOwner 根据业务方信息获取配置
-	GetByOwner(ctx context.Context, ownerID int64, ownerType string) (domain.BusinessConfig, error)
-	// List 列出业务配置
-	List(ctx context.Context, offset, limit int, filters map[string]interface{}) ([]domain.BusinessConfig, int64, error)
+	SaveConfig(ctx context.Context, config domain.BusinessConfig) error
 }
 
 type businessConfigRepository struct {
@@ -40,7 +38,7 @@ func (b *businessConfigRepository) GetByIDs(ctx context.Context, ids []int64) (m
 		config, err := b.GetByID(ctx, id)
 		if err != nil {
 			// 如果是未找到记录的错误，则跳过
-			if err == egorm.ErrRecordNotFound {
+			if errors.Is(err, egorm.ErrRecordNotFound) {
 				continue
 			}
 			return nil, err
@@ -64,11 +62,11 @@ func (b *businessConfigRepository) GetByID(ctx context.Context, id int64) (domai
 		ID:            daoConfig.ID,
 		OwnerID:       daoConfig.OwnerID,
 		OwnerType:     daoConfig.OwnerType,
-		ChannelConfig: string(daoConfig.ChannelConfig),
-		TxnConfig:     string(daoConfig.TxnConfig),
+		ChannelConfig: daoConfig.ChannelConfig.String,
+		TxnConfig:     daoConfig.TxnConfig.String,
 		RateLimit:     daoConfig.RateLimit,
-		Quota:         string(daoConfig.Quota),
-		RetryPolicy:   string(daoConfig.RetryPolicy),
+		Quota:         daoConfig.Quota.String,
+		RetryPolicy:   daoConfig.RetryPolicy.String,
 		Ctime:         daoConfig.Ctime,
 		Utime:         daoConfig.Utime,
 	}, nil
@@ -81,7 +79,7 @@ func (b *businessConfigRepository) Delete(ctx context.Context, id int64) error {
 }
 
 // SaveNonZeroConfig 保存业务配置（仅保存非零字段）
-func (b *businessConfigRepository) SaveNonZeroConfig(ctx context.Context, config domain.BusinessConfig) error {
+func (b *businessConfigRepository) SaveConfig(ctx context.Context, config domain.BusinessConfig) error {
 	// 将领域对象转换为DAO对象
 	daoConfig := daopkg.BusinessConfig{
 		ID:        config.ID,
@@ -94,57 +92,33 @@ func (b *businessConfigRepository) SaveNonZeroConfig(ctx context.Context, config
 
 	// 转换JSON字段
 	if config.ChannelConfig != "" {
-		daoConfig.ChannelConfig = []byte(config.ChannelConfig)
+		daoConfig.ChannelConfig = sql.NullString{
+			String: config.ChannelConfig,
+			Valid:  true,
+		}
 	}
 
 	if config.TxnConfig != "" {
-		daoConfig.TxnConfig = []byte(config.TxnConfig)
+		daoConfig.TxnConfig = sql.NullString{
+			String: config.TxnConfig,
+			Valid:  true,
+		}
 	}
 
 	if config.Quota != "" {
-		daoConfig.Quota = []byte(config.Quota)
+		daoConfig.Quota = sql.NullString{
+			String: config.Quota,
+			Valid:  true,
+		}
 	}
 
 	if config.RetryPolicy != "" {
-		daoConfig.RetryPolicy = []byte(config.RetryPolicy)
+		daoConfig.RetryPolicy = sql.NullString{
+			String: config.RetryPolicy,
+			Valid:  true,
+		}
 	}
 
 	// 调用DAO层保存方法
-	return b.configDao.SaveNonZeroConfig(ctx, daoConfig)
-}
-
-// GetByOwner 根据业务方信息获取配置
-func (b *businessConfigRepository) GetByOwner(ctx context.Context, ownerID int64, ownerType string) (domain.BusinessConfig, error) {
-	// 构建查询条件并查询数据
-	// 这里简化实现，实际代码可能需要通过DAO层接口实现或直接查询
-	var configs []domain.BusinessConfig
-	var total int64
-
-	// 使用List方法查询
-	configs, total, err := b.List(ctx, 0, 1, map[string]interface{}{
-		"owner_id":   ownerID,
-		"owner_type": ownerType,
-	})
-
-	if err != nil {
-		return domain.BusinessConfig{}, err
-	}
-
-	if total == 0 || len(configs) == 0 {
-		return domain.BusinessConfig{}, egorm.ErrRecordNotFound
-	}
-
-	return configs[0], nil
-}
-
-// List 列出业务配置
-func (b *businessConfigRepository) List(ctx context.Context, offset, limit int, filters map[string]interface{}) ([]domain.BusinessConfig, int64, error) {
-	// 这里是模拟实现，实际应通过DAO层接口或直接查询数据库
-	// 在此处，我们创建一个空数组和固定的总数
-	// 实际实现应该查询数据库
-
-	// 由于DAO层没有提供List方法，我们这里模拟返回空数据
-	// 实际开发中应该扩展DAO层接口并实现真正的查询
-
-	return []domain.BusinessConfig{}, 0, nil
+	return b.configDao.SaveConfig(ctx, daoConfig)
 }
