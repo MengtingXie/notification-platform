@@ -11,5 +11,5 @@ type (
 		Svc                  service.BusinessConfigService
 	}
 	BusinessConfig = domain.BusinessConfig
-	Service = service.BusinessConfigService
+	Service        = service.BusinessConfigService
 )
