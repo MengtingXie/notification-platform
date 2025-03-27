@@ -502,3 +502,43 @@ func (s *NotificationServiceTestSuite) TestBatchUpdateNotificationStatusSucceede
 		})
 	}
 }
+
+func (s *NotificationServiceTestSuite) TestBatchUpdateNotificationStatus() {
+	t := s.T()
+	ctx := t.Context()
+
+	// 准备测试数据 - 创建多条通知记录
+	notifications := []domain.Notification{
+		s.createTestNotification(1),
+		s.createTestNotification(2),
+		s.createTestNotification(3),
+	}
+
+	// 批量创建通知记录
+	createdNotifications := make([]domain.Notification, len(notifications))
+	for i, notification := range notifications {
+		created, err := s.svc.CreateNotification(ctx, notification)
+		require.NoError(t, err)
+		createdNotifications[i] = created
+	}
+
+	// 选择前两个通知进行状态更新
+	ids := []uint64{createdNotifications[0].ID, createdNotifications[1].ID}
+	newStatus := domain.StatusSucceeded
+
+	// 测试批量更新状态
+	err := s.svc.BatchUpdateNotificationStatus(ctx, ids, string(newStatus))
+	require.NoError(t, err)
+
+	// 验证已更新的通知状态
+	for _, id := range ids {
+		updated, err := s.svc.GetNotificationByID(ctx, id)
+		require.NoError(t, err)
+		assert.Equal(t, newStatus, updated.Status)
+	}
+
+	// 验证未更新的通知状态未变
+	unaffected, err := s.svc.GetNotificationByID(ctx, createdNotifications[2].ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.StatusPending, unaffected.Status)
+}

@@ -52,6 +52,9 @@ type NotificationDAO interface {
 
 	// ListByScheduleTime 根据计划发送时间查询通知
 	ListByScheduleTime(ctx context.Context, startTime, endTime int64, limit int) ([]Notification, error)
+
+	// BatchUpdateStatus
+	BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error
 }
 
 // Notification 通知记录表
@@ -247,4 +250,14 @@ func (d *notificationDAO) BatchUpdateStatusSucceededOrFailed(ctx context.Context
 
 		return nil
 	})
+}
+
+func (d *notificationDAO) BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error {
+	result := d.db.WithContext(ctx).Model(&Notification{}).
+		Where("id in ?", ids).
+		Updates(map[string]interface{}{
+			"status": status,
+			"utime":  time.Now().Unix(),
+		})
+	return result.Error
 }

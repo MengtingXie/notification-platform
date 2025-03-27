@@ -763,3 +763,81 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	err = s.dao.BatchUpdateStatusSucceededOrFailed(ctx, []uint64{}, []Notification{})
 	assert.NoError(t, err)
 }
+
+func (s *NotificationDAOTestSuite) TestBatchUpdateStatus() {
+	t := s.T()
+	ctx := context.Background()
+
+	// 准备测试数据 - 创建多条通知记录
+	notifications := []Notification{
+		{
+			ID:                10001,
+			BizID:             1001,
+			Key:               "batch_update_key_1",
+			Receiver:          "user1@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        101,
+			TemplateVersionID: 1001,
+			Status:            notificationStatusPending,
+			ScheduledSTime:    time.Now().Unix(),
+			ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+		},
+		{
+			ID:                10002,
+			BizID:             1002,
+			Key:               "batch_update_key_2",
+			Receiver:          "user2@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        102,
+			TemplateVersionID: 1002,
+			Status:            notificationStatusPending,
+			ScheduledSTime:    time.Now().Unix(),
+			ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+		},
+		{
+			ID:                10003,
+			BizID:             1003,
+			Key:               "batch_update_key_3",
+			Receiver:          "user3@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        103,
+			TemplateVersionID: 1003,
+			Status:            notificationStatusPending,
+			ScheduledSTime:    time.Now().Unix(),
+			ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+		},
+	}
+
+	// 批量创建通知记录
+	for _, notification := range notifications {
+		err := s.db.Create(&notification).Error
+		assert.NoError(t, err)
+	}
+
+	// 记录更新前的时间
+	beforeUpdateTime := time.Now().Unix()
+	time.Sleep(1 * time.Second) // 确保更新时间与创建时间有明显差异
+
+	// 选择前两个通知进行状态更新
+	ids := []uint64{10001, 10002}
+	newStatus := notificationStatusSucceeded
+
+	// 测试批量更新状态
+	err := s.dao.BatchUpdateStatus(ctx, ids, newStatus)
+	assert.NoError(t, err)
+
+	// 验证已更新的通知状态
+	for _, id := range ids {
+		var result Notification
+		err = s.db.First(&result, id).Error
+		assert.NoError(t, err)
+		assert.Equal(t, newStatus, result.Status)
+		assert.Greater(t, result.Utime, beforeUpdateTime)
+	}
+
+	// 验证未更新的通知状态未变
+	var unaffectedNotification Notification
+	err = s.db.First(&unaffectedNotification, 10003).Error
+	assert.NoError(t, err)
+	assert.Equal(t, notificationStatusPending, unaffectedNotification.Status)
+}
