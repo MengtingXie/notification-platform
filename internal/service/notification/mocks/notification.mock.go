@@ -80,6 +80,44 @@ func (c *MockNotificationServiceBatchCreateNotificationsCall) DoAndReturn(f func
 	return c
 }
 
+// BatchUpdateNotificationStatus mocks base method.
+func (m *MockNotificationService) BatchUpdateNotificationStatus(ctx context.Context, ids []uint64, status string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BatchUpdateNotificationStatus", ctx, ids, status)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BatchUpdateNotificationStatus indicates an expected call of BatchUpdateNotificationStatus.
+func (mr *MockNotificationServiceMockRecorder) BatchUpdateNotificationStatus(ctx, ids, status any) *MockNotificationServiceBatchUpdateNotificationStatusCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchUpdateNotificationStatus", reflect.TypeOf((*MockNotificationService)(nil).BatchUpdateNotificationStatus), ctx, ids, status)
+	return &MockNotificationServiceBatchUpdateNotificationStatusCall{Call: call}
+}
+
+// MockNotificationServiceBatchUpdateNotificationStatusCall wrap *gomock.Call
+type MockNotificationServiceBatchUpdateNotificationStatusCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockNotificationServiceBatchUpdateNotificationStatusCall) Return(arg0 error) *MockNotificationServiceBatchUpdateNotificationStatusCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockNotificationServiceBatchUpdateNotificationStatusCall) Do(f func(context.Context, []uint64, string) error) *MockNotificationServiceBatchUpdateNotificationStatusCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockNotificationServiceBatchUpdateNotificationStatusCall) DoAndReturn(f func(context.Context, []uint64, string) error) *MockNotificationServiceBatchUpdateNotificationStatusCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // BatchUpdateNotificationStatusSucceededOrFailed mocks base method.
 func (m *MockNotificationService) BatchUpdateNotificationStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error {
 	m.ctrl.T.Helper()
