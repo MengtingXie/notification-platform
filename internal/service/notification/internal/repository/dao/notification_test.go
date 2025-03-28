@@ -841,3 +841,60 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatus() {
 	assert.NoError(t, err)
 	assert.Equal(t, notificationStatusPending, unaffectedNotification.Status)
 }
+
+func (s *NotificationDAOTestSuite) TestBatchGetByIDs() {
+	t := s.T()
+	ctx := context.Background()
+
+	// 准备测试数据
+	notifications := []Notification{
+		{
+			ID:                301,
+			BizID:             1301,
+			Key:               "batch_get_key_1",
+			Receiver:          "user1@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        301,
+			TemplateVersionID: 3001,
+			Status:            notificationStatusPending,
+			ScheduledSTime:    time.Now().Unix(),
+			ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+		},
+		{
+			ID:                302,
+			BizID:             1302,
+			Key:               "batch_get_key_2",
+			Receiver:          "user2@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        302,
+			TemplateVersionID: 3002,
+			Status:            notificationStatusPending,
+			ScheduledSTime:    time.Now().Unix(),
+			ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+		},
+	}
+
+	err := s.db.CreateInBatches(notifications, len(notifications)).Error
+	assert.NoError(t, err)
+
+	// 测试 BatchGetByIDs 方法
+	ids := []uint64{301, 302}
+	result, err := s.dao.BatchGetByIDs(ctx, ids)
+	assert.NoError(t, err)
+	assert.Len(t, result, 2)
+
+	// 验证返回的通知记录
+	for _, expected := range notifications {
+		actual, exists := result[expected.ID]
+		assert.True(t, exists, "未找到期望的记录ID: %d", expected.ID)
+		assert.Equal(t, expected.BizID, actual.BizID)
+		assert.Equal(t, expected.Key, actual.Key)
+		assert.Equal(t, expected.Receiver, actual.Receiver)
+		assert.Equal(t, expected.Channel, actual.Channel)
+		assert.Equal(t, expected.TemplateID, actual.TemplateID)
+		assert.Equal(t, expected.TemplateVersionID, actual.TemplateVersionID)
+		assert.Equal(t, expected.Status, actual.Status)
+		assert.Equal(t, expected.ScheduledSTime, actual.ScheduledSTime)
+		assert.Equal(t, expected.ScheduledETime, actual.ScheduledETime)
+	}
+}

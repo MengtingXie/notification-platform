@@ -542,3 +542,95 @@ func (s *NotificationServiceTestSuite) TestBatchUpdateNotificationStatus() {
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusPending, unaffected.Status)
 }
+
+func (s *NotificationServiceTestSuite) TestBatchGetByIDs() {
+	t := s.T()
+	ctx := t.Context()
+
+	// 创建多条通知记录用于测试
+	notifications := []domain.Notification{
+		s.createTestNotification(100),
+		s.createTestNotification(101),
+		s.createTestNotification(102),
+	}
+
+	// 批量创建通知记录
+	createdNotifications, err := s.svc.BatchCreateNotifications(ctx, notifications)
+	require.NoError(t, err)
+	require.Len(t, createdNotifications, len(notifications))
+
+	// 提取通知ID
+	var ids []uint64
+	expectedMap := make(map[uint64]domain.Notification)
+	for _, n := range createdNotifications {
+		ids = append(ids, n.ID)
+		expectedMap[n.ID] = n
+	}
+
+	tests := []struct {
+		name       string
+		inputIDs   []uint64
+		assertFunc func(t *testing.T, result map[uint64]domain.Notification, err error)
+	}{
+		{
+			name:     "获取所有已创建的通知",
+			inputIDs: ids,
+			assertFunc: func(t *testing.T, result map[uint64]domain.Notification, err error) {
+				require.NoError(t, err)
+				require.Len(t, result, len(ids))
+
+				for id, notification := range result {
+					expected, exists := expectedMap[id]
+					assert.True(t, exists)
+					s.assertNotification(t, expected, notification)
+				}
+			},
+		},
+		{
+			name:     "只获取部分ID对应的通知",
+			inputIDs: ids[:2], // 只取前两个ID
+			assertFunc: func(t *testing.T, result map[uint64]domain.Notification, err error) {
+				require.NoError(t, err)
+				require.Len(t, result, 2)
+
+				for id, notification := range result {
+					expected, exists := expectedMap[id]
+					assert.True(t, exists)
+					s.assertNotification(t, expected, notification)
+				}
+			},
+		},
+		{
+			name:     "包含不存在的ID",
+			inputIDs: append([]uint64{}, ids[0], 999999), // 一个存在的ID和一个不存在的ID
+			assertFunc: func(t *testing.T, result map[uint64]domain.Notification, err error) {
+				require.NoError(t, err)
+				require.Len(t, result, 1) // 应该只返回1个存在的通知
+
+				// 验证返回的是正确的通知
+				notification, exists := result[ids[0]]
+				assert.True(t, exists)
+				s.assertNotification(t, expectedMap[ids[0]], notification)
+
+				// 验证不存在的ID没有返回结果
+				_, exists = result[999999]
+				assert.False(t, exists)
+			},
+		},
+		{
+			name:     "空ID列表",
+			inputIDs: []uint64{},
+			assertFunc: func(t *testing.T, result map[uint64]domain.Notification, err error) {
+				require.NoError(t, err)
+				assert.Empty(t, result)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := s.svc.BatchGetByIDs(ctx, tt.inputIDs)
+			tt.assertFunc(t, result, err)
+		})
+	}
+}

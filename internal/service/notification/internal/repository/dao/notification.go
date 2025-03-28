@@ -55,6 +55,8 @@ type NotificationDAO interface {
 
 	// BatchUpdateStatus
 	BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error
+
+	BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]Notification, error)
 }
 
 // Notification 通知记录表
@@ -84,6 +86,18 @@ func NewNotificationDAO(db *egorm.Component) NotificationDAO {
 	return &notificationDAO{
 		db: db,
 	}
+}
+
+func (d *notificationDAO) BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]Notification, error) {
+	var notifications []Notification
+	err := d.db.WithContext(ctx).
+		Where("id in (?)", ids).
+		Find(&notifications).Error
+	notificationMap := make(map[uint64]Notification, len(ids))
+	for _, notification := range notifications {
+		notificationMap[notification.ID] = notification
+	}
+	return notificationMap, err
 }
 
 // Create 创建单条通知记录
