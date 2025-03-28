@@ -94,7 +94,8 @@ func (d *notificationDAO) BatchGetByIDs(ctx context.Context, ids []uint64) (map[
 		Where("id in (?)", ids).
 		Find(&notifications).Error
 	notificationMap := make(map[uint64]Notification, len(ids))
-	for _, notification := range notifications {
+	for idx := range notifications {
+		notification := notifications[idx]
 		notificationMap[notification.ID] = notification
 	}
 	return notificationMap, err

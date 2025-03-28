@@ -64,7 +64,8 @@ func (r *notificationRepository) BatchGetByIDs(ctx context.Context, ids []uint64
 		return nil, err
 	}
 	domainNotificationMap := make(map[uint64]domain.Notification, len(notificationMap))
-	for id, notification := range notificationMap {
+	for id := range notificationMap {
+		notification := notificationMap[id]
 		domainNotificationMap[id] = r.toDomain(notification)
 	}
 	return domainNotificationMap, nil
