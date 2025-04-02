@@ -5,9 +5,9 @@ package tx_notification.v1;
 import "google/protobuf/timestamp.proto";
 
 option go_package = "gitee.com/flycash/notification-platform/api/gen/v1;tx_notification";
-service BackCheckService {
+service TransactionCheckService {
   // 通知平台调用业务方的接口
-  rpc BackCheck(BackCheckRequest) returns (BackCheckResponse) {}
+  rpc Check(BackCheckRequest) returns (BackCheckResponse) {}
 }
 
 // 回查请求（通知平台 -> 业务方）
