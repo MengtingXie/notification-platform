@@ -6,15 +6,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/integration/testgrpc"
-	"github.com/ego-component/eetcd/registry"
-	"github.com/gotomicro/ego/client/egrpc/resolver"
-	"gorm.io/gorm"
 	"log"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/integration/testgrpc"
+	"github.com/ego-component/eetcd/registry"
+	"github.com/gotomicro/ego/client/egrpc/resolver"
+	"gorm.io/gorm"
 
 	tx_notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/tx_notification/v1"
 	"gitee.com/flycash/notification-platform/internal/service/config"
@@ -704,7 +705,7 @@ func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
 	}, config.Module{
 		Svc: configSvc,
 	})
-	//time.Sleep(time.Second * 1000000)
+	// time.Sleep(time.Second * 1000000)
 
 	// 初始化注册中心
 	etcdClient := testioc.InitEtcdClient()

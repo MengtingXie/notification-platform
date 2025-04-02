@@ -9,7 +9,7 @@ package startup
 import (
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
-	"gitee.com/flycash/notification-platform/internal/service/tx_notification"
+	txnotification "gitee.com/flycash/notification-platform/internal/service/tx_notification"
 	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/service"
