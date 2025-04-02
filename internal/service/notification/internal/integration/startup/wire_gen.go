@@ -8,16 +8,15 @@ package startup
 
 import (
 	"gitee.com/flycash/notification-platform/internal/service/notification"
-	"gitee.com/flycash/notification-platform/internal/service/notification/internal/service"
 	"gitee.com/flycash/notification-platform/internal/test/ioc"
 )
 
 // Injectors from wire.go:
 
-func InitNotificationService() service.NotificationService {
-	db := ioc.InitDB()
+func InitNotificationService() notification.Service {
+	v := ioc.InitDB()
 	sonyflake := ioc.InitIDGenerator()
-	module := notification.InitModule(db, sonyflake)
-	notificationService := module.Svc
-	return notificationService
+	module := notification.InitModule(v, sonyflake)
+	v2 := module.Svc
+	return v2
 }

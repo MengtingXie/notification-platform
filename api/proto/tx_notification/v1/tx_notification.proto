@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package tx_notification.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "gitee.com/flycash/notification-platform/api/gen/v1;tx_notification";
+service BackCheckService {
+  // 通知平台调用业务方的接口
+  rpc BackCheck(BackCheckRequest) returns (BackCheckResponse) {}
+}
+
+// 回查请求（通知平台 -> 业务方）
+message BackCheckRequest {
+  string key = 1; // 唯一标识
+  google.protobuf.Timestamp timestamp = 2;
+}
+
+// 回调响应（业务方 -> 通知平台）
+message BackCheckResponse {
+  enum ResponseStatus {
+    SUCCESS = 0;
+    FAILURE = 1; // 失败
+  }
+  ResponseStatus status = 1;
+}

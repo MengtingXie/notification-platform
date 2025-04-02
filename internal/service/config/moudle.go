@@ -8,7 +8,7 @@ import (
 type (
 	Module struct {
 		ignoredInitTablesErr error
-		Svc                  service.BusinessConfigService
+		Svc                  Service
 	}
 	BusinessConfig = domain.BusinessConfig
 	Service        = service.BusinessConfigService

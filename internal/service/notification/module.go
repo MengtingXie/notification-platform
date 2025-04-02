@@ -15,6 +15,7 @@ type (
 	Service      = service.NotificationService
 	Channel      = domain.Channel
 	Status       = domain.Status
+	Template     = domain.Template
 )
 
 var (
