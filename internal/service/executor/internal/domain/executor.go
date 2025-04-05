@@ -47,7 +47,6 @@ type Notification struct {
 type SendResponse struct {
 	NotificationID uint64                  // 通知ID
 	Status         notification.SendStatus // 发送状态
-	SendTime       time.Time               // 发送时间
 	RetryCount     int8                    // 重试次数
 	ErrorCode      ErrorCode               // 错误代码
 	ErrorMessage   string                  // 错误信息

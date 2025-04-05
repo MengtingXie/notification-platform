@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"gitee.com/flycash/notification-platform/internal/service/executor/internal/domain"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
@@ -106,6 +105,5 @@ func (p *smsProvider) Send(ctx context.Context, notification notificationsvc.Not
 	return domain.SendResponse{
 		NotificationID: notification.ID,
 		Status:         notificationsvc.SendStatusSucceeded,
-		SendTime:       time.Now(),
 	}, nil
 }

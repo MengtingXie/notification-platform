@@ -26,6 +26,8 @@ type ExecutorService interface {
 	BatchSendNotificationsAsync(ctx context.Context, ns ...domain.Notification) (domain.BatchSendAsyncResponse, error)
 	// BatchQueryNotifications 同步批量查询
 	BatchQueryNotifications(ctx context.Context, keys ...string) ([]domain.SendResponse, error)
+	// QueryNotification 单条查询
+	QueryNotification(ctx context.Context, key string) (domain.SendResponse, error)
 }
 
 // executor 执行器实现
@@ -98,7 +100,6 @@ func (e *executor) SendNotification(ctx context.Context, n domain.Notification) 
 	// 如果没有获得响应，返回基本响应
 	resp.NotificationID = sentNotification.ID
 	resp.Status = sentNotification.Status
-	resp.SendTime = time.Unix(sentNotification.SendTime, 0)
 	return resp, nil
 }
 
@@ -328,4 +329,32 @@ func (e *executor) BatchQueryNotifications(_ context.Context, keys ...string) ([
 	// 将查询到的Notification转换为SendResponse
 
 	return results, nil
+}
+
+// QueryNotification 单条查询通知
+func (e *executor) QueryNotification(ctx context.Context, key string) (domain.SendResponse, error) {
+	// 如果找不到或者key为空，返回空响应
+	if key == "" {
+		return domain.SendResponse{
+			Status:       notificationsvc.SendStatusFailed,
+			ErrorCode:    domain.ErrorCodeInvalidParameter,
+			ErrorMessage: "业务唯一标识不能为空",
+		}, nil
+	}
+
+	// 复用BatchQueryNotifications实现
+	results, err := e.BatchQueryNotifications(ctx, key)
+	if err != nil {
+		return domain.SendResponse{}, err
+	}
+
+	if len(results) == 0 {
+		return domain.SendResponse{
+			Status:       notificationsvc.SendStatusFailed,
+			ErrorCode:    domain.ErrorCodeUnspecified,
+			ErrorMessage: "未找到通知",
+		}, nil
+	}
+
+	return results[0], nil
 }

@@ -117,9 +117,6 @@ service NotificationService {
 
   // 异步批量发送
   rpc BatchSendNotificationsAsync(BatchSendNotificationsAsyncRequest) returns (BatchSendNotificationsAsyncResponse);
-
-  // 同步批量查询
-  rpc BatchQueryNotifications(BatchQueryNotificationsRequest) returns (BatchQueryNotificationsResponse);
 }
 
 // 通知
@@ -149,12 +146,10 @@ message SendNotificationResponse {
   uint64 notification_id = 1;
   // 发送状态
   SendStatus status = 2;
-  // 发送时间
-  google.protobuf.Timestamp send_time = 3;
   // 失败时的错误代码
-  ErrorCode error_code = 4;
+  ErrorCode error_code = 3;
   // 错误详情
-  string error_message = 5;
+  string error_message = 4;
 }
 
 // 异步单条发送通知请求
@@ -196,15 +191,4 @@ message BatchSendNotificationsAsyncRequest {
 message BatchSendNotificationsAsyncResponse {
   // 通知平台生成的通知ID
   repeated uint64 notification_ids = 1;
-}
-
-// 同步批量查询请求
-message BatchQueryNotificationsRequest {
-  // 业务方某个业务内部的唯一标识
-  repeated string keys = 1;
-}
-
-// 同步批量查询响应
-message BatchQueryNotificationsResponse {
-  repeated SendNotificationResponse results = 1;
 }

@@ -12,7 +12,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/notification/v1"
 )
@@ -20,6 +19,7 @@ import (
 // NotificationServer 处理通知平台的gRPC请求
 type NotificationServer struct {
 	notificationv1.UnimplementedNotificationServiceServer
+	notificationv1.UnimplementedNotificationQueryServiceServer
 	executor executorsvc.Service
 	// TODO: 配置服务 configService config.ConfigService
 }
@@ -175,14 +175,39 @@ func (s *NotificationServer) BatchQueryNotifications(ctx context.Context, req *n
 	}
 
 	for _, r := range results {
-		resp, err := s.convertToSendResponse(r)
+		sendResp, err := s.convertToSendResponse(r)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "转换响应失败: %v", err)
 		}
-		response.Results = append(response.Results, resp)
+		response.Results = append(response.Results, sendResp)
 	}
 
 	return response, nil
+}
+
+// QueryNotification 处理单条查询通知请求
+func (s *NotificationServer) QueryNotification(ctx context.Context, req *notificationv1.QueryNotificationRequest) (*notificationv1.QueryNotificationResponse, error) {
+	// 1. 从metadata中解析Authorization JWT Token
+	_, err := s.extractAndValidateBizID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. 调用执行器
+	result, err := s.executor.QueryNotification(ctx, req.Key)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "查询通知失败: %v", err)
+	}
+
+	// 3. 将结果转换为响应
+	sendResp, err := s.convertToSendResponse(result)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "转换响应失败: %v", err)
+	}
+
+	return &notificationv1.QueryNotificationResponse{
+		Result: sendResp,
+	}, nil
 }
 
 // extractAndValidateBizID 从请求中提取并验证BizID
@@ -314,11 +339,6 @@ func (s *NotificationServer) convertToSendResponse(result executorsvc.SendRespon
 		ErrorCode:      convertErrorCode(result.ErrorCode),
 		ErrorMessage:   result.ErrorMessage,
 	}
-
-	if !result.SendTime.IsZero() {
-		response.SendTime = timestamppb.New(result.SendTime)
-	}
-
 	return response, nil
 }
 

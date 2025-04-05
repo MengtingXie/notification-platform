@@ -173,6 +173,45 @@ func (c *MockExecutorServiceBatchSendNotificationsAsyncCall) DoAndReturn(f func(
 	return c
 }
 
+// QueryNotification mocks base method.
+func (m *MockExecutorService) QueryNotification(ctx context.Context, key string) (domain.SendResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryNotification", ctx, key)
+	ret0, _ := ret[0].(domain.SendResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QueryNotification indicates an expected call of QueryNotification.
+func (mr *MockExecutorServiceMockRecorder) QueryNotification(ctx, key any) *MockExecutorServiceQueryNotificationCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryNotification", reflect.TypeOf((*MockExecutorService)(nil).QueryNotification), ctx, key)
+	return &MockExecutorServiceQueryNotificationCall{Call: call}
+}
+
+// MockExecutorServiceQueryNotificationCall wrap *gomock.Call
+type MockExecutorServiceQueryNotificationCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockExecutorServiceQueryNotificationCall) Return(arg0 domain.SendResponse, arg1 error) *MockExecutorServiceQueryNotificationCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockExecutorServiceQueryNotificationCall) Do(f func(context.Context, string) (domain.SendResponse, error)) *MockExecutorServiceQueryNotificationCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockExecutorServiceQueryNotificationCall) DoAndReturn(f func(context.Context, string) (domain.SendResponse, error)) *MockExecutorServiceQueryNotificationCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // SendNotification mocks base method.
 func (m *MockExecutorService) SendNotification(ctx context.Context, n domain.Notification) (domain.SendResponse, error) {
 	m.ctrl.T.Helper()
