@@ -201,6 +201,7 @@ var (
 		(*TransactionCheckServiceCheckResponse)(nil),             // 2: client.v1.TransactionCheckServiceCheckResponse
 	}
 )
+
 var file_client_v1_tx_notification_proto_depIdxs = []int32{
 	0, // 0: client.v1.TransactionCheckServiceCheckResponse.status:type_name -> client.v1.TransactionCheckServiceCheckResponse.ResponseStatus
 	1, // 1: client.v1.TransactionCheckService.Check:input_type -> client.v1.TransactionCheckServiceCheckRequest

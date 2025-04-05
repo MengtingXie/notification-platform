@@ -144,6 +144,7 @@ var (
 		(*SayHelloResponse)(nil), // 1: helloworld.v1.SayHelloResponse
 	}
 )
+
 var file_helloworld_v1_helloworld_proto_depIdxs = []int32{
 	0, // 0: helloworld.v1.GreeterService.SayHello:input_type -> helloworld.v1.SayHelloRequest
 	1, // 1: helloworld.v1.GreeterService.SayHello:output_type -> helloworld.v1.SayHelloResponse

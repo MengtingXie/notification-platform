@@ -1643,6 +1643,7 @@ var (
 		(*timestamppb.Timestamp)(nil),               // 28: google.protobuf.Timestamp
 	}
 )
+
 var file_notification_v1_notification_proto_depIdxs = []int32{
 	23, // 0: notification.v1.SendStrategy.immediate:type_name -> notification.v1.SendStrategy.ImmediateStrategy
 	24, // 1: notification.v1.SendStrategy.delayed:type_name -> notification.v1.SendStrategy.DelayedStrategy
