@@ -3,19 +3,15 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"errors"
 
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/repository/dao"
-
-	"github.com/ego-component/egorm"
 )
 
 type BusinessConfigRepository interface {
 	GetByIDs(ctx context.Context, ids []int64) (map[int64]domain.BusinessConfig, error)
 	GetByID(ctx context.Context, id int64) (domain.BusinessConfig, error)
 	Delete(ctx context.Context, id int64) error
-	// SaveConfig 保存非零字段
 	SaveConfig(ctx context.Context, config domain.BusinessConfig) error
 }
 
@@ -32,22 +28,15 @@ func NewBusinessConfigRepository(configDao dao.BusinessConfigDAO) BusinessConfig
 
 // GetByIDs 根据多个ID批量获取业务配置
 func (b *businessConfigRepository) GetByIDs(ctx context.Context, ids []int64) (map[int64]domain.BusinessConfig, error) {
-	result := make(map[int64]domain.BusinessConfig)
-
-	// 循环查询每个ID的配置（实际使用中可以优化为批量查询）
-	for _, id := range ids {
-		config, err := b.GetByID(ctx, id)
-		if err != nil {
-			// 如果是未找到记录的错误，则跳过
-			if errors.Is(err, egorm.ErrRecordNotFound) {
-				continue
-			}
-			return nil, err
-		}
-		result[id] = config
+	configMap, err := b.dao.GetByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
 	}
-
-	return result, nil
+	domainConfigMap := make(map[int64]domain.BusinessConfig, len(configMap))
+	for id, config := range configMap {
+		domainConfigMap[id] = b.toDomain(config)
+	}
+	return domainConfigMap, nil
 }
 
 // GetByID 根据ID获取业务配置
@@ -61,28 +50,13 @@ func (b *businessConfigRepository) GetByID(ctx context.Context, id int64) (domai
 	return b.toDomain(c), nil
 }
 
-func (b *businessConfigRepository) toDomain(c dao.BusinessConfig) domain.BusinessConfig {
-	return domain.BusinessConfig{
-		ID:            c.ID,
-		OwnerID:       c.OwnerID,
-		OwnerType:     c.OwnerType,
-		ChannelConfig: c.ChannelConfig.String,
-		TxnConfig:     c.TxnConfig.String,
-		RateLimit:     c.RateLimit,
-		Quota:         c.Quota.String,
-		RetryPolicy:   c.RetryPolicy.String,
-		Ctime:         c.Ctime,
-		Utime:         c.Utime,
-	}
-}
-
 // Delete 删除业务配置
 func (b *businessConfigRepository) Delete(ctx context.Context, id int64) error {
 	// 直接调用DAO层删除方法
 	return b.dao.Delete(ctx, id)
 }
 
-// SaveConfig 保存业务配置（仅保存非零字段）
+// SaveConfig 保存业务配置（
 func (b *businessConfigRepository) SaveConfig(ctx context.Context, config domain.BusinessConfig) error {
 	// 将领域对象转换为DAO对象
 	daoConfig := dao.BusinessConfig{
@@ -111,4 +85,19 @@ func (b *businessConfigRepository) SaveConfig(ctx context.Context, config domain
 	}
 	// 调用DAO层保存方法
 	return b.dao.SaveConfig(ctx, daoConfig)
+}
+
+func (b *businessConfigRepository) toDomain(daoConfig dao.BusinessConfig) domain.BusinessConfig {
+	return domain.BusinessConfig{
+		ID:            daoConfig.ID,
+		OwnerID:       daoConfig.OwnerID,
+		OwnerType:     daoConfig.OwnerType,
+		ChannelConfig: daoConfig.ChannelConfig.String,
+		TxnConfig:     daoConfig.TxnConfig.String,
+		RateLimit:     daoConfig.RateLimit,
+		Quota:         daoConfig.Quota.String,
+		RetryPolicy:   daoConfig.RetryPolicy.String,
+		Ctime:         daoConfig.Ctime,
+		Utime:         daoConfig.Utime,
+	}
 }

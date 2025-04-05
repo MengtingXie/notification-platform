@@ -40,6 +40,10 @@ type NotificationRepository interface {
 
 	// ListByScheduleTime 根据计划发送时间范围获取通知列表
 	ListByScheduleTime(ctx context.Context, startTime, endTime time.Time, limit int) ([]domain.Notification, error)
+
+	BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error
+
+	BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]domain.Notification, error)
 }
 
 // notificationRepository 通知仓储实现
@@ -52,6 +56,19 @@ func NewNotificationRepository(d dao.NotificationDAO) NotificationRepository {
 	return &notificationRepository{
 		dao: d,
 	}
+}
+
+func (r *notificationRepository) BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]domain.Notification, error) {
+	notificationMap, err := r.dao.BatchGetByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	domainNotificationMap := make(map[uint64]domain.Notification, len(notificationMap))
+	for id := range notificationMap {
+		notification := notificationMap[id]
+		domainNotificationMap[id] = r.toDomain(notification)
+	}
+	return domainNotificationMap, nil
 }
 
 // Create 创建一条通知
@@ -200,4 +217,8 @@ func (r *notificationRepository) ListByScheduleTime(ctx context.Context, startTi
 		result[i] = r.toDomain(ns[i])
 	}
 	return result, nil
+}
+
+func (r *notificationRepository) BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error {
+	return r.dao.BatchUpdateStatus(ctx, ids, status)
 }

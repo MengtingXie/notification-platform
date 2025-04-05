@@ -10,6 +10,6 @@ type (
 	BusinessConfig = domain.BusinessConfig
 	Module         struct {
 		ignoredInitTablesErr error
-		Svc                  service.BusinessConfigService
+		Svc                  Service
 	}
 )

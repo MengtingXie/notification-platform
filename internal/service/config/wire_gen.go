@@ -11,12 +11,11 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/service"
 	"github.com/ego-component/egorm"
-	"gorm.io/gorm"
 )
 
 // Injectors from wire.go:
 
-func InitService(db *gorm.DB) *Module {
+func InitService(db *egorm.Component) *Module {
 	error2 := initTables(db)
 	businessConfigDAO := dao.NewBusinessConfigDAO(db)
 	businessConfigRepository := repository.NewBusinessConfigRepository(businessConfigDAO)

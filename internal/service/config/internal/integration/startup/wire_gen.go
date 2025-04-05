@@ -13,8 +13,8 @@ import (
 
 // Injectors from wire.go:
 
-func InitService() *config.Module {
-	db := ioc.InitDB()
-	module := config.InitService(db)
+func InitModule() *config.Module {
+	v := ioc.InitDB()
+	module := config.InitService(v)
 	return module
 }

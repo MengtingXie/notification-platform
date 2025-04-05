@@ -41,6 +41,10 @@ type NotificationService interface {
 
 	// BatchUpdateNotificationStatusSucceededOrFailed 批量更新通知状态为成功或失败
 	BatchUpdateNotificationStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error
+
+	BatchUpdateNotificationStatus(ctx context.Context, ids []uint64, status string) error
+
+	BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]domain.Notification, error)
 }
 
 // notificationService 通知服务实现
@@ -55,6 +59,14 @@ func NewNotificationService(repo repository.NotificationRepository, idGenerator 
 		repo:        repo,
 		idGenerator: idGenerator,
 	}
+}
+
+func (s *notificationService) BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]domain.Notification, error) {
+	return s.repo.BatchGetByIDs(ctx, ids)
+}
+
+func (s *notificationService) BatchUpdateNotificationStatus(ctx context.Context, ids []uint64, status string) error {
+	return s.repo.BatchUpdateStatus(ctx, ids, status)
 }
 
 // CreateNotification 创建通知

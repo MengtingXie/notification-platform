@@ -32,7 +32,7 @@ type BusinessConfigDAO interface {
 	GetByIDs(ctx context.Context, id []int64) (map[int64]BusinessConfig, error)
 	GetByID(ctx context.Context, id int64) (BusinessConfig, error)
 	Delete(ctx context.Context, id int64) error
-	// SaveConfig 保存非零字段
+	// SaveConfig
 	SaveConfig(ctx context.Context, config BusinessConfig) error
 }
 
@@ -64,7 +64,7 @@ func (b *businessConfigDAO) GetByID(ctx context.Context, id int64) (BusinessConf
 func (b *businessConfigDAO) GetByIDs(ctx context.Context, ids []int64) (map[int64]BusinessConfig, error) {
 	var configs []BusinessConfig
 	// 根据ID查询业务配置
-	err := b.db.WithContext(ctx).Where("id in (?)", ids).First(&configs).Error
+	err := b.db.WithContext(ctx).Where("id in (?)", ids).Find(&configs).Error
 	if err != nil {
 		return nil, err
 	}
@@ -84,24 +84,16 @@ func (b *businessConfigDAO) Delete(ctx context.Context, id int64) error {
 	if result.Error != nil {
 		return result.Error
 	}
-
-	// 检查是否有记录被删除
-	if result.RowsAffected == 0 {
-		return egorm.ErrRecordNotFound
-	}
-
 	return nil
 }
 
-// SaveConfig 保存业务配置（新增或更新非零字段）
+// SaveConfig 保存业务配置
 func (b *businessConfigDAO) SaveConfig(ctx context.Context, config BusinessConfig) error {
 	now := time.Now().UnixMilli()
 	config.Ctime = now
 	config.Utime = now
 	// 使用upsert语句，如果记录存在则更新，不存在则插入
 	db := b.db.WithContext(ctx)
-
-	// 执行upsert操作，使用OnConflict子句
 	result := db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "id"}},           // 根据ID判断冲突
 		DoUpdates: clause.AssignmentColumns(updateColumns), // 只更新指定的非空列
@@ -109,9 +101,6 @@ func (b *businessConfigDAO) SaveConfig(ctx context.Context, config BusinessConfi
 
 	if result.Error != nil {
 		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return egorm.ErrRecordNotFound
 	}
 	return nil
 }

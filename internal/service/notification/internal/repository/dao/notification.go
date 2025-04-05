@@ -52,6 +52,11 @@ type NotificationDAO interface {
 
 	// ListByScheduleTime 根据计划发送时间查询通知
 	ListByScheduleTime(ctx context.Context, startTime, endTime int64, limit int) ([]Notification, error)
+
+	// BatchUpdateStatus
+	BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error
+
+	BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]Notification, error)
 }
 
 // Notification 通知记录表
@@ -81,6 +86,19 @@ func NewNotificationDAO(db *egorm.Component) NotificationDAO {
 	return &notificationDAO{
 		db: db,
 	}
+}
+
+func (d *notificationDAO) BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]Notification, error) {
+	var notifications []Notification
+	err := d.db.WithContext(ctx).
+		Where("id in (?)", ids).
+		Find(&notifications).Error
+	notificationMap := make(map[uint64]Notification, len(ids))
+	for idx := range notifications {
+		notification := notifications[idx]
+		notificationMap[notification.ID] = notification
+	}
+	return notificationMap, err
 }
 
 // Create 创建单条通知记录
@@ -247,4 +265,14 @@ func (d *notificationDAO) BatchUpdateStatusSucceededOrFailed(ctx context.Context
 
 		return nil
 	})
+}
+
+func (d *notificationDAO) BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error {
+	result := d.db.WithContext(ctx).Model(&Notification{}).
+		Where("id in ?", ids).
+		Updates(map[string]interface{}{
+			"status": status,
+			"utime":  time.Now().Unix(),
+		})
+	return result.Error
 }

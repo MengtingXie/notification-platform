@@ -80,6 +80,83 @@ func (c *MockNotificationServiceBatchCreateNotificationsCall) DoAndReturn(f func
 	return c
 }
 
+// BatchGetByIDs mocks base method.
+func (m *MockNotificationService) BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]domain.Notification, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BatchGetByIDs", ctx, ids)
+	ret0, _ := ret[0].(map[uint64]domain.Notification)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BatchGetByIDs indicates an expected call of BatchGetByIDs.
+func (mr *MockNotificationServiceMockRecorder) BatchGetByIDs(ctx, ids any) *MockNotificationServiceBatchGetByIDsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchGetByIDs", reflect.TypeOf((*MockNotificationService)(nil).BatchGetByIDs), ctx, ids)
+	return &MockNotificationServiceBatchGetByIDsCall{Call: call}
+}
+
+// MockNotificationServiceBatchGetByIDsCall wrap *gomock.Call
+type MockNotificationServiceBatchGetByIDsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockNotificationServiceBatchGetByIDsCall) Return(arg0 map[uint64]domain.Notification, arg1 error) *MockNotificationServiceBatchGetByIDsCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockNotificationServiceBatchGetByIDsCall) Do(f func(context.Context, []uint64) (map[uint64]domain.Notification, error)) *MockNotificationServiceBatchGetByIDsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockNotificationServiceBatchGetByIDsCall) DoAndReturn(f func(context.Context, []uint64) (map[uint64]domain.Notification, error)) *MockNotificationServiceBatchGetByIDsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// BatchUpdateNotificationStatus mocks base method.
+func (m *MockNotificationService) BatchUpdateNotificationStatus(ctx context.Context, ids []uint64, status string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BatchUpdateNotificationStatus", ctx, ids, status)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BatchUpdateNotificationStatus indicates an expected call of BatchUpdateNotificationStatus.
+func (mr *MockNotificationServiceMockRecorder) BatchUpdateNotificationStatus(ctx, ids, status any) *MockNotificationServiceBatchUpdateNotificationStatusCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchUpdateNotificationStatus", reflect.TypeOf((*MockNotificationService)(nil).BatchUpdateNotificationStatus), ctx, ids, status)
+	return &MockNotificationServiceBatchUpdateNotificationStatusCall{Call: call}
+}
+
+// MockNotificationServiceBatchUpdateNotificationStatusCall wrap *gomock.Call
+type MockNotificationServiceBatchUpdateNotificationStatusCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockNotificationServiceBatchUpdateNotificationStatusCall) Return(arg0 error) *MockNotificationServiceBatchUpdateNotificationStatusCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockNotificationServiceBatchUpdateNotificationStatusCall) Do(f func(context.Context, []uint64, string) error) *MockNotificationServiceBatchUpdateNotificationStatusCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockNotificationServiceBatchUpdateNotificationStatusCall) DoAndReturn(f func(context.Context, []uint64, string) error) *MockNotificationServiceBatchUpdateNotificationStatusCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // BatchUpdateNotificationStatusSucceededOrFailed mocks base method.
 func (m *MockNotificationService) BatchUpdateNotificationStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error {
 	m.ctrl.T.Helper()
