@@ -22,6 +22,7 @@ var (
 	ErrInvalidParameter         = service.ErrInvalidParameter
 	ErrNotificationNotFound     = service.ErrNotificationNotFound
 	ErrCreateNotificationFailed = service.ErrCreateNotificationFailed
+	ErrNotificationDuplicate    = service.ErrNotificationDuplicate
 )
 
 const (

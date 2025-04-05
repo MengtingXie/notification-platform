@@ -10,40 +10,45 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/notification/internal/repository/dao"
 )
 
-var ErrNotificationNotFound = dao.ErrNotificationNotFound
+var (
+	ErrNotificationNotFound  = dao.ErrNotificationNotFound
+	ErrNotificationDuplicate = dao.ErrNotificationDuplicate
+)
 
 // NotificationRepository 通知仓储接口
 type NotificationRepository interface {
 	// Create 创建一条通知
-	Create(ctx context.Context, n domain.Notification) error
+	Create(ctx context.Context, notification domain.Notification) (domain.Notification, error)
 
 	// BatchCreate 批量创建通知
-	BatchCreate(ctx context.Context, ns []domain.Notification) error
+	BatchCreate(ctx context.Context, notifications []domain.Notification) ([]domain.Notification, error)
+
+	// GetByID 根据ID获取通知
+	GetByID(ctx context.Context, id uint64) (domain.Notification, error)
+
+	// BatchGetByIDs 根据ID列表获取通知列表
+	BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]domain.Notification, error)
+
+	// GetByBizID 根据业务ID获取通知列表
+	GetByBizID(ctx context.Context, bizID int64) ([]domain.Notification, error)
+
+	// GetByKeys 根据业务ID和业务内唯一标识获取通知列表
+	GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]domain.Notification, error)
 
 	// UpdateStatus 更新通知状态
-	UpdateStatus(ctx context.Context, id uint64, status domain.Status) error
+	UpdateStatus(ctx context.Context, id uint64, status domain.Status, version int) error
 
 	// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
 	BatchUpdateStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error
 
-	// FindByID 根据ID查找通知
-	FindByID(ctx context.Context, id uint64) (domain.Notification, error)
-
-	// FindByBizID 根据业务ID查找通知
-	FindByBizID(ctx context.Context, bizID int64) ([]domain.Notification, error)
-
-	// FindByKeys 根据业务ID和业务内唯一标识获取通知列表
-	FindByKeys(ctx context.Context, bizID int64, keys ...string) ([]domain.Notification, error)
+	// BatchUpdateStatus 批量更新通知状态
+	BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.Status) error
 
 	// ListByStatus 根据状态获取通知列表
 	ListByStatus(ctx context.Context, status domain.Status, limit int) ([]domain.Notification, error)
 
 	// ListByScheduleTime 根据计划发送时间范围获取通知列表
 	ListByScheduleTime(ctx context.Context, startTime, endTime time.Time, limit int) ([]domain.Notification, error)
-
-	BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error
-
-	BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]domain.Notification, error)
 }
 
 // notificationRepository 通知仓储实现
@@ -72,14 +77,17 @@ func (r *notificationRepository) BatchGetByIDs(ctx context.Context, ids []uint64
 }
 
 // Create 创建一条通知
-func (r *notificationRepository) Create(ctx context.Context, n domain.Notification) error {
-	return r.dao.Create(ctx, r.toEntity(n))
+func (r *notificationRepository) Create(ctx context.Context, notification domain.Notification) (domain.Notification, error) {
+	ds, err := r.dao.Create(ctx, r.toEntity(notification))
+	if err != nil {
+		return domain.Notification{}, err
+	}
+	return r.toDomain(ds), nil
 }
 
-// toEntity 将领域模型转换为DAO模型
+// toEntity 将领域对象转换为DAO实体
 func (r *notificationRepository) toEntity(n domain.Notification) dao.Notification {
-	// 将 TemplateParams 转换为 JSON 字符串
-	templateParamsJSON, _ := json.Marshal(n.Template.Params)
+	templateParams, _ := json.Marshal(n.Template.Params)
 
 	return dao.Notification{
 		ID:                n.ID,
@@ -89,31 +97,40 @@ func (r *notificationRepository) toEntity(n domain.Notification) dao.Notificatio
 		Channel:           string(n.Channel),
 		TemplateID:        n.Template.ID,
 		TemplateVersionID: n.Template.VersionID,
-		TemplateParams:    string(templateParamsJSON),
+		TemplateParams:    string(templateParams),
 		Status:            string(n.Status),
 		RetryCount:        n.RetryCount,
 		ScheduledSTime:    n.ScheduledSTime,
 		ScheduledETime:    n.ScheduledETime,
+		Version:           n.Version,
 	}
 }
 
 // BatchCreate 批量创建通知
-func (r *notificationRepository) BatchCreate(ctx context.Context, ns []domain.Notification) error {
-	if len(ns) == 0 {
-		return nil
+func (r *notificationRepository) BatchCreate(ctx context.Context, notifications []domain.Notification) ([]domain.Notification, error) {
+	if len(notifications) == 0 {
+		return nil, nil
 	}
 
-	daoNotifications := make([]dao.Notification, len(ns))
-	for i := range ns {
-		daoNotifications[i] = r.toEntity(ns[i])
+	daoNotifications := make([]dao.Notification, len(notifications))
+	for i := range notifications {
+		daoNotifications[i] = r.toEntity(notifications[i])
 	}
 
-	return r.dao.BatchCreate(ctx, daoNotifications)
+	createdNotifications, err := r.dao.BatchCreate(ctx, daoNotifications)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range createdNotifications {
+		notifications[i] = r.toDomain(createdNotifications[i])
+	}
+	return notifications, nil
 }
 
 // UpdateStatus 更新通知状态
-func (r *notificationRepository) UpdateStatus(ctx context.Context, id uint64, status domain.Status) error {
-	return r.dao.UpdateStatus(ctx, id, string(status))
+func (r *notificationRepository) UpdateStatus(ctx context.Context, id uint64, status domain.Status, version int) error {
+	return r.dao.UpdateStatus(ctx, id, string(status), version)
 }
 
 // BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
@@ -132,41 +149,42 @@ func (r *notificationRepository) BatchUpdateStatusSucceededOrFailed(ctx context.
 	return r.dao.BatchUpdateStatusSucceededOrFailed(ctx, successIDs, failedItems)
 }
 
-// FindByID 根据ID查找通知
-func (r *notificationRepository) FindByID(ctx context.Context, id uint64) (domain.Notification, error) {
-	n, err := r.dao.FindByID(ctx, id)
+// GetByID 根据ID获取通知
+func (r *notificationRepository) GetByID(ctx context.Context, id uint64) (domain.Notification, error) {
+	n, err := r.dao.GetByID(ctx, id)
 	if err != nil {
 		return domain.Notification{}, err
 	}
 	return r.toDomain(n), nil
 }
 
-// toDomain 从DAO模型转换为领域模型
+// toDomain 将DAO实体转换为领域对象
 func (r *notificationRepository) toDomain(n dao.Notification) domain.Notification {
 	var templateParams map[string]string
 	_ = json.Unmarshal([]byte(n.TemplateParams), &templateParams)
 
 	return domain.Notification{
-		ID:       n.ID,
-		BizID:    n.BizID,
-		Key:      n.Key,
-		Receiver: n.Receiver,
-		Channel:  domain.Channel(n.Channel),
+		ID:             n.ID,
+		BizID:          n.BizID,
+		Key:            n.Key,
+		Receiver:       n.Receiver,
+		Channel:        domain.Channel(n.Channel),
+		Status:         domain.Status(n.Status),
+		RetryCount:     n.RetryCount,
+		ScheduledSTime: n.ScheduledSTime,
+		ScheduledETime: n.ScheduledETime,
+		Version:        n.Version,
 		Template: domain.Template{
 			ID:        n.TemplateID,
 			VersionID: n.TemplateVersionID,
 			Params:    templateParams,
 		},
-		Status:         domain.Status(n.Status),
-		RetryCount:     n.RetryCount,
-		ScheduledSTime: n.ScheduledSTime,
-		ScheduledETime: n.ScheduledETime,
 	}
 }
 
-// FindByBizID 根据业务ID查找通知
-func (r *notificationRepository) FindByBizID(ctx context.Context, bizID int64) ([]domain.Notification, error) {
-	ns, err := r.dao.FindByBizID(ctx, bizID)
+// GetByBizID 根据业务ID获取通知列表
+func (r *notificationRepository) GetByBizID(ctx context.Context, bizID int64) ([]domain.Notification, error) {
+	ns, err := r.dao.GetByBizID(ctx, bizID)
 	if err != nil {
 		return nil, err
 	}
@@ -178,9 +196,9 @@ func (r *notificationRepository) FindByBizID(ctx context.Context, bizID int64) (
 	return result, nil
 }
 
-// FindByKeys 根据业务ID和业务内唯一标识获取通知列表
-func (r *notificationRepository) FindByKeys(ctx context.Context, bizID int64, keys ...string) ([]domain.Notification, error) {
-	notifications, err := r.dao.FindByKeys(ctx, bizID, keys...)
+// GetByKeys 根据业务ID和业务内唯一标识获取通知列表
+func (r *notificationRepository) GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]domain.Notification, error) {
+	notifications, err := r.dao.GetByKeys(ctx, bizID, keys...)
 	if err != nil {
 		return nil, fmt.Errorf("查询通知列表失败: %w", err)
 	}
@@ -219,6 +237,6 @@ func (r *notificationRepository) ListByScheduleTime(ctx context.Context, startTi
 	return result, nil
 }
 
-func (r *notificationRepository) BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error {
-	return r.dao.BatchUpdateStatus(ctx, ids, status)
+func (r *notificationRepository) BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.Status) error {
+	return r.dao.BatchUpdateStatus(ctx, ids, string(status))
 }

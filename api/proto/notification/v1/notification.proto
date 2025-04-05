@@ -61,6 +61,8 @@ message SendStrategy {
     ScheduledStrategy scheduled = 3;
     // 时间窗口内发送
     TimeWindowStrategy time_window = 4;
+    // 截止日期前发送
+    DeadlineStrategy deadline = 5;
   }
 
   // 空结构表示立即发送
@@ -81,6 +83,11 @@ message SendStrategy {
     int64 start_time_milliseconds = 1;
     // 结束时间
     int64 end_time_milliseconds = 2;
+  }
+
+  message DeadlineStrategy {
+    // 截止日期
+    google.protobuf.Timestamp deadline = 1;
   }
 }
 

@@ -222,6 +222,47 @@ func (m *SendStrategy) validate(all bool) error {
 			}
 		}
 
+	case *SendStrategy_Deadline:
+		if v == nil {
+			err := SendStrategyValidationError{
+				field:  "StrategyType",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+		if all {
+			switch v := interface{}(m.GetDeadline()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, SendStrategyValidationError{
+						field:  "Deadline",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, SendStrategyValidationError{
+						field:  "Deadline",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetDeadline()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return SendStrategyValidationError{
+					field:  "Deadline",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
 	default:
 		_ = v // ensures v is used
 	}
@@ -2161,3 +2202,135 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = SendStrategy_TimeWindowStrategyValidationError{}
+
+// Validate checks the field values on SendStrategy_DeadlineStrategy with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *SendStrategy_DeadlineStrategy) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on SendStrategy_DeadlineStrategy with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the result is a list of violation errors wrapped in
+// SendStrategy_DeadlineStrategyMultiError, or nil if none found.
+func (m *SendStrategy_DeadlineStrategy) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *SendStrategy_DeadlineStrategy) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if all {
+		switch v := interface{}(m.GetDeadline()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, SendStrategy_DeadlineStrategyValidationError{
+					field:  "Deadline",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, SendStrategy_DeadlineStrategyValidationError{
+					field:  "Deadline",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetDeadline()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return SendStrategy_DeadlineStrategyValidationError{
+				field:  "Deadline",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return SendStrategy_DeadlineStrategyMultiError(errors)
+	}
+
+	return nil
+}
+
+// SendStrategy_DeadlineStrategyMultiError is an error wrapping multiple
+// validation errors returned by SendStrategy_DeadlineStrategy.ValidateAll()
+// if the designated constraints aren't met.
+type SendStrategy_DeadlineStrategyMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m SendStrategy_DeadlineStrategyMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m SendStrategy_DeadlineStrategyMultiError) AllErrors() []error { return m }
+
+// SendStrategy_DeadlineStrategyValidationError is the validation error
+// returned by SendStrategy_DeadlineStrategy.Validate if the designated
+// constraints aren't met.
+type SendStrategy_DeadlineStrategyValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e SendStrategy_DeadlineStrategyValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e SendStrategy_DeadlineStrategyValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e SendStrategy_DeadlineStrategyValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e SendStrategy_DeadlineStrategyValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e SendStrategy_DeadlineStrategyValidationError) ErrorName() string {
+	return "SendStrategy_DeadlineStrategyValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e SendStrategy_DeadlineStrategyValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sSendStrategy_DeadlineStrategy.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = SendStrategy_DeadlineStrategyValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = SendStrategy_DeadlineStrategyValidationError{}

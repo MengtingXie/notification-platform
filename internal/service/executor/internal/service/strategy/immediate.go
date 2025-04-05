@@ -42,7 +42,7 @@ func (s *ImmediateSendStrategy) Send(ctx context.Context, ns []domain.Notificati
 	}
 
 	// 创建通知记录
-	createdNotifications, err := s.notificationSvc.BatchCreateNotifications(ctx, notificationSvcDomains)
+	createdNotifications, err := s.notificationSvc.BatchCreate(ctx, notificationSvcDomains)
 	if err != nil {
 		return nil, fmt.Errorf("创建通知失败: %w", err)
 	}

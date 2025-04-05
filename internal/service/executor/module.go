@@ -22,6 +22,7 @@ const (
 	SendStrategyDelayed    = domain.SendStrategyDelayed    // 延迟发送
 	SendStrategyScheduled  = domain.SendStrategyScheduled  // 定时发送
 	SendStrategyTimeWindow = domain.SendStrategyTimeWindow // 时间窗口发送
+	SendStrategyDeadline   = domain.SendStrategyDeadline   // 截止日期发送
 
 	ErrorCodeUnspecified              = domain.ErrorCodeUnspecified              // 未指定错误码
 	ErrorCodeInvalidParameter         = domain.ErrorCodeInvalidParameter         // 无效参数

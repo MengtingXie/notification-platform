@@ -58,15 +58,14 @@ func (s *NotificationDAOTestSuite) TestCreate() {
 		RetryCount:        0,
 		ScheduledSTime:    time.Now().Unix(),
 		ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+		Version:           1,
 	}
 
-	err := s.dao.Create(ctx, notification)
+	result, err := s.dao.Create(ctx, notification)
 	assert.NoError(t, err)
 
 	// 验证创建成功
-	var result Notification
-	err = s.db.First(&result, "id = ?", notification.ID).Error
-	assert.NoError(t, err)
+	assert.Equal(t, notification.ID, result.ID)
 	assert.Equal(t, notification.BizID, result.BizID)
 	assert.Equal(t, notification.Key, result.Key)
 	assert.Equal(t, notification.Receiver, result.Receiver)
@@ -74,6 +73,7 @@ func (s *NotificationDAOTestSuite) TestCreate() {
 	assert.Equal(t, notification.TemplateID, result.TemplateID)
 	assert.Equal(t, notification.TemplateVersionID, result.TemplateVersionID)
 	assert.Equal(t, notification.Status, result.Status)
+	assert.Equal(t, 1, result.Version)
 	assert.NotZero(t, result.Ctime)
 	assert.NotZero(t, result.Utime)
 }
@@ -94,6 +94,7 @@ func (s *NotificationDAOTestSuite) TestBatchCreate() {
 			Status:            notificationStatusPending,
 			ScheduledSTime:    time.Now().Unix(),
 			ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+			Version:           1,
 		},
 		{
 			ID:                3,
@@ -106,17 +107,17 @@ func (s *NotificationDAOTestSuite) TestBatchCreate() {
 			Status:            notificationStatusPending,
 			ScheduledSTime:    time.Now().Unix(),
 			ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+			Version:           1,
 		},
 	}
 
-	err := s.dao.BatchCreate(ctx, notifications)
+	created, err := s.dao.BatchCreate(ctx, notifications)
 	assert.NoError(t, err)
 
 	// 验证批量创建成功 - 完整比较每个通知的字段
-	for _, expected := range notifications {
-		var actual Notification
-		err := s.db.First(&actual, expected.ID).Error
-		assert.NoError(t, err)
+	for i := range notifications {
+		expected := notifications[i]
+		actual := created[i]
 
 		assert.Equal(t, expected.ID, actual.ID)
 		assert.Equal(t, expected.BizID, actual.BizID)
@@ -128,6 +129,7 @@ func (s *NotificationDAOTestSuite) TestBatchCreate() {
 		assert.Equal(t, expected.Status, actual.Status)
 		assert.Equal(t, expected.ScheduledSTime, actual.ScheduledSTime)
 		assert.Equal(t, expected.ScheduledETime, actual.ScheduledETime)
+		assert.Equal(t, 1, actual.Version)
 		assert.NotZero(t, actual.Ctime)
 		assert.NotZero(t, actual.Utime)
 	}
@@ -150,6 +152,7 @@ func (s *NotificationDAOTestSuite) TestUpdateStatus() {
 		Status:            notificationStatusPending,
 		ScheduledSTime:    now.Unix(),
 		ScheduledETime:    now.Add(time.Hour).Unix(),
+		Version:           1, // 初始版本为1
 		Ctime:             now.Unix(),
 		Utime:             now.Unix(),
 	}
@@ -157,8 +160,8 @@ func (s *NotificationDAOTestSuite) TestUpdateStatus() {
 	err := s.db.Create(&notification).Error
 	assert.NoError(t, err)
 
-	// 测试更新状态
-	err = s.dao.UpdateStatus(ctx, notification.ID, notificationStatusSucceeded)
+	// 测试更新状态 - 正确的版本号
+	err = s.dao.UpdateStatus(ctx, notification.ID, notificationStatusSucceeded, 1)
 	assert.NoError(t, err)
 
 	// 验证状态已更新
@@ -166,7 +169,18 @@ func (s *NotificationDAOTestSuite) TestUpdateStatus() {
 	err = s.db.First(&result, notification.ID).Error
 	assert.NoError(t, err)
 	assert.Equal(t, notificationStatusSucceeded, result.Status)
+	assert.Equal(t, 2, result.Version) // 版本号应该加1
 	assert.Greater(t, result.Utime, notification.Utime)
+
+	// 测试版本号不匹配的情况
+	err = s.dao.UpdateStatus(ctx, notification.ID, notificationStatusFailed, 1)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotificationVersionMismatch)
+
+	// 测试不存在的ID
+	err = s.dao.UpdateStatus(ctx, 999999, notificationStatusSucceeded, 1)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotificationNotFound)
 }
 
 func (s *NotificationDAOTestSuite) TestFindByID() {
@@ -193,7 +207,7 @@ func (s *NotificationDAOTestSuite) TestFindByID() {
 	assert.NoError(t, err)
 
 	// 测试查询
-	result, err := s.dao.FindByID(ctx, notification.ID)
+	result, err := s.dao.GetByID(ctx, notification.ID)
 	assert.NoError(t, err)
 	assert.NotEqual(t, Notification{}, result) // 确保不是空结构体
 	assert.Equal(t, notification.ID, result.ID)
@@ -214,7 +228,7 @@ func (s *NotificationDAOTestSuite) TestFindByID() {
 	assert.Equal(t, notification.Utime, result.Utime)
 
 	// 测试查询不存在记录
-	result, err = s.dao.FindByID(ctx, 9999)
+	result, err = s.dao.GetByID(ctx, 9999)
 	assert.Error(t, err)
 	assert.Equal(t, Notification{}, result) // 应返回空结构体
 }
@@ -260,7 +274,7 @@ func (s *NotificationDAOTestSuite) TestFindByBizID() {
 	assert.NoError(t, err)
 
 	// 测试查询
-	results, err := s.dao.FindByBizID(ctx, bizID)
+	results, err := s.dao.GetByBizID(ctx, bizID)
 	assert.NoError(t, err)
 	assert.Len(t, results, 2)
 
@@ -288,7 +302,7 @@ func (s *NotificationDAOTestSuite) TestFindByBizID() {
 	}
 
 	// 测试查询不存在记录
-	results, err = s.dao.FindByBizID(ctx, 9999)
+	results, err = s.dao.GetByBizID(ctx, 9999)
 	assert.NoError(t, err)
 	assert.Len(t, results, 0) // 应该返回空切片
 }
@@ -897,4 +911,109 @@ func (s *NotificationDAOTestSuite) TestBatchGetByIDs() {
 		assert.Equal(t, expected.ScheduledSTime, actual.ScheduledSTime)
 		assert.Equal(t, expected.ScheduledETime, actual.ScheduledETime)
 	}
+}
+
+func (s *NotificationDAOTestSuite) TestCreateDuplicate() {
+	t := s.T()
+	ctx := context.Background()
+
+	// 创建第一条通知记录
+	notification := Notification{
+		ID:                100,
+		BizID:             100,
+		Key:               "duplicate_key",
+		Receiver:          "user@example.com",
+		Channel:           notificationChannelEmail,
+		TemplateID:        100,
+		TemplateVersionID: 1000,
+		Status:            notificationStatusPending,
+		ScheduledSTime:    time.Now().Unix(),
+		ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+		Version:           1,
+	}
+
+	err := s.db.Create(&notification).Error
+	assert.NoError(t, err)
+
+	// 创建具有相同BizID和Key的第二条通知记录
+	duplicateNotification := Notification{
+		ID:                101,
+		BizID:             100,             // 相同的BizID
+		Key:               "duplicate_key", // 相同的Key
+		Receiver:          "another@example.com",
+		Channel:           notificationChannelEmail,
+		TemplateID:        101,
+		TemplateVersionID: 1001,
+		Status:            notificationStatusPending,
+		ScheduledSTime:    time.Now().Unix(),
+		ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+		Version:           1,
+	}
+
+	// 测试创建重复记录
+	_, err = s.dao.Create(ctx, duplicateNotification)
+	assert.ErrorIs(t, err, ErrNotificationDuplicate)
+}
+
+func (s *NotificationDAOTestSuite) TestBatchCreateDuplicate() {
+	t := s.T()
+	ctx := context.Background()
+
+	// 先创建一条记录
+	notification := Notification{
+		ID:                200,
+		BizID:             200,
+		Key:               "batch_duplicate_key",
+		Receiver:          "user@example.com",
+		Channel:           notificationChannelEmail,
+		TemplateID:        200,
+		TemplateVersionID: 2000,
+		Status:            notificationStatusPending,
+		ScheduledSTime:    time.Now().Unix(),
+		ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+		Version:           1,
+	}
+
+	err := s.db.Create(&notification).Error
+	assert.NoError(t, err)
+
+	// 批量创建，包含一条重复记录
+	notifications := []Notification{
+		{
+			ID:                201,
+			BizID:             201,
+			Key:               "batch_key_1",
+			Receiver:          "user1@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        201,
+			TemplateVersionID: 2001,
+			Status:            notificationStatusPending,
+			ScheduledSTime:    time.Now().Unix(),
+			ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+			Version:           1,
+		},
+		{
+			ID:                202,
+			BizID:             200,                   // 与已存在记录相同的BizID
+			Key:               "batch_duplicate_key", // 与已存在记录相同的Key
+			Receiver:          "user2@example.com",
+			Channel:           notificationChannelEmail,
+			TemplateID:        202,
+			TemplateVersionID: 2002,
+			Status:            notificationStatusPending,
+			ScheduledSTime:    time.Now().Unix(),
+			ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+			Version:           1,
+		},
+	}
+
+	// 测试批量创建包含重复记录
+	_, err = s.dao.BatchCreate(ctx, notifications)
+	assert.ErrorIs(t, err, ErrNotificationDuplicate)
+
+	// 验证第一条记录未被创建（事务回滚）
+	var count int64
+	err = s.db.Model(&Notification{}).Where("id = ?", 201).Count(&count).Error
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
 }

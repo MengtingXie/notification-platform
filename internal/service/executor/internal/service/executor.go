@@ -25,9 +25,9 @@ type ExecutorService interface {
 	// BatchSendNotificationsAsync 异步批量发送
 	BatchSendNotificationsAsync(ctx context.Context, ns ...domain.Notification) (domain.BatchSendAsyncResponse, error)
 	// BatchQueryNotifications 同步批量查询
-	BatchQueryNotifications(ctx context.Context, keys ...string) ([]domain.SendResponse, error)
+	BatchQueryNotifications(ctx context.Context, bizID int64, keys ...string) ([]domain.SendResponse, error)
 	// QueryNotification 单条查询
-	QueryNotification(ctx context.Context, key string) (domain.SendResponse, error)
+	QueryNotification(ctx context.Context, bizID int64, key string) (domain.SendResponse, error)
 }
 
 // executor 执行器实现
@@ -48,9 +48,7 @@ func NewExecutorService(notificationSvc notificationsvc.Service, idGenerator *so
 
 // SendNotification 同步单条发送
 func (e *executor) SendNotification(ctx context.Context, n domain.Notification) (domain.SendResponse, error) {
-	resp := domain.SendResponse{
-		Status: notificationsvc.SendStatusPending,
-	}
+	resp := domain.SendResponse{}
 
 	if ok := e.isValidateRequest(n, &resp); !ok {
 		return resp, nil
@@ -59,48 +57,36 @@ func (e *executor) SendNotification(ctx context.Context, n domain.Notification) 
 	// 生成通知ID
 	id, err := e.idGenerator.NextID()
 	if err != nil {
+		resp.Status = notificationsvc.SendStatusFailed
 		return resp, fmt.Errorf("通知ID生成失败: %w", err)
 	}
 
 	// 调用服务发送通知
 	n.Notification.ID = id
-	sentNotification, err := e.notificationSvc.CreateNotification(ctx, n.Notification)
-	if err != nil {
-		// 直接处理通知服务错误
-		resp.Status = notificationsvc.SendStatusFailed
-		resp.ErrorCode, resp.ErrorMessage = e.convertToErrorCodeAndErrorMessage(err)
-		return resp, nil
-	}
 
 	// 发送通知
 	notifications := []domain.Notification{n}
 	responses, err := e.sendStrategy.Send(ctx, notifications)
 	// 处理策略错误
 	if err != nil {
-		// 直接使用mapErrorToResponse处理错误
-		resp.Status = notificationsvc.SendStatusFailed
-		resp.ErrorCode, resp.ErrorMessage = e.convertToErrorCodeAndErrorMessage(err)
-
 		// 仅检查是否为已知业务错误
 		if errors.Is(err, strategy.ErrInvalidParameter) ||
 			errors.Is(err, notificationsvc.ErrInvalidParameter) ||
 			errors.Is(err, notificationsvc.ErrCreateNotificationFailed) {
+
+			// 直接使用mapErrorToResponse处理错误
+			resp.Status = notificationsvc.SendStatusFailed
+			resp.ErrorCode, resp.ErrorMessage = e.convertToErrorCodeAndErrorMessage(err)
+
 			return resp, nil
 		}
-
 		// 未知的系统错误，返回原始错误
 		return resp, fmt.Errorf("发送通知系统错误: %w", err)
 	}
 
 	// 从响应中提取结果
-	if len(responses) > 0 {
-		return responses[0], nil
-	}
-
-	// 如果没有获得响应，返回基本响应
-	resp.NotificationID = sentNotification.ID
-	resp.Status = sentNotification.Status
-	return resp, nil
+	const zero = 0
+	return responses[zero], nil
 }
 
 // isValidateRequest 检查通知参数是否有效
@@ -172,7 +158,14 @@ func (e *executor) isValidSendStrategy(n domain.Notification, resp *domain.SendR
 		if n.SendStrategyConfig.StartTimeMilliseconds <= 0 || n.SendStrategyConfig.EndTimeMilliseconds <= n.SendStrategyConfig.StartTimeMilliseconds {
 			resp.Status = notificationsvc.SendStatusFailed
 			resp.ErrorCode = domain.ErrorCodeInvalidParameter
-			resp.ErrorMessage = "时间窗口策略需要指定有效的开始和结束时间"
+			resp.ErrorMessage = "时间窗口发送策略需要指定有效的开始和结束时间"
+			return false
+		}
+	case domain.SendStrategyDeadline:
+		if n.SendStrategyConfig.DeadlineTime.IsZero() || n.SendStrategyConfig.DeadlineTime.Before(time.Now()) {
+			resp.Status = notificationsvc.SendStatusFailed
+			resp.ErrorCode = domain.ErrorCodeInvalidParameter
+			resp.ErrorMessage = "截止日期发送策略需要指定未来的发送时间"
 			return false
 		}
 	}
@@ -224,7 +217,7 @@ func (e *executor) SendNotificationAsync(ctx context.Context, n domain.Notificat
 
 	// 创建通知记录
 	n.Notification.ID = id
-	createdNotification, err := e.notificationSvc.CreateNotification(ctx, n.Notification)
+	createdNotification, err := e.notificationSvc.Create(ctx, n.Notification)
 	if err != nil {
 		// 直接处理错误
 		resp.Status = notificationsvc.SendStatusFailed
@@ -235,10 +228,6 @@ func (e *executor) SendNotificationAsync(ctx context.Context, n domain.Notificat
 	// 设置响应
 	resp.NotificationID = createdNotification.ID
 	resp.Status = notificationsvc.SendStatusPending
-
-	// 异步发送通知，这里只返回已创建状态
-	// TODO: 实际实现可能需要将通知加入队列
-
 	return resp, nil
 }
 
@@ -320,19 +309,48 @@ func (e *executor) BatchSendNotificationsAsync(ctx context.Context, ns ...domain
 }
 
 // BatchQueryNotifications 批量查询通知
-func (e *executor) BatchQueryNotifications(_ context.Context, keys ...string) ([]domain.SendResponse, error) {
-	results := make([]domain.SendResponse, 0, len(keys))
+func (e *executor) BatchQueryNotifications(ctx context.Context, bizID int64, keys ...string) ([]domain.SendResponse, error) {
+	if len(keys) == 0 {
+		return []domain.SendResponse{}, nil
+	}
 
-	// 实际实现应该通过 Key 查询通知记录
-	// e.notificationSvc.GetNotificationsByKeys(ctx, keys)
+	// 通过 Key 查询通知记录
+	notifications, err := e.notificationSvc.GetByKeys(ctx, bizID, keys...)
+	if err != nil {
+		return nil, fmt.Errorf("查询通知记录失败: %w", err)
+	}
+
+	// 创建一个map用于快速查找
+	notificationMap := make(map[string]notificationsvc.Notification, len(notifications))
+	for i := range notifications {
+		notificationMap[notifications[i].Key] = notifications[i]
+	}
 
 	// 将查询到的Notification转换为SendResponse
+	results := make([]domain.SendResponse, len(keys))
+	for i, key := range keys {
+		if notification, ok := notificationMap[key]; ok {
+			// 找到对应的通知记录
+			results[i] = domain.SendResponse{
+				NotificationID: notification.ID,
+				Status:         notification.Status,
+				ErrorCode:      domain.ErrorCodeUnspecified,
+			}
+		} else {
+			// 未找到对应的通知记录
+			results[i] = domain.SendResponse{
+				Status:       notificationsvc.SendStatusFailed,
+				ErrorCode:    domain.ErrorCodeUnspecified,
+				ErrorMessage: fmt.Sprintf("未找到Key为%s的通知", key),
+			}
+		}
+	}
 
 	return results, nil
 }
 
 // QueryNotification 单条查询通知
-func (e *executor) QueryNotification(ctx context.Context, key string) (domain.SendResponse, error) {
+func (e *executor) QueryNotification(ctx context.Context, bizID int64, key string) (domain.SendResponse, error) {
 	// 如果找不到或者key为空，返回空响应
 	if key == "" {
 		return domain.SendResponse{
@@ -343,7 +361,7 @@ func (e *executor) QueryNotification(ctx context.Context, key string) (domain.Se
 	}
 
 	// 复用BatchQueryNotifications实现
-	results, err := e.BatchQueryNotifications(ctx, key)
+	results, err := e.BatchQueryNotifications(ctx, bizID, key)
 	if err != nil {
 		return domain.SendResponse{}, err
 	}

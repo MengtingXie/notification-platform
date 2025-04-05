@@ -13,8 +13,9 @@ import (
 )
 
 var (
-	ErrNotificationDuplicate = errors.New("通知记录主键冲突")
-	ErrNotificationNotFound  = errors.New("通知记录不存在")
+	ErrNotificationDuplicate       = errors.New("通知记录主键冲突")
+	ErrNotificationNotFound        = errors.New("通知记录不存在")
+	ErrNotificationVersionMismatch = errors.New("通知记录版本不匹配")
 )
 
 const (
@@ -25,27 +26,29 @@ const (
 
 type NotificationDAO interface {
 	// Create 创建单条通知记录
-	Create(ctx context.Context, data Notification) error
+	Create(ctx context.Context, data Notification) (Notification, error)
 
 	// UpdateStatus 更新通知状态
-	UpdateStatus(ctx context.Context, id uint64, status string) error
+	UpdateStatus(ctx context.Context, id uint64, status string, version int) error
 
 	// BatchCreate 批量创建通知记录
-	BatchCreate(ctx context.Context, dataList []Notification) error
+	BatchCreate(ctx context.Context, dataList []Notification) ([]Notification, error)
 
 	// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
 	// successIDs: 更新为成功状态的ID列表
 	// failedNotifications: 更新为失败状态的通知列表，包含ID和重试次数
 	BatchUpdateStatusSucceededOrFailed(ctx context.Context, successIDs []uint64, failedNotifications []Notification) error
 
-	// FindByID 根据ID查询通知
-	FindByID(ctx context.Context, id uint64) (Notification, error)
+	// GetByID 根据ID查询通知
+	GetByID(ctx context.Context, id uint64) (Notification, error)
 
-	// FindByBizID 根据业务ID查询通知列表
-	FindByBizID(ctx context.Context, bizID int64) ([]Notification, error)
+	BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]Notification, error)
 
-	// FindByKeys 根据业务ID和业务内唯一标识获取通知列表
-	FindByKeys(ctx context.Context, bizID int64, keys ...string) ([]Notification, error)
+	// GetByBizID 根据业务ID查询通知列表
+	GetByBizID(ctx context.Context, bizID int64) ([]Notification, error)
+
+	// GetByKeys 根据业务ID和业务内唯一标识获取通知列表
+	GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]Notification, error)
 
 	// ListByStatus 根据状态查询通知列表
 	ListByStatus(ctx context.Context, status string, limit int) ([]Notification, error)
@@ -53,10 +56,8 @@ type NotificationDAO interface {
 	// ListByScheduleTime 根据计划发送时间查询通知
 	ListByScheduleTime(ctx context.Context, startTime, endTime int64, limit int) ([]Notification, error)
 
-	// BatchUpdateStatus
+	// BatchUpdateStatus 批量更新通知状态
 	BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error
-
-	BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]Notification, error)
 }
 
 // Notification 通知记录表
@@ -73,6 +74,7 @@ type Notification struct {
 	RetryCount        int8   `gorm:"type:TINYINT;DEFAULT:0;comment:'当前重试次数'"`
 	ScheduledSTime    int64  `gorm:"index:idx_scheduled,priority:1;comment:'计划发送开始时间'"`
 	ScheduledETime    int64  `gorm:"index:idx_scheduled,priority:2;comment:'计划发送结束时间'"`
+	Version           int    `gorm:"type:INT;NOT NULL;DEFAULT:1;comment:'版本号，用于CAS操作'"`
 	Ctime             int64
 	Utime             int64
 }
@@ -88,6 +90,107 @@ func NewNotificationDAO(db *egorm.Component) NotificationDAO {
 	}
 }
 
+// Create 创建单条通知记录
+func (d *notificationDAO) Create(ctx context.Context, data Notification) (Notification, error) {
+	now := time.Now().Unix()
+	data.Ctime, data.Utime = now, now
+	data.Version = 1
+
+	err := d.db.WithContext(ctx).Create(&data).Error
+	if isUniqueConstraintError(err) {
+		return Notification{}, fmt.Errorf("%w", ErrNotificationDuplicate)
+	}
+	return data, err
+}
+
+// isUniqueConstraintError 检查是否是唯一索引冲突错误
+func isUniqueConstraintError(err error) bool {
+	if err == nil {
+		return false
+	}
+	me := new(mysql.MySQLError)
+	if ok := errors.As(err, &me); ok {
+		const uniqueIndexErrNo uint16 = 1062
+		return me.Number == uniqueIndexErrNo
+	}
+	return false
+}
+
+// BatchCreate 批量创建通知记录
+func (d *notificationDAO) BatchCreate(ctx context.Context, datas []Notification) ([]Notification, error) {
+	if len(datas) == 0 {
+		return nil, nil
+	}
+
+	now := time.Now().Unix()
+	for i := range datas {
+		datas[i].Ctime, datas[i].Utime = now, now
+		datas[i].Version = 1
+	}
+
+	// 使用事务执行批量插入，确保可以捕获并处理唯一键冲突
+	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for i := range datas {
+			err := tx.Create(&datas[i]).Error
+			if isUniqueConstraintError(err) {
+				return fmt.Errorf("%w", ErrNotificationDuplicate)
+			}
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return datas, err
+}
+
+// UpdateStatus 更新通知状态
+func (d *notificationDAO) UpdateStatus(ctx context.Context, id uint64, status string, version int) error {
+	result := d.db.WithContext(ctx).Model(&Notification{}).
+		Where("id = ? AND version = ?", id, version).
+		Updates(map[string]interface{}{
+			"status":  status,
+			"version": gorm.Expr("version + 1"),
+			"utime":   time.Now().Unix(),
+		})
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected < 1 {
+		// 没有更新任何行，可能是ID不存在或版本不匹配
+		// 先查询记录是否存在
+		var count int64
+		if err := d.db.WithContext(ctx).Model(&Notification{}).
+			Where("id = ?", id).
+			Count(&count).Error; err != nil {
+			return err
+		}
+
+		if count == 0 {
+			return fmt.Errorf("%w", ErrNotificationNotFound)
+		}
+
+		return fmt.Errorf("%w", ErrNotificationVersionMismatch)
+	}
+
+	return nil
+}
+
+// GetByID 根据ID查询通知
+func (d *notificationDAO) GetByID(ctx context.Context, id uint64) (Notification, error) {
+	var notification Notification
+	err := d.db.WithContext(ctx).First(&notification, id).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return Notification{}, fmt.Errorf("%w: id=%d", ErrNotificationNotFound, id)
+		}
+		return Notification{}, err
+	}
+	return notification, nil
+}
+
 func (d *notificationDAO) BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]Notification, error) {
 	var notifications []Notification
 	err := d.db.WithContext(ctx).
@@ -101,59 +204,8 @@ func (d *notificationDAO) BatchGetByIDs(ctx context.Context, ids []uint64) (map[
 	return notificationMap, err
 }
 
-// Create 创建单条通知记录
-func (d *notificationDAO) Create(ctx context.Context, data Notification) error {
-	now := time.Now().Unix()
-	data.Ctime, data.Utime = now, now
-	err := d.db.WithContext(ctx).Create(&data).Error
-	me := new(mysql.MySQLError)
-	if ok := errors.As(err, &me); ok {
-		const uniqueIndexErrNo uint16 = 1062
-		if me.Number == uniqueIndexErrNo {
-			return ErrNotificationDuplicate
-		}
-	}
-	return err
-}
-
-// BatchCreate 批量创建通知记录
-func (d *notificationDAO) BatchCreate(ctx context.Context, dataList []Notification) error {
-	if len(dataList) == 0 {
-		return nil
-	}
-	now := time.Now().Unix()
-	for i := range dataList {
-		dataList[i].Ctime, dataList[i].Utime = now, now
-	}
-	return d.db.WithContext(ctx).CreateInBatches(dataList, len(dataList)).Error
-}
-
-// UpdateStatus 更新通知状态
-func (d *notificationDAO) UpdateStatus(ctx context.Context, id uint64, status string) error {
-	result := d.db.WithContext(ctx).Model(&Notification{}).
-		Where("id = ?", id).
-		Updates(map[string]interface{}{
-			"status": status,
-			"utime":  time.Now().Unix(),
-		})
-	return result.Error
-}
-
-// FindByID 根据ID查询通知
-func (d *notificationDAO) FindByID(ctx context.Context, id uint64) (Notification, error) {
-	var notification Notification
-	err := d.db.WithContext(ctx).First(&notification, id).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return Notification{}, fmt.Errorf("%w: id=%d", ErrNotificationNotFound, id)
-		}
-		return Notification{}, err
-	}
-	return notification, nil
-}
-
-// FindByBizID 根据业务ID查询通知列表
-func (d *notificationDAO) FindByBizID(ctx context.Context, bizID int64) ([]Notification, error) {
+// GetByBizID 根据业务ID查询通知列表
+func (d *notificationDAO) GetByBizID(ctx context.Context, bizID int64) ([]Notification, error) {
 	var notifications []Notification
 	err := d.db.WithContext(ctx).Where("biz_id = ?", bizID).Find(&notifications).Error
 	if err != nil {
@@ -162,8 +214,8 @@ func (d *notificationDAO) FindByBizID(ctx context.Context, bizID int64) ([]Notif
 	return notifications, nil
 }
 
-// FindByKeys 根据业务ID和业务内唯一标识获取通知列表
-func (d *notificationDAO) FindByKeys(ctx context.Context, bizID int64, keys ...string) ([]Notification, error) {
+// GetByKeys 根据业务ID和业务内唯一标识获取通知列表
+func (d *notificationDAO) GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]Notification, error) {
 	var notifications []Notification
 	err := d.db.WithContext(ctx).Where("biz_id = ? AND `key` IN ?", bizID, keys).Find(&notifications).Error
 	if err != nil {

@@ -149,7 +149,7 @@ func (d *sender) Send(ctx context.Context, notifications []notificationsvc.Notif
 
 	// 更新发送状态
 	if len(succeedNotifications) > 0 || len(failedNotifications) > 0 {
-		err = d.notificationSvc.BatchUpdateNotificationStatusSucceededOrFailed(ctx, succeedNotifications, failedNotifications)
+		err = d.notificationSvc.BatchUpdateStatusSucceededOrFailed(ctx, succeedNotifications, failedNotifications)
 		if err != nil {
 			// 仅记录错误，不影响返回结果
 			fmt.Printf("更新通知状态失败: %v\n", err)

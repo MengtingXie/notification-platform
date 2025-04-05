@@ -140,13 +140,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 							Params: req.Notification.TemplateParams,
 						},
 					},
-					SendStrategyConfig: struct {
-						Type                  executorsvc.SendStrategyType
-						DelaySeconds          int64
-						ScheduledTime         time.Time
-						StartTimeMilliseconds int64
-						EndTimeMilliseconds   int64
-					}{
+					SendStrategyConfig: executorsvc.SendStrategyConfig{
 						Type: executorsvc.SendStrategyImmediate,
 					},
 				}
