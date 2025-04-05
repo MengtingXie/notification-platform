@@ -11,8 +11,8 @@ import (
 
 	notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/notification/v1"
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
+	executorsvc "gitee.com/flycash/notification-platform/internal/service/executor"
 	executormocks "gitee.com/flycash/notification-platform/internal/service/executor/mocks"
-	executorsvc "gitee.com/flycash/notification-platform/internal/service/executor/service"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/stretchr/testify/require"
@@ -85,6 +85,18 @@ func (s *ServerTestSuite) newClientConn() *grpc.ClientConn {
 	return conn
 }
 
+// 定义一个基本结构，之后只需要修改几个地方
+type mockExecutorNotification struct {
+	Notification       notificationsvc.Notification
+	SendStrategyConfig struct {
+		Type                  executorsvc.SendStrategyType
+		DelaySeconds          int64
+		ScheduledTime         time.Time
+		StartTimeMilliseconds int64
+		EndTimeMilliseconds   int64
+	}
+}
+
 func (s *ServerTestSuite) TestSendNotification() {
 	t := s.T()
 	timestamp := time.Now().UnixNano() // 使用纳秒级时间戳确保唯一性
@@ -116,13 +128,45 @@ func (s *ServerTestSuite) TestSendNotification() {
 			},
 			setup: func(t *testing.T, req *notificationv1.SendNotificationRequest) {
 				notificationID := uint64(1000 + timestamp%100)
+				// 期望转换后的notification
+				expectedNotification := executorsvc.Notification{
+					Notification: notificationsvc.Notification{
+						BizID:    int64(101), // 测试用bizID
+						Key:      req.Notification.Key,
+						Receiver: req.Notification.Receiver,
+						Channel:  notificationsvc.ChannelSMS,
+						Template: notificationsvc.Template{
+							ID:     100,
+							Params: req.Notification.TemplateParams,
+						},
+					},
+					SendStrategyConfig: struct {
+						Type                  executorsvc.SendStrategyType
+						DelaySeconds          int64
+						ScheduledTime         time.Time
+						StartTimeMilliseconds int64
+						EndTimeMilliseconds   int64
+					}{
+						Type: executorsvc.SendStrategyImmediate,
+					},
+				}
+
 				s.mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
-					Return(executorsvc.SendResponse{
-						NotificationID: notificationID,
-						Status:         executorsvc.SendStatusSucceeded,
-						SendTime:       time.Now(),
-					}, nil)
+					DoAndReturn(func(_ context.Context, n executorsvc.Notification) (executorsvc.SendResponse, error) {
+						// 确认参数正确
+						require.Equal(t, expectedNotification.Notification.BizID, n.Notification.BizID)
+						require.Equal(t, expectedNotification.Notification.Key, n.Notification.Key)
+						require.Equal(t, expectedNotification.Notification.Channel, n.Notification.Channel)
+						require.Equal(t, expectedNotification.SendStrategyConfig.Type, n.SendStrategyConfig.Type)
+
+						// 返回模拟响应
+						return executorsvc.SendResponse{
+							NotificationID: notificationID,
+							Status:         notificationsvc.SendStatusSucceeded,
+							SendTime:       time.Now(),
+						}, nil
+					})
 			},
 			after: func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse) {
 				require.NotEmpty(t, resp.NotificationId)
@@ -156,7 +200,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 					SendNotification(gomock.Any(), gomock.Any()).
 					Return(executorsvc.SendResponse{
 						NotificationID: notificationID,
-						Status:         executorsvc.SendStatusSucceeded,
+						Status:         notificationsvc.SendStatusSucceeded,
 						SendTime:       time.Now(),
 					}, nil)
 			},
@@ -191,11 +235,17 @@ func (s *ServerTestSuite) TestSendNotification() {
 				notificationID := uint64(3000 + timestamp%100)
 				s.mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
-					Return(executorsvc.SendResponse{
-						NotificationID: notificationID,
-						Status:         executorsvc.SendStatusSucceeded,
-						SendTime:       time.Now(),
-					}, nil)
+					DoAndReturn(func(_ context.Context, n executorsvc.Notification) (executorsvc.SendResponse, error) {
+						// 验证延迟策略被正确转换
+						require.Equal(t, executorsvc.SendStrategyDelayed, n.SendStrategyConfig.Type)
+						require.Equal(t, int64(60), n.SendStrategyConfig.DelaySeconds)
+
+						return executorsvc.SendResponse{
+							NotificationID: notificationID,
+							Status:         notificationsvc.SendStatusSucceeded,
+							SendTime:       time.Now(),
+						}, nil
+					})
 			},
 			after: func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse) {
 				require.NotEmpty(t, resp.NotificationId)
@@ -228,11 +278,17 @@ func (s *ServerTestSuite) TestSendNotification() {
 				notificationID := uint64(4000 + timestamp%100)
 				s.mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
-					Return(executorsvc.SendResponse{
-						NotificationID: notificationID,
-						Status:         executorsvc.SendStatusSucceeded,
-						SendTime:       time.Now(),
-					}, nil)
+					DoAndReturn(func(_ context.Context, n executorsvc.Notification) (executorsvc.SendResponse, error) {
+						// 验证定时策略被正确转换
+						require.Equal(t, executorsvc.SendStrategyScheduled, n.SendStrategyConfig.Type)
+						require.False(t, n.SendStrategyConfig.ScheduledTime.IsZero())
+
+						return executorsvc.SendResponse{
+							NotificationID: notificationID,
+							Status:         notificationsvc.SendStatusSucceeded,
+							SendTime:       time.Now(),
+						}, nil
+					})
 			},
 			after: func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse) {
 				require.NotEmpty(t, resp.NotificationId)
@@ -266,11 +322,18 @@ func (s *ServerTestSuite) TestSendNotification() {
 				notificationID := uint64(5000 + timestamp%100)
 				s.mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
-					Return(executorsvc.SendResponse{
-						NotificationID: notificationID,
-						Status:         executorsvc.SendStatusSucceeded,
-						SendTime:       time.Now(),
-					}, nil)
+					DoAndReturn(func(_ context.Context, n executorsvc.Notification) (executorsvc.SendResponse, error) {
+						// 验证时间窗口策略被正确转换
+						require.Equal(t, executorsvc.SendStrategyTimeWindow, n.SendStrategyConfig.Type)
+						require.True(t, n.SendStrategyConfig.StartTimeMilliseconds > 0)
+						require.True(t, n.SendStrategyConfig.EndTimeMilliseconds > n.SendStrategyConfig.StartTimeMilliseconds)
+
+						return executorsvc.SendResponse{
+							NotificationID: notificationID,
+							Status:         notificationsvc.SendStatusSucceeded,
+							SendTime:       time.Now(),
+						}, nil
+					})
 			},
 			after: func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse) {
 				require.NotEmpty(t, resp.NotificationId)
@@ -293,7 +356,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 				s.mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
 					Return(executorsvc.SendResponse{
-						Status:       executorsvc.SendStatusFailed,
+						Status:       notificationsvc.SendStatusFailed,
 						ErrorCode:    executorsvc.ErrorCodeInvalidParameter,
 						ErrorMessage: "无效的请求参数: 不支持的通知渠道",
 					}, nil)
@@ -319,7 +382,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 				s.mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
 					Return(executorsvc.SendResponse{
-						Status:       executorsvc.SendStatusFailed,
+						Status:       notificationsvc.SendStatusFailed,
 						ErrorCode:    executorsvc.ErrorCodeInvalidParameter,
 						ErrorMessage: "无效的请求参数: 无效的模板ID",
 					}, nil)
@@ -345,7 +408,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 				s.mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
 					Return(executorsvc.SendResponse{
-						Status:       executorsvc.SendStatusFailed,
+						Status:       notificationsvc.SendStatusFailed,
 						ErrorCode:    executorsvc.ErrorCodeInvalidParameter,
 						ErrorMessage: "无效的请求参数: 接收者不能为空",
 					}, nil)

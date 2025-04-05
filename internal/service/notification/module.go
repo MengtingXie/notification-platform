@@ -12,19 +12,26 @@ type (
 	}
 
 	Notification = domain.Notification
-	Service      = service.NotificationService
+	Template     = domain.Template
+	Service      service.NotificationService
 	Channel      = domain.Channel
-	Status       = domain.Status
+	SendStatus   = domain.Status
 )
 
 var (
-	ErrInvalidParameter     = service.ErrInvalidParameter
-	ErrNotificationNotFound = service.ErrNotificationNotFound
-	ErrChannelDisabled      = service.ErrChannelDisabled
+	ErrInvalidParameter         = service.ErrInvalidParameter
+	ErrNotificationNotFound     = service.ErrNotificationNotFound
+	ErrCreateNotificationFailed = service.ErrCreateNotificationFailed
+)
 
-	StatusPrepare   = domain.StatusPrepare   // 准备中
-	StatusCanceled  = domain.StatusCanceled  // 已取消
-	StatusPending   = domain.StatusPending   // 待发送
-	StatusSucceeded = domain.StatusSucceeded // 发送成功
-	StatusFailed    = domain.StatusFailed    // 发送失败
+const (
+	SendStatusPrepare   = domain.StatusPrepare   // 准备中
+	SendStatusCanceled  = domain.StatusCanceled  // 已取消
+	SendStatusPending   = domain.StatusPending   // 待发送
+	SendStatusSucceeded = domain.StatusSucceeded // 发送成功
+	SendStatusFailed    = domain.StatusFailed    // 发送失败
+
+	ChannelSMS   = domain.ChannelSMS
+	ChannelEmail = domain.ChannelEmail
+	ChannelInApp = domain.ChannelInApp
 )

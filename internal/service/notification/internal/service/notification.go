@@ -14,7 +14,7 @@ var (
 	ErrInvalidParameter             = errors.New("参数非法")
 	ErrNotificationIDGenerateFailed = errors.New("通知ID生成失败")
 	ErrNotificationNotFound         = repository.ErrNotificationNotFound
-	ErrChannelDisabled              = errors.New("通知渠道已禁用")
+	ErrCreateNotificationFailed     = errors.New("创建通知失败")
 )
 
 // NotificationService 通知服务接口
@@ -65,13 +65,13 @@ func (s *notificationService) CreateNotification(ctx context.Context, notificati
 
 	id, err := s.idGenerator.NextID()
 	if err != nil {
-		return domain.Notification{}, ErrNotificationIDGenerateFailed
+		return domain.Notification{}, fmt.Errorf("%w", ErrNotificationIDGenerateFailed)
 	}
 	notification.ID = id
 
 	err2 := s.repo.Create(ctx, notification)
 	if err2 != nil {
-		return domain.Notification{}, fmt.Errorf("创建通知记录失败: %w", err2)
+		return domain.Notification{}, fmt.Errorf("%w: %w", ErrCreateNotificationFailed, err2)
 	}
 	notification.ID = id
 
@@ -124,14 +124,14 @@ func (s *notificationService) BatchCreateNotifications(ctx context.Context, noti
 	for i := range notifications {
 		id, err := s.idGenerator.NextID()
 		if err != nil {
-			return nil, ErrNotificationIDGenerateFailed
+			return nil, fmt.Errorf("%w", ErrNotificationIDGenerateFailed)
 		}
 		notifications[i].ID = id
 	}
 
 	err := s.repo.BatchCreate(ctx, notifications)
 	if err != nil {
-		return nil, fmt.Errorf("批量创建通知记录失败: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrCreateNotificationFailed, err)
 	}
 
 	return notifications, nil

@@ -5,25 +5,27 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
+	executorsvc "gitee.com/flycash/notification-platform/internal/service/executor"
+	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/notification/v1"
-	"gitee.com/flycash/notification-platform/internal/service/executor/service"
 )
 
 // NotificationServer 处理通知平台的gRPC请求
 type NotificationServer struct {
 	notificationv1.UnimplementedNotificationServiceServer
-	executor service.ExecutorService
+	executor executorsvc.Service
 	// TODO: 配置服务 configService config.ConfigService
 }
 
 // NewServer 创建通知平台gRPC服务器
-func NewServer(executor service.ExecutorService) *NotificationServer {
+func NewServer(executor executorsvc.Service) *NotificationServer {
 	return &NotificationServer{
 		executor: executor,
 	}
@@ -90,7 +92,7 @@ func (s *NotificationServer) BatchSendNotifications(ctx context.Context, req *no
 	}
 
 	// 2. 将请求转换为领域对象
-	notifications := make([]service.Notification, 0, len(req.Notifications))
+	notifications := make([]executorsvc.Notification, 0, len(req.Notifications))
 	for _, n := range req.Notifications {
 		notification, err := s.convertToNotification(n, bizID)
 		if err != nil {
@@ -132,7 +134,7 @@ func (s *NotificationServer) BatchSendNotificationsAsync(ctx context.Context, re
 	}
 
 	// 2. 将请求转换为领域对象
-	notifications := make([]service.Notification, 0, len(req.Notifications))
+	notifications := make([]executorsvc.Notification, 0, len(req.Notifications))
 	for _, n := range req.Notifications {
 		notification, err := s.convertToNotification(n, bizID)
 		if err != nil {
@@ -217,71 +219,95 @@ func (s *NotificationServer) extractAndValidateBizID(ctx context.Context) (int64
 }
 
 // convertToNotification 将请求转换为通知领域对象
-func (s *NotificationServer) convertToNotification(n *notificationv1.Notification, bizID int64) (service.Notification, error) {
+func (s *NotificationServer) convertToNotification(n *notificationv1.Notification, bizID int64) (executorsvc.Notification, error) {
 	if n == nil {
-		return service.Notification{}, errors.New("通知不能为空")
+		return executorsvc.Notification{}, errors.New("通知不能为空")
 	}
 
 	// 转换TemplateID
 	tid, err := strconv.ParseInt(n.TemplateId, 10, 64)
 	if err != nil {
-		return service.Notification{}, fmt.Errorf("无效的模板ID: %s", n.TemplateId)
+		return executorsvc.Notification{}, fmt.Errorf("无效的模板ID: %s", n.TemplateId)
 	}
 
 	// 构建基本Notification
-	notification := service.Notification{
-		BizID:          bizID,
-		Key:            n.Key,
-		Receiver:       n.Receiver,
-		Channel:        convertChannel(n.Channel),
-		TemplateID:     tid,
-		TemplateParams: n.TemplateParams,
-		Strategy:       service.SendStrategyImmediate, // 默认为立即发送
+	notification := notificationsvc.Notification{
+		BizID:    bizID,
+		Key:      n.Key,
+		Receiver: n.Receiver,
+		Channel:  convertChannel(n.Channel),
+		Template: notificationsvc.Template{
+			ID:     tid,
+			Params: n.TemplateParams,
+		},
 	}
 
-	// 添加发送策略
+	// 构建发送策略
+	sendStrategyType := executorsvc.SendStrategyImmediate // 默认为立即发送
+	var delaySeconds int64
+	var scheduledTime time.Time
+	var startTimeMilliseconds int64
+	var endTimeMilliseconds int64
+
+	// 处理发送策略
 	if n.Strategy != nil {
 		switch s := n.Strategy.StrategyType.(type) {
 		case *notificationv1.SendStrategy_Immediate:
-			notification.Strategy = service.SendStrategyImmediate
+			sendStrategyType = executorsvc.SendStrategyImmediate
 		case *notificationv1.SendStrategy_Delayed:
 			if s.Delayed != nil && s.Delayed.DelaySeconds > 0 {
-				notification.Strategy = service.SendStrategyDelayed
-				notification.DelaySeconds = s.Delayed.DelaySeconds
+				sendStrategyType = executorsvc.SendStrategyDelayed
+				delaySeconds = s.Delayed.DelaySeconds
 			}
 		case *notificationv1.SendStrategy_Scheduled:
 			if s.Scheduled != nil && s.Scheduled.SendTime != nil {
-				notification.Strategy = service.SendStrategyScheduled
-				notification.ScheduledTime = s.Scheduled.SendTime.AsTime()
+				sendStrategyType = executorsvc.SendStrategyScheduled
+				scheduledTime = s.Scheduled.SendTime.AsTime()
 			}
 		case *notificationv1.SendStrategy_TimeWindow:
 			if s.TimeWindow != nil {
-				notification.Strategy = service.SendStrategyTimeWindow
-				notification.StartTimeMilliseconds = s.TimeWindow.StartTimeMilliseconds
-				notification.EndTimeMilliseconds = s.TimeWindow.EndTimeMilliseconds
+				sendStrategyType = executorsvc.SendStrategyTimeWindow
+				startTimeMilliseconds = s.TimeWindow.StartTimeMilliseconds
+				endTimeMilliseconds = s.TimeWindow.EndTimeMilliseconds
 			}
 		}
 	}
 
-	return notification, nil
+	// 构建最终的Notification
+	return executorsvc.Notification{
+		Notification: notification,
+		SendStrategyConfig: struct {
+			Type                  executorsvc.SendStrategyType
+			DelaySeconds          int64
+			ScheduledTime         time.Time
+			StartTimeMilliseconds int64
+			EndTimeMilliseconds   int64
+		}{
+			Type:                  sendStrategyType,
+			DelaySeconds:          delaySeconds,
+			ScheduledTime:         scheduledTime,
+			StartTimeMilliseconds: startTimeMilliseconds,
+			EndTimeMilliseconds:   endTimeMilliseconds,
+		},
+	}, nil
 }
 
 // convertChannel 将gRPC通道转换为领域通道
-func convertChannel(channel notificationv1.Channel) service.Channel {
+func convertChannel(channel notificationv1.Channel) notificationsvc.Channel {
 	switch channel {
 	case notificationv1.Channel_SMS:
-		return service.ChannelSMS
+		return notificationsvc.ChannelSMS
 	case notificationv1.Channel_EMAIL:
-		return service.ChannelEmail
+		return notificationsvc.ChannelEmail
 	case notificationv1.Channel_IN_APP:
-		return service.ChannelInApp
+		return notificationsvc.ChannelInApp
 	default:
-		return service.ChannelUnspecified
+		return ""
 	}
 }
 
 // convertToSendResponse 将领域响应转换为gRPC响应
-func (s *NotificationServer) convertToSendResponse(result service.SendResponse) (*notificationv1.SendNotificationResponse, error) {
+func (s *NotificationServer) convertToSendResponse(result executorsvc.SendResponse) (*notificationv1.SendNotificationResponse, error) {
 	response := &notificationv1.SendNotificationResponse{
 		NotificationId: result.NotificationID,
 		Status:         convertSendStatus(result.Status),
@@ -297,17 +323,17 @@ func (s *NotificationServer) convertToSendResponse(result service.SendResponse) 
 }
 
 // convertSendStatus 将领域发送状态转换为gRPC发送状态
-func convertSendStatus(status service.SendStatus) notificationv1.SendStatus {
+func convertSendStatus(status notificationsvc.SendStatus) notificationv1.SendStatus {
 	switch status {
-	case service.SendStatusPrepare:
+	case notificationsvc.SendStatusPrepare:
 		return notificationv1.SendStatus_PREPARE
-	case service.SendStatusCanceled:
+	case notificationsvc.SendStatusCanceled:
 		return notificationv1.SendStatus_CANCELED
-	case service.SendStatusPending:
+	case notificationsvc.SendStatusPending:
 		return notificationv1.SendStatus_PENDING
-	case service.SendStatusSucceeded:
+	case notificationsvc.SendStatusSucceeded:
 		return notificationv1.SendStatus_SUCCEEDED
-	case service.SendStatusFailed:
+	case notificationsvc.SendStatusFailed:
 		return notificationv1.SendStatus_FAILED
 	default:
 		return notificationv1.SendStatus_SEND_STATUS_UNSPECIFIED
@@ -315,17 +341,17 @@ func convertSendStatus(status service.SendStatus) notificationv1.SendStatus {
 }
 
 // convertErrorCode 将领域错误码转换为gRPC错误码
-func convertErrorCode(code service.ErrorCode) notificationv1.ErrorCode {
+func convertErrorCode(code executorsvc.ErrorCode) notificationv1.ErrorCode {
 	switch code {
-	case service.ErrorCodeInvalidParameter:
+	case executorsvc.ErrorCodeInvalidParameter:
 		return notificationv1.ErrorCode_INVALID_PARAMETER
-	case service.ErrorCodeRateLimited:
+	case executorsvc.ErrorCodeRateLimited:
 		return notificationv1.ErrorCode_RATE_LIMITED
-	case service.ErrorCodeTemplateNotFound:
+	case executorsvc.ErrorCodeTemplateNotFound:
 		return notificationv1.ErrorCode_TEMPLATE_NOT_FOUND
-	case service.ErrorCodeChannelDisabled:
+	case executorsvc.ErrorCodeChannelDisabled:
 		return notificationv1.ErrorCode_CHANNEL_DISABLED
-	case service.ErrorCodeCreateNotificationFailed:
+	case executorsvc.ErrorCodeCreateNotificationFailed:
 		return notificationv1.ErrorCode_CREATE_NOTIFICATION_FAILED
 	default:
 		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED

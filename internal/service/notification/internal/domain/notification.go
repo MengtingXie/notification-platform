@@ -4,10 +4,9 @@ package domain
 type Channel string
 
 const (
-	ChannelUnknown Channel = "unknown"
-	ChannelSMS     Channel = "SMS"    // 短信
-	ChannelEmail   Channel = "EMAIL"  // 邮件
-	ChannelInApp   Channel = "IN_APP" // 站内信
+	ChannelSMS   Channel = "SMS"    // 短信
+	ChannelEmail Channel = "EMAIL"  // 邮件
+	ChannelInApp Channel = "IN_APP" // 站内信
 )
 
 // Status 通知状态
