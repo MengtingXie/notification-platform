@@ -21,7 +21,7 @@ type TxNotificationRepository interface {
 	First(ctx context.Context, txID int64) (domain.TxNotification, error)
 	BatchGetTxNotification(ctx context.Context, txIDs []int64) (map[int64]domain.TxNotification, error)
 	GetByBizIDKey(ctx context.Context, bizID int64, key string) (domain.TxNotification, error)
-	UpdateNotificationID(ctx context.Context, bizId int64, key string, notificationID uint64) error
+	UpdateNotificationID(ctx context.Context, bizID int64, key string, notificationID uint64) error
 }
 
 type txNotificationRepo struct {
@@ -35,8 +35,8 @@ func NewTxNotificationRepository(txdao dao.TxNotificationDAO) TxNotificationRepo
 	}
 }
 
-func (t *txNotificationRepo) UpdateNotificationID(ctx context.Context, bizId int64, key string, notificationID uint64) error {
-	return t.txdao.UpdateNotificationID(ctx, bizId, key, notificationID)
+func (t *txNotificationRepo) UpdateNotificationID(ctx context.Context, bizID int64, key string, notificationID uint64) error {
+	return t.txdao.UpdateNotificationID(ctx, bizID, key, notificationID)
 }
 
 func (t *txNotificationRepo) GetByBizIDKey(ctx context.Context, bizID int64, key string) (domain.TxNotification, error) {

@@ -87,9 +87,16 @@ func (t *TxNotificationServiceV1) GetNotification(ctx context.Context, bizID int
 }
 
 func (t *TxNotificationServiceV1) Prepare(ctx context.Context, txNotification domain.TxNotification) (uint64, error) {
-	noti, err := t.notificationSvc.CreateNotification(ctx, txNotification.Notification)
-	if err != nil {
-		return 0, fmt.Errorf("创建通知失败 err:%w", err)
+	noti, nerr := t.notificationSvc.CreateNotification(ctx, txNotification.Notification)
+	if nerr != nil {
+		if errors.Is(nerr, notification.ErrNotificationDuplicate) {
+			txn, err := t.repo.GetByBizIDKey(ctx, txNotification.BizID, txNotification.Key)
+			if err != nil {
+				return 0, err
+			}
+			return txn.Notification.ID, nil
+		}
+		return 0, nerr
 	}
 	txNotification.Notification = noti
 	conf, err := t.configSvc.GetByID(ctx, txNotification.BizID)
@@ -116,7 +123,7 @@ func (t *TxNotificationServiceV1) Commit(ctx context.Context, bizID int64, key s
 		return fmt.Errorf("查找事务失败 err:%w", err)
 	}
 
-	err = t.notificationSvc.UpdateNotificationStatus(ctx, noti.Notification.ID, notification.StatusSucceeded)
+	err = t.notificationSvc.UpdateNotificationStatus(ctx, noti.Notification.ID, notification.SendStatusPending)
 	if err != nil {
 		return fmt.Errorf("更新事务失败 err:%w", err)
 	}
@@ -133,7 +140,7 @@ func (t *TxNotificationServiceV1) Cancel(ctx context.Context, bizID int64, key s
 		return fmt.Errorf("查找事务失败 err:%w", err)
 	}
 
-	err = t.notificationSvc.UpdateNotificationStatus(ctx, noti.Notification.ID, notification.StatusCanceled)
+	err = t.notificationSvc.UpdateNotificationStatus(ctx, noti.Notification.ID, notification.SendStatusCanceled)
 	if err != nil {
 		return fmt.Errorf("更新事务失败 err:%w", err)
 	}

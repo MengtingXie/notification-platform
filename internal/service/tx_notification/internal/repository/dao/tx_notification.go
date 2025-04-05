@@ -59,17 +59,17 @@ type TxNotificationDAO interface {
 	BatchGetTxNotification(ctx context.Context, txIDs []int64) (map[int64]TxNotification, error)
 
 	GetByBizIDKey(ctx context.Context, bizID int64, key string) (TxNotification, error)
-	UpdateNotificationID(ctx context.Context, bizId int64, key string, notificationID uint64) error
+	UpdateNotificationID(ctx context.Context, bizID int64, key string, notificationID uint64) error
 }
 
 type txNotificationDAO struct {
 	db *egorm.Component
 }
 
-func (t *txNotificationDAO) UpdateNotificationID(ctx context.Context, bizId int64, key string, notificationID uint64) error {
+func (t *txNotificationDAO) UpdateNotificationID(ctx context.Context, bizID int64, key string, notificationID uint64) error {
 	err := t.db.WithContext(ctx).
 		Model(&TxNotification{}).
-		Where("biz_id = ? AND `key` = ?", bizId, key).
+		Where("biz_id = ? AND `key` = ?", bizID, key).
 		Update("notification_id", notificationID).Error
 	return err
 }

@@ -20,10 +20,15 @@ var notificationServiceProviderSet = wire.NewSet(
 func InitModule(db *egorm.Component, idGenerator *sonyflake.Sonyflake) Module {
 	wire.Build(
 		initTables,
+		convert,
 		notificationServiceProviderSet,
 		// 封装统一对象
 		wire.Struct(new(Module), "*"))
 	return Module{}
+}
+
+func convert(svc service.NotificationService) Service {
+	return svc.(Service)
 }
 
 func initTables(db *egorm.Component) error {

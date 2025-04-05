@@ -14,9 +14,9 @@ import (
 // Injectors from wire.go:
 
 func InitNotificationService() notification.Service {
-	v := ioc.InitDB()
+	db := ioc.InitDB()
 	sonyflake := ioc.InitIDGenerator()
-	module := notification.InitModule(v, sonyflake)
-	v2 := module.Svc
-	return v2
+	module := notification.InitModule(db, sonyflake)
+	service := module.Svc
+	return service
 }

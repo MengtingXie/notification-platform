@@ -10,13 +10,13 @@ type (
 		ignoredInitTablesErr error // 必须放在第一个
 		Svc                  Service
 	}
-	Service              = service.TxNotificationService
-	TxNotification       = domain.TxNotification
-	TxNotificationStatus = domain.TxNotificationStatus
+	Service        = service.TxNotificationService
+	TxNotification = domain.TxNotification
+	Status         = domain.TxNotificationStatus
 )
 
 const (
-	TxNotificationStatusPrepare TxNotificationStatus = "PREPARE"
-	TxNotificationStatusCommit  TxNotificationStatus = "COMMIT"
-	TxNotificationStatusCancel  TxNotificationStatus = "CANCEL"
+	TxNotificationStatusPrepare Status = "PREPARE"
+	TxNotificationStatusCommit  Status = "COMMIT"
+	TxNotificationStatusCancel  Status = "CANCEL"
 )

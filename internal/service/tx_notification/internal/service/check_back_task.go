@@ -36,8 +36,11 @@ type TxCheckTask struct {
 }
 
 const (
-	TxCheckTaskKey = "check_back_job"
-	defaultTimeout = 5 * time.Second
+	TxCheckTaskKey  = "check_back_job"
+	defaultTimeout  = 5 * time.Second
+	committedStatus = 1
+	unknownStatus   = 0
+	cancelStatus    = 2
 )
 
 func (task *TxCheckTask) Start(ctx context.Context) {
@@ -175,7 +178,7 @@ func (task *TxCheckTask) oneBackCheck(ctx context.Context, configMap map[int64]c
 	res, err := task.getCheckBackRes(ctx, backConfig, txNotification)
 	// 都检查了一次无论成功与否
 	txNotification.CheckCount++
-	if err != nil || res == 0 {
+	if err != nil || res == unknownStatus {
 		builder, verr := task.retryStrategyBuilder.Build(conf.TxnConfig)
 		if verr != nil {
 			txNotification.NextCheckTime = 0
@@ -196,12 +199,12 @@ func (task *TxCheckTask) oneBackCheck(ctx context.Context, configMap map[int64]c
 		return txNotification
 
 	}
-	//
-	if res == 2 {
+
+	if res == cancelStatus {
 		txNotification.Status = domain.TxNotificationStatusCancel
 		txNotification.NextCheckTime = 0
 	}
-	if res == 1 {
+	if res == committedStatus {
 		txNotification.NextCheckTime = 0
 		txNotification.Status = domain.TxNotificationStatusCommit
 	}
@@ -259,7 +262,7 @@ func (task *TxCheckTask) commit(ctx context.Context, txns []domain.TxNotificatio
 	ids := slice.Map(txns, func(_ int, src domain.TxNotification) uint64 {
 		return src.Notification.ID
 	})
-	err := task.notificationSvc.BatchUpdateNotificationStatus(ctx, ids, string(notification.StatusPending))
+	err := task.notificationSvc.BatchUpdateNotificationStatus(ctx, ids, string(notification.SendStatusPending))
 	if err != nil {
 		task.logger.Error("更新通知服务中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))
 		return
@@ -274,7 +277,7 @@ func (task *TxCheckTask) fail(ctx context.Context, txns []domain.TxNotification)
 	ids := slice.Map(txns, func(_ int, src domain.TxNotification) uint64 {
 		return src.Notification.ID
 	})
-	err := task.notificationSvc.BatchUpdateNotificationStatus(ctx, ids, string(notification.StatusCanceled))
+	err := task.notificationSvc.BatchUpdateNotificationStatus(ctx, ids, string(notification.SendStatusCanceled))
 	if err != nil {
 		task.logger.Error("更新通知服务中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))
 		return

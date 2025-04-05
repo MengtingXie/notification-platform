@@ -23,9 +23,10 @@ func InitModule(db *gorm.DB, idGenerator *sonyflake.Sonyflake) Module {
 	notificationDAO := dao.NewNotificationDAO(db)
 	notificationRepository := repository.NewNotificationRepository(notificationDAO)
 	notificationService := service.NewNotificationService(notificationRepository, idGenerator)
+	service2 := convert(notificationService)
 	module := Module{
 		ignoredInitTablesErr: error2,
-		Svc:                  notificationService,
+		Svc:                  service2,
 	}
 	return module
 }
@@ -33,6 +34,10 @@ func InitModule(db *gorm.DB, idGenerator *sonyflake.Sonyflake) Module {
 // wire.go:
 
 var notificationServiceProviderSet = wire.NewSet(dao.NewNotificationDAO, repository.NewNotificationRepository, service.NewNotificationService)
+
+func convert(svc service.NotificationService) Service {
+	return svc.(Service)
+}
 
 func initTables(db *egorm.Component) error {
 	return dao.InitTables(db)

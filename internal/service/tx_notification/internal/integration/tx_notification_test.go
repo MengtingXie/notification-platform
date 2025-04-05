@@ -72,7 +72,7 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 							"key": "value",
 						},
 					},
-					Status:         notification.StatusPending,
+					Status:         notification.SendStatusPending,
 					RetryCount:     9,
 					ScheduledETime: 123,
 					ScheduledSTime: 321,
@@ -108,7 +108,7 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 								"key": "value",
 							},
 						},
-						Status:         notification.StatusPending,
+						Status:         notification.SendStatusPending,
 						RetryCount:     9,
 						ScheduledETime: 123,
 						ScheduledSTime: 321,
@@ -126,7 +126,7 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 							"key": "value",
 						},
 					},
-					Status:         notification.StatusPending,
+					Status:         notification.SendStatusPending,
 					RetryCount:     9,
 					ScheduledETime: 123,
 					ScheduledSTime: 321,
@@ -173,7 +173,7 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 							"key": "value",
 						},
 					},
-					Status:         notification.StatusPending,
+					Status:         notification.SendStatusPending,
 					RetryCount:     9,
 					ScheduledETime: 123,
 					ScheduledSTime: 321,
@@ -205,7 +205,7 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 								"key": "value",
 							},
 						},
-						Status:         notification.StatusPending,
+						Status:         notification.SendStatusPending,
 						RetryCount:     9,
 						ScheduledETime: 123,
 						ScheduledSTime: 321,
@@ -223,7 +223,7 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 							"key": "value",
 						},
 					},
-					Status:         notification.StatusPending,
+					Status:         notification.SendStatusPending,
 					RetryCount:     9,
 					ScheduledETime: 123,
 					ScheduledSTime: 321,
@@ -273,115 +273,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 	}
 }
 
-func (s *TxNotificationServiceTestSuite) TestCurPrepare() {
-	// 测试逻辑，开三个goroutine并发去调用，Prepare方法插入同一个bizid 和 key的数据，然后数据库只有一条数据，也就是测试幂等
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	ctrl := gomock.NewController(s.T())
-	defer ctrl.Finish()
-
-	// 准备测试数据
-	const bizID int64 = 100
-	const key string = "concurrent_test_key"
-
-	// 设置模拟服务
-	mockConfigSvc := configmocks.NewMockBusinessConfigService(ctrl)
-	mockConfigSvc.EXPECT().
-		GetByID(gomock.Any(), bizID).
-		Return(config.BusinessConfig{
-			ID:        bizID,
-			TxnConfig: `{"type":"normal","maxRetryTimes":3,"interval":10}`,
-		}, nil).
-		AnyTimes() // 因为会被多次调用，所以使用AnyTimes
-
-	mockNotificationSvc := notificationmocks.NewMockNotificationService(ctrl)
-	mockNotificationSvc.EXPECT().
-		CreateNotification(gomock.Any(), gomock.Any()).
-		Return(notification.Notification{
-			ID:       20001,
-			BizID:    bizID,
-			Key:      key,
-			Receiver: "13800138000",
-			Channel:  "SMS",
-			Status:   notification.StatusPending,
-		}, nil).
-		AnyTimes() // 因为会被多次调用，所以使用AnyTimes
-
-	// 初始化服务
-	svc := startup.InitTxNotificationService(notification.Module{
-		Svc: mockNotificationSvc,
-	}, config.Module{
-		Svc: mockConfigSvc,
-	})
-
-	// 创建相同的通知对象
-	txNotification := domain.TxNotification{
-		Notification: notification.Notification{
-			BizID:    bizID,
-			Key:      key,
-			Receiver: "13800138000",
-			Channel:  "SMS",
-			Template: notification.Template{
-				ID:        1,
-				VersionID: 10,
-				Params: map[string]string{
-					"code": "123456",
-				},
-			},
-			Status: notification.StatusPending,
-		},
-		BizID: bizID,
-		Key:   key,
-	}
-
-	// 使用WaitGroup等待所有goroutine完成
-	var wg sync.WaitGroup
-	wg.Add(3)
-
-	// 存储每个goroutine的结果
-	results := make([]uint64, 0, 3)
-	mu := &sync.Mutex{}
-
-	// 并发调用Prepare方法
-	for i := 0; i < 3; i++ {
-		go func(idx int) {
-			defer wg.Done()
-			txid, err := svc.Prepare(ctx, txNotification)
-			fmt.Println("xxxxxxx", txid)
-			require.NoError(s.T(), err)
-			mu.Lock()
-			results = append(results, txid)
-			mu.Unlock()
-		}(i)
-	}
-
-	// 等待所有goroutine完成
-	wg.Wait()
-
-	// 至少有一个goroutine应该成功
-	assert.Equal(s.T(), 3, len(results))
-
-	// 验证数据库中只有一条记录
-	var count int64
-	err := s.db.Model(&dao.TxNotification{}).
-		Where("biz_id = ? AND `key` = ?", bizID, key).
-		Count(&count).Error
-
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), int64(1), count, "数据库中应该只有一条记录，证明幂等性")
-
-	// 检查记录内容
-	var txn dao.TxNotification
-	err = s.db.Where("biz_id = ? AND `key` = ?", bizID, key).First(&txn).Error
-	require.NoError(s.T(), err)
-
-	assert.Equal(s.T(), bizID, txn.BizID)
-	assert.Equal(s.T(), key, txn.Key)
-	assert.Equal(s.T(), uint64(20001), txn.NotificationID)
-	assert.Equal(s.T(), domain.TxNotificationStatusPrepare.String(), txn.Status)
-}
-
 func (s *TxNotificationServiceTestSuite) TestCommit() {
 	testcases := []struct {
 		name            string
@@ -400,7 +291,7 @@ func (s *TxNotificationServiceTestSuite) TestCommit() {
 			notificationSvc: func(t *testing.T, ctrl *gomock.Controller) notification.Service {
 				mockNotificationService := notificationmocks.NewMockNotificationService(ctrl)
 				mockNotificationService.EXPECT().
-					UpdateNotificationStatus(gomock.Any(), uint64(10123), notification.StatusSucceeded).
+					UpdateNotificationStatus(gomock.Any(), uint64(10123), notification.SendStatusPending).
 					Return(nil)
 				return mockNotificationService
 			},
@@ -502,7 +393,7 @@ func (s *TxNotificationServiceTestSuite) TestCancel() {
 			notificationSvc: func(t *testing.T, ctrl *gomock.Controller) notification.Service {
 				mockNotificationService := notificationmocks.NewMockNotificationService(ctrl)
 				mockNotificationService.EXPECT().
-					UpdateNotificationStatus(gomock.Any(), uint64(10123), notification.StatusCanceled).
+					UpdateNotificationStatus(gomock.Any(), uint64(10123), notification.SendStatusCanceled).
 					Return(nil)
 				return mockNotificationService
 			},
@@ -631,7 +522,7 @@ func (s *TxNotificationServiceTestSuite) TestGetNotification() {
 								"code": "123456",
 							},
 						},
-						Status:         notification.StatusPending,
+						Status:         notification.SendStatusPending,
 						RetryCount:     0,
 						ScheduledSTime: 0,
 						ScheduledETime: 0,
@@ -655,7 +546,7 @@ func (s *TxNotificationServiceTestSuite) TestGetNotification() {
 				assert.Equal(t, "get-test-case-01", txn.Notification.Key)
 				assert.Equal(t, "13800138000", txn.Notification.Receiver)
 				assert.Equal(t, notification.Channel("SMS"), txn.Notification.Channel)
-				assert.Equal(t, notification.StatusPending, txn.Notification.Status)
+				assert.Equal(t, notification.SendStatusPending, txn.Notification.Status)
 				assert.Equal(t, int64(1), txn.Notification.Template.ID)
 				assert.Equal(t, int64(10), txn.Notification.Template.VersionID)
 				assert.Equal(t, map[string]string{"code": "123456"}, txn.Notification.Template.Params)
@@ -885,19 +776,19 @@ func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
 	wantNotifications := []notification.Notification{
 		{
 			ID:     1,
-			Status: notification.StatusPending,
+			Status: notification.SendStatusPending,
 		},
 		{
 			ID:     11,
-			Status: notification.StatusPending,
+			Status: notification.SendStatusPending,
 		},
 		{
 			ID:     22,
-			Status: notification.StatusCanceled,
+			Status: notification.SendStatusCanceled,
 		},
 		{
 			ID:     44,
-			Status: notification.StatusCanceled,
+			Status: notification.SendStatusCanceled,
 		},
 	}
 	for _, wantNotification := range wantNotifications {

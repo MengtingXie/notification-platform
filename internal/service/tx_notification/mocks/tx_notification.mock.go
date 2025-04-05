@@ -157,10 +157,10 @@ func (c *MockTxNotificationServiceGetNotificationCall) DoAndReturn(f func(contex
 }
 
 // Prepare mocks base method.
-func (m *MockTxNotificationService) Prepare(ctx context.Context, txNotification domain.TxNotification) (int64, error) {
+func (m *MockTxNotificationService) Prepare(ctx context.Context, txNotification domain.TxNotification) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Prepare", ctx, txNotification)
-	ret0, _ := ret[0].(int64)
+	ret0, _ := ret[0].(uint64)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -178,19 +178,19 @@ type MockTxNotificationServicePrepareCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockTxNotificationServicePrepareCall) Return(arg0 int64, arg1 error) *MockTxNotificationServicePrepareCall {
+func (c *MockTxNotificationServicePrepareCall) Return(arg0 uint64, arg1 error) *MockTxNotificationServicePrepareCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockTxNotificationServicePrepareCall) Do(f func(context.Context, domain.TxNotification) (int64, error)) *MockTxNotificationServicePrepareCall {
+func (c *MockTxNotificationServicePrepareCall) Do(f func(context.Context, domain.TxNotification) (uint64, error)) *MockTxNotificationServicePrepareCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockTxNotificationServicePrepareCall) DoAndReturn(f func(context.Context, domain.TxNotification) (int64, error)) *MockTxNotificationServicePrepareCall {
+func (c *MockTxNotificationServicePrepareCall) DoAndReturn(f func(context.Context, domain.TxNotification) (uint64, error)) *MockTxNotificationServicePrepareCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

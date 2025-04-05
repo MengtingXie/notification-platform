@@ -6,10 +6,10 @@ import (
 )
 
 type (
-	Module struct {
+	Service        service.BusinessConfigService
+	BusinessConfig = domain.BusinessConfig
+	Module         struct {
 		ignoredInitTablesErr error
 		Svc                  Service
 	}
-	BusinessConfig = domain.BusinessConfig
-	Service        = service.BusinessConfigService
 )
