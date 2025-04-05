@@ -4,7 +4,7 @@ import "gitee.com/flycash/notification-platform/internal/service/notification"
 
 type TxNotification struct {
 	// 事务id
-	TxID string
+	TxID int64
 
 	// 创建的通知id
 	Notification notification.Notification

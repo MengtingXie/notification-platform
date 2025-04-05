@@ -1,7 +1,7 @@
 package retry
 
 type Strategy interface {
-	// NextTime 有没有下一次，已经下次重试的时间戳
+	// NextTime 有没有下一次，以及下次重试的时间戳
 	NextTime(req Req) (int64, bool)
 }
 type StrategyFunc func(req Req) (int64, bool)

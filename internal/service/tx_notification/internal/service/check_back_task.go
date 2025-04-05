@@ -9,6 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ecodeclub/ekit/syncx"
+
+	tx_notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
 	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/domain"
@@ -19,12 +22,9 @@ import (
 	"github.com/gotomicro/ego/core/elog"
 	"github.com/meoying/dlock-go"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/protobuf/types/known/timestamppb"
-
-	tx_notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/tx_notification/v1"
 )
 
-type CheckBackTask struct {
+type TxCheckTask struct {
 	repo                 repository.TxNotificationRepository
 	notificationSvc      notification.Service
 	configSvc            config.Service
@@ -32,19 +32,20 @@ type CheckBackTask struct {
 	logger               *elog.Component
 	lock                 dlock.Client
 	batchSize            int
+	clientMap            syncx.Map[string, *egrpc.Component]
 }
 
 const (
-	key            = "check_back_job"
+	TxCheckTaskKey = "check_back_job"
 	defaultTimeout = 5 * time.Second
 )
 
-func (task *CheckBackTask) Start(ctx context.Context) {
-	task.logger = task.logger.With(elog.String("key", key))
+func (task *TxCheckTask) Start(ctx context.Context) {
+	task.logger = task.logger.With(elog.String("key", TxCheckTaskKey))
 	interval := time.Minute
 	for {
 		// 每个循环过程就是一次尝试拿到分布式锁之后，不断调度的过程
-		lock, err := task.lock.NewLock(ctx, key, interval)
+		lock, err := task.lock.NewLock(ctx, TxCheckTaskKey, interval)
 		if err != nil {
 			task.logger.Error("初始化分布式锁失败，重试",
 				elog.Any("err", err))
@@ -91,7 +92,7 @@ func (task *CheckBackTask) Start(ctx context.Context) {
 	}
 }
 
-func (task *CheckBackTask) loop(ctx context.Context) error {
+func (task *TxCheckTask) loop(ctx context.Context) error {
 	loopCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 	txNotifications, err := task.repo.Find(loopCtx, 0, task.batchSize)
@@ -111,7 +112,7 @@ func (task *CheckBackTask) loop(ctx context.Context) error {
 	retryTxns := make([]domain.TxNotification, 0, len(txNotifications))
 	// 需要提交的事务通知
 	commitTxns := make([]domain.TxNotification, 0, len(txNotifications))
-	// 失败的事务通知
+	// 失败和取消的事务通知
 	failedTxns := make([]domain.TxNotification, 0, len(txNotifications))
 
 	for idx := range txNotifications {
@@ -132,7 +133,9 @@ func (task *CheckBackTask) loop(ctx context.Context) error {
 				retryTxns = append(retryTxns, txn)
 				mu.Unlock()
 			case domain.TxNotificationStatusCancel:
-
+				mu.Lock()
+				failedTxns = append(failedTxns, txn)
+				mu.Unlock()
 			default:
 				return errors.New("unexpected status")
 			}
@@ -156,7 +159,7 @@ func (task *CheckBackTask) loop(ctx context.Context) error {
 }
 
 // 校验完了
-func (task *CheckBackTask) oneBackCheck(ctx context.Context, configMap map[int64]config.BusinessConfig, txNotification domain.TxNotification) domain.TxNotification {
+func (task *TxCheckTask) oneBackCheck(ctx context.Context, configMap map[int64]config.BusinessConfig, txNotification domain.TxNotification) domain.TxNotification {
 	conf, ok := configMap[txNotification.BizID]
 	if !ok || conf.TxnConfig == "" {
 		// 没设置，所以不需要回查
@@ -172,7 +175,7 @@ func (task *CheckBackTask) oneBackCheck(ctx context.Context, configMap map[int64
 	res, err := task.getCheckBackRes(ctx, backConfig, txNotification)
 	// 都检查了一次无论成功与否
 	txNotification.CheckCount++
-	if err != nil || res != 0 {
+	if err != nil || res == 0 {
 		builder, verr := task.retryStrategyBuilder.Build(conf.TxnConfig)
 		if verr != nil {
 			txNotification.NextCheckTime = 0
@@ -193,8 +196,15 @@ func (task *CheckBackTask) oneBackCheck(ctx context.Context, configMap map[int64
 		return txNotification
 
 	}
-	txNotification.NextCheckTime = 0
-	txNotification.Status = domain.TxNotificationStatusCommit
+	//
+	if res == 2 {
+		txNotification.Status = domain.TxNotificationStatusCancel
+		txNotification.NextCheckTime = 0
+	}
+	if res == 1 {
+		txNotification.NextCheckTime = 0
+		txNotification.Status = domain.TxNotificationStatusCommit
+	}
 	return txNotification
 }
 
@@ -202,7 +212,7 @@ type CheckBackConfig struct {
 	ServiceName string `json:"serviceName"`
 }
 
-func (task *CheckBackTask) getConfigFromStr(conf string) (CheckBackConfig, error) {
+func (task *TxCheckTask) getConfigFromStr(conf string) (CheckBackConfig, error) {
 	var cfg CheckBackConfig
 	err := json.Unmarshal([]byte(conf), &cfg)
 	if err != nil {
@@ -211,7 +221,7 @@ func (task *CheckBackTask) getConfigFromStr(conf string) (CheckBackConfig, error
 	return cfg, nil
 }
 
-func (task *CheckBackTask) getCheckBackRes(ctx context.Context, conf CheckBackConfig, txn domain.TxNotification) (status int, err error) {
+func (task *TxCheckTask) getCheckBackRes(ctx context.Context, conf CheckBackConfig, txn domain.TxNotification) (status int, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if str, ok := r.(string); ok {
@@ -223,18 +233,20 @@ func (task *CheckBackTask) getCheckBackRes(ctx context.Context, conf CheckBackCo
 	}()
 
 	// 使用ego的服务发现，根据conf的servicename 来访问对应的服务使用notification-platform/api/proto/gen/tx_notification/v1下的服务
-
-	grpcConn := egrpc.Load("").Build(egrpc.WithAddr(fmt.Sprintf("etcd:///%s", conf.ServiceName)))
+	grpcConn, ok := task.clientMap.Load(conf.ServiceName)
+	if !ok {
+		grpcConn = egrpc.Load("").Build(egrpc.WithAddr(fmt.Sprintf("etcd:///%s", conf.ServiceName)))
+		task.clientMap.Store(conf.ServiceName, grpcConn)
+	}
 	// 创建BackCheckService的客户端
-	client := tx_notificationv1.NewBackCheckServiceClient(grpcConn)
+	client := tx_notificationv1.NewTransactionCheckServiceClient(grpcConn)
 	// 准备请求参数
-	req := &tx_notificationv1.BackCheckRequest{
-		Key:       txn.Key,
-		Timestamp: timestamppb.Now(),
+	req := &tx_notificationv1.TransactionCheckServiceCheckRequest{
+		Key: txn.Key,
 	}
 
 	// 发起远程调用
-	resp, err := client.BackCheck(ctx, req)
+	resp, err := client.Check(ctx, req)
 	if err != nil {
 		return 0, err
 	}
@@ -242,7 +254,7 @@ func (task *CheckBackTask) getCheckBackRes(ctx context.Context, conf CheckBackCo
 	return int(resp.Status), nil
 }
 
-func (task *CheckBackTask) commit(ctx context.Context, txns []domain.TxNotification) {
+func (task *TxCheckTask) commit(ctx context.Context, txns []domain.TxNotification) {
 	// 更新远程
 	ids := slice.Map(txns, func(_ int, src domain.TxNotification) uint64 {
 		return src.Notification.ID
@@ -258,7 +270,7 @@ func (task *CheckBackTask) commit(ctx context.Context, txns []domain.TxNotificat
 	}
 }
 
-func (task *CheckBackTask) fail(ctx context.Context, txns []domain.TxNotification) {
+func (task *TxCheckTask) fail(ctx context.Context, txns []domain.TxNotification) {
 	ids := slice.Map(txns, func(_ int, src domain.TxNotification) uint64 {
 		return src.Notification.ID
 	})
@@ -273,16 +285,16 @@ func (task *CheckBackTask) fail(ctx context.Context, txns []domain.TxNotificatio
 	}
 }
 
-func (task *CheckBackTask) retry(ctx context.Context, txns []domain.TxNotification) {
+func (task *TxCheckTask) retry(ctx context.Context, txns []domain.TxNotification) {
 	err := task.repo.UpdateCheckStatus(ctx, txns)
 	if err != nil {
 		task.logger.Error("更新事务表中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))
 	}
 }
 
-func (task *CheckBackTask) taskIDs(txns []domain.TxNotification) string {
+func (task *TxCheckTask) taskIDs(txns []domain.TxNotification) string {
 	txids := slice.Map(txns, func(_ int, src domain.TxNotification) string {
-		return src.TxID
+		return fmt.Sprintf("%d", src.TxID)
 	})
 	return strings.Join(txids, ",")
 }

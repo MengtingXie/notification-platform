@@ -1,26 +1,26 @@
 syntax = "proto3";
 
-package tx_notification.v1;
+package client.v1;
 
-import "google/protobuf/timestamp.proto";
+// 引入Notification定义
 
-option go_package = "gitee.com/flycash/notification-platform/api/gen/v1;tx_notification";
+option go_package = "gitee.com/flycash/notification-platform/api/gen/client/tx_notification/v1;tx_notification";
 service TransactionCheckService {
   // 通知平台调用业务方的接口
-  rpc Check(BackCheckRequest) returns (BackCheckResponse) {}
+  rpc Check(TransactionCheckServiceCheckRequest) returns (TransactionCheckServiceCheckResponse) {}
 }
 
 // 回查请求（通知平台 -> 业务方）
-message BackCheckRequest {
+message TransactionCheckServiceCheckRequest {
   string key = 1; // 唯一标识
-  google.protobuf.Timestamp timestamp = 2;
 }
 
 // 回调响应（业务方 -> 通知平台）
-message BackCheckResponse {
+message TransactionCheckServiceCheckResponse {
   enum ResponseStatus {
-    SUCCESS = 0;
-    FAILURE = 1; // 失败
+    UNKNOWN = 0;
+    COMMITTED = 1;
+    CANCEL = 2;
   }
   ResponseStatus status = 1;
 }

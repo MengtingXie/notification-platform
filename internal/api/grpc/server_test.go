@@ -9,6 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/api/grpc/interceptor/jwt"
+	txnotificationmocks "gitee.com/flycash/notification-platform/internal/service/tx_notification/mocks"
+
 	notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/notification/v1"
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
 	executormocks "gitee.com/flycash/notification-platform/internal/service/executor/mocks"
@@ -40,13 +43,14 @@ type ServerTestSuite struct {
 	notificationSvc notificationsvc.Service
 	mockExecutor    *executormocks.MockExecutorService
 	ctrl            *gomock.Controller
+	jwtAuth         *jwt.JwtAuth
 }
 
 func (s *ServerTestSuite) SetupSuite() {
 	s.db = testioc.InitDB()
 	s.notificationSvc = notificationsvc.InitModule(s.db, testioc.InitIDGenerator()).Svc
 	s.listener = bufconn.Listen(1024 * 1024)
-
+	s.jwtAuth = jwt.NewJwtAuth("key1")
 	// 创建mock控制器
 	s.ctrl = gomock.NewController(s.T())
 	// 创建mock执行器
@@ -54,7 +58,7 @@ func (s *ServerTestSuite) SetupSuite() {
 
 	// 启动grpc.Server
 	s.grpcServer = grpc.NewServer()
-	notificationv1.RegisterNotificationServiceServer(s.grpcServer, grpcapi.NewServer(s.mockExecutor))
+	notificationv1.RegisterNotificationServiceServer(s.grpcServer, grpcapi.NewServer(s.mockExecutor, nil))
 
 	ready := make(chan struct{})
 	go func() {
@@ -390,4 +394,59 @@ func (s *ServerTestSuite) TestSendNotification() {
 			tc.after(t, tc.req, resp)
 		})
 	}
+}
+
+func (s *ServerTestSuite) TestCommit() {
+	mockTxSvc := txnotificationmocks.NewMockTxNotificationService(s.ctrl)
+	mockTxSvc.EXPECT().Commit(gomock.Any(), int64(13), "case1").Return(nil)
+	// 创建内存监听器
+	lis := bufconn.Listen(1024 * 1024)
+	defer lis.Close()
+
+	// 创建gRPC服务器
+	server := grpc.NewServer(grpc.ChainUnaryInterceptor(
+		jwt.JwtAuthInterceptor(s.jwtAuth),
+	))
+	defer server.Stop()
+	notificationv1.RegisterNotificationServiceServer(server, grpcapi.NewServer(nil, mockTxSvc))
+	// 启动服务器
+	go func() {
+		if err := server.Serve(lis); err != nil {
+			s.T().Errorf("gRPC server failed: %v", err)
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 客户端连接配置
+	conn, err := grpc.DialContext(ctx, "bufnet",
+		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+			return lis.Dial()
+		}),
+		grpc.WithInsecure(),
+	)
+	require.NoError(s.T(), err)
+	defer conn.Close()
+
+	// 创建客户端
+	client := notificationv1.NewNotificationServiceClient(conn)
+
+	token, err := s.jwtAuth.Encode(map[string]any{
+		"biz_id": 13,
+	})
+	require.NoError(s.T(), err)
+	ctx = s.generalToken(ctx, token)
+	// 调用Commit方法
+	_, verr := client.TxCommit(ctx, &notificationv1.TxCommitRequest{
+		Key: "case1",
+	})
+	require.NoError(s.T(), verr)
+}
+
+func (s *ServerTestSuite) generalToken(ctx context.Context, token string) context.Context {
+	md := metadata.Pairs(
+		"authorization", token,
+	)
+	ctx = metadata.NewOutgoingContext(ctx, md)
+	return ctx
 }

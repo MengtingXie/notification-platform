@@ -120,38 +120,9 @@ service NotificationService {
 
   // 同步批量查询
   rpc BatchQueryNotifications(BatchQueryNotificationsRequest) returns (BatchQueryNotificationsResponse);
-
-  // 事务接口
   rpc TxPrepare(TxPrepareRequest) returns (TxPrepareResponse);
   rpc TxCommit(TxCommitRequest) returns (TxCommitResponse);
-  rpc TxRollback(TxRollbackRequest) returns (TxRollbackResponse);
-
-}
-
-message TxPrepareRequest {
-  Notification notification = 1;
-}
-
-message TxPrepareResponse {
-  // 通知平台生成的通知ID，根据需要加字段
-  uint64 notification_id = 1;
-}
-
-message TxCommitRequest {
-  // 使用 key
-  string key = 1;
-}
-
-message TxCommitResponse {
-
-}
-
-message TxRollbackRequest {
-  string key = 1;
-}
-
-message TxRollbackResponse {
-
+  rpc TxCancel(TxCancelRequest) returns (TxCancelResponse);
 }
 
 // 通知
@@ -240,3 +211,27 @@ message BatchQueryNotificationsRequest {
 message BatchQueryNotificationsResponse {
   repeated SendNotificationResponse results = 1;
 }
+
+// 准备事务请求
+message TxPrepareRequest {
+  notification.v1.Notification notification = 1;
+}
+
+// 准备事务响应
+message TxPrepareResponse {}
+
+// 提交事务请求
+message TxCommitRequest {
+  string key = 1; // 事务唯一标识
+}
+
+// 提交事务响应
+message TxCommitResponse {}
+
+// 回滚事务请求
+message TxCancelRequest {
+  string key = 1; // 事务唯一标识
+}
+
+// 回滚事务响应
+message TxCancelResponse {}

@@ -1984,6 +1984,641 @@ var _ interface {
 	ErrorName() string
 } = BatchQueryNotificationsResponseValidationError{}
 
+// Validate checks the field values on TxPrepareRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *TxPrepareRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on TxPrepareRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// TxPrepareRequestMultiError, or nil if none found.
+func (m *TxPrepareRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *TxPrepareRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if all {
+		switch v := interface{}(m.GetNotification()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, TxPrepareRequestValidationError{
+					field:  "Notification",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, TxPrepareRequestValidationError{
+					field:  "Notification",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetNotification()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return TxPrepareRequestValidationError{
+				field:  "Notification",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return TxPrepareRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// TxPrepareRequestMultiError is an error wrapping multiple validation errors
+// returned by TxPrepareRequest.ValidateAll() if the designated constraints
+// aren't met.
+type TxPrepareRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m TxPrepareRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m TxPrepareRequestMultiError) AllErrors() []error { return m }
+
+// TxPrepareRequestValidationError is the validation error returned by
+// TxPrepareRequest.Validate if the designated constraints aren't met.
+type TxPrepareRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e TxPrepareRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e TxPrepareRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e TxPrepareRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e TxPrepareRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e TxPrepareRequestValidationError) ErrorName() string { return "TxPrepareRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e TxPrepareRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sTxPrepareRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = TxPrepareRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = TxPrepareRequestValidationError{}
+
+// Validate checks the field values on TxPrepareResponse with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *TxPrepareResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on TxPrepareResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// TxPrepareResponseMultiError, or nil if none found.
+func (m *TxPrepareResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *TxPrepareResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return TxPrepareResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// TxPrepareResponseMultiError is an error wrapping multiple validation errors
+// returned by TxPrepareResponse.ValidateAll() if the designated constraints
+// aren't met.
+type TxPrepareResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m TxPrepareResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m TxPrepareResponseMultiError) AllErrors() []error { return m }
+
+// TxPrepareResponseValidationError is the validation error returned by
+// TxPrepareResponse.Validate if the designated constraints aren't met.
+type TxPrepareResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e TxPrepareResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e TxPrepareResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e TxPrepareResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e TxPrepareResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e TxPrepareResponseValidationError) ErrorName() string {
+	return "TxPrepareResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e TxPrepareResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sTxPrepareResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = TxPrepareResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = TxPrepareResponseValidationError{}
+
+// Validate checks the field values on TxCommitRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *TxCommitRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on TxCommitRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// TxCommitRequestMultiError, or nil if none found.
+func (m *TxCommitRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *TxCommitRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Key
+
+	if len(errors) > 0 {
+		return TxCommitRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// TxCommitRequestMultiError is an error wrapping multiple validation errors
+// returned by TxCommitRequest.ValidateAll() if the designated constraints
+// aren't met.
+type TxCommitRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m TxCommitRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m TxCommitRequestMultiError) AllErrors() []error { return m }
+
+// TxCommitRequestValidationError is the validation error returned by
+// TxCommitRequest.Validate if the designated constraints aren't met.
+type TxCommitRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e TxCommitRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e TxCommitRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e TxCommitRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e TxCommitRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e TxCommitRequestValidationError) ErrorName() string { return "TxCommitRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e TxCommitRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sTxCommitRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = TxCommitRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = TxCommitRequestValidationError{}
+
+// Validate checks the field values on TxCommitResponse with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *TxCommitResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on TxCommitResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// TxCommitResponseMultiError, or nil if none found.
+func (m *TxCommitResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *TxCommitResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return TxCommitResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// TxCommitResponseMultiError is an error wrapping multiple validation errors
+// returned by TxCommitResponse.ValidateAll() if the designated constraints
+// aren't met.
+type TxCommitResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m TxCommitResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m TxCommitResponseMultiError) AllErrors() []error { return m }
+
+// TxCommitResponseValidationError is the validation error returned by
+// TxCommitResponse.Validate if the designated constraints aren't met.
+type TxCommitResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e TxCommitResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e TxCommitResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e TxCommitResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e TxCommitResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e TxCommitResponseValidationError) ErrorName() string { return "TxCommitResponseValidationError" }
+
+// Error satisfies the builtin error interface
+func (e TxCommitResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sTxCommitResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = TxCommitResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = TxCommitResponseValidationError{}
+
+// Validate checks the field values on TxCancelRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *TxCancelRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on TxCancelRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// TxCancelRequestMultiError, or nil if none found.
+func (m *TxCancelRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *TxCancelRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Key
+
+	if len(errors) > 0 {
+		return TxCancelRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// TxCancelRequestMultiError is an error wrapping multiple validation errors
+// returned by TxCancelRequest.ValidateAll() if the designated constraints
+// aren't met.
+type TxCancelRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m TxCancelRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m TxCancelRequestMultiError) AllErrors() []error { return m }
+
+// TxCancelRequestValidationError is the validation error returned by
+// TxCancelRequest.Validate if the designated constraints aren't met.
+type TxCancelRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e TxCancelRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e TxCancelRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e TxCancelRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e TxCancelRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e TxCancelRequestValidationError) ErrorName() string { return "TxCancelRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e TxCancelRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sTxCancelRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = TxCancelRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = TxCancelRequestValidationError{}
+
+// Validate checks the field values on TxCancelResponse with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *TxCancelResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on TxCancelResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// TxCancelResponseMultiError, or nil if none found.
+func (m *TxCancelResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *TxCancelResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return TxCancelResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// TxCancelResponseMultiError is an error wrapping multiple validation errors
+// returned by TxCancelResponse.ValidateAll() if the designated constraints
+// aren't met.
+type TxCancelResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m TxCancelResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m TxCancelResponseMultiError) AllErrors() []error { return m }
+
+// TxCancelResponseValidationError is the validation error returned by
+// TxCancelResponse.Validate if the designated constraints aren't met.
+type TxCancelResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e TxCancelResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e TxCancelResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e TxCancelResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e TxCancelResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e TxCancelResponseValidationError) ErrorName() string { return "TxCancelResponseValidationError" }
+
+// Error satisfies the builtin error interface
+func (e TxCancelResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sTxCancelResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = TxCancelResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = TxCancelResponseValidationError{}
+
 // Validate checks the field values on SendStrategy_ImmediateStrategy with the
 // rules defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.

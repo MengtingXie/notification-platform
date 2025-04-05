@@ -9,9 +9,9 @@ require (
 	github.com/ego-component/eetcd v1.0.0
 	github.com/ego-component/egorm v1.1.4
 	github.com/go-sql-driver/mysql v1.7.1
+	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/wire v0.6.0
 	github.com/gotomicro/ego v1.2.3
-	github.com/lithammer/shortuuid/v4 v4.2.0
 	github.com/meoying/dlock-go v0.0.0-20250327141213-0dffbb87db24
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/sony/sonyflake v1.2.0

@@ -127,6 +127,9 @@ const (
 	NotificationService_BatchSendNotifications_FullMethodName      = "/notification.v1.NotificationService/BatchSendNotifications"
 	NotificationService_BatchSendNotificationsAsync_FullMethodName = "/notification.v1.NotificationService/BatchSendNotificationsAsync"
 	NotificationService_BatchQueryNotifications_FullMethodName     = "/notification.v1.NotificationService/BatchQueryNotifications"
+	NotificationService_TxPrepare_FullMethodName                   = "/notification.v1.NotificationService/TxPrepare"
+	NotificationService_TxCommit_FullMethodName                    = "/notification.v1.NotificationService/TxCommit"
+	NotificationService_TxCancel_FullMethodName                    = "/notification.v1.NotificationService/TxCancel"
 )
 
 // NotificationServiceClient is the client API for NotificationService service.
@@ -143,6 +146,9 @@ type NotificationServiceClient interface {
 	BatchSendNotificationsAsync(ctx context.Context, in *BatchSendNotificationsAsyncRequest, opts ...grpc.CallOption) (*BatchSendNotificationsAsyncResponse, error)
 	// 同步批量查询
 	BatchQueryNotifications(ctx context.Context, in *BatchQueryNotificationsRequest, opts ...grpc.CallOption) (*BatchQueryNotificationsResponse, error)
+	TxPrepare(ctx context.Context, in *TxPrepareRequest, opts ...grpc.CallOption) (*TxPrepareResponse, error)
+	TxCommit(ctx context.Context, in *TxCommitRequest, opts ...grpc.CallOption) (*TxCommitResponse, error)
+	TxCancel(ctx context.Context, in *TxCancelRequest, opts ...grpc.CallOption) (*TxCancelResponse, error)
 }
 
 type notificationServiceClient struct {
@@ -203,6 +209,36 @@ func (c *notificationServiceClient) BatchQueryNotifications(ctx context.Context,
 	return out, nil
 }
 
+func (c *notificationServiceClient) TxPrepare(ctx context.Context, in *TxPrepareRequest, opts ...grpc.CallOption) (*TxPrepareResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TxPrepareResponse)
+	err := c.cc.Invoke(ctx, NotificationService_TxPrepare_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *notificationServiceClient) TxCommit(ctx context.Context, in *TxCommitRequest, opts ...grpc.CallOption) (*TxCommitResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TxCommitResponse)
+	err := c.cc.Invoke(ctx, NotificationService_TxCommit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *notificationServiceClient) TxCancel(ctx context.Context, in *TxCancelRequest, opts ...grpc.CallOption) (*TxCancelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TxCancelResponse)
+	err := c.cc.Invoke(ctx, NotificationService_TxCancel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NotificationServiceServer is the server API for NotificationService service.
 // All implementations should embed UnimplementedNotificationServiceServer
 // for forward compatibility.
@@ -217,6 +253,9 @@ type NotificationServiceServer interface {
 	BatchSendNotificationsAsync(context.Context, *BatchSendNotificationsAsyncRequest) (*BatchSendNotificationsAsyncResponse, error)
 	// 同步批量查询
 	BatchQueryNotifications(context.Context, *BatchQueryNotificationsRequest) (*BatchQueryNotificationsResponse, error)
+	TxPrepare(context.Context, *TxPrepareRequest) (*TxPrepareResponse, error)
+	TxCommit(context.Context, *TxCommitRequest) (*TxCommitResponse, error)
+	TxCancel(context.Context, *TxCancelRequest) (*TxCancelResponse, error)
 }
 
 // UnimplementedNotificationServiceServer should be embedded to have
@@ -244,6 +283,18 @@ func (UnimplementedNotificationServiceServer) BatchSendNotificationsAsync(contex
 
 func (UnimplementedNotificationServiceServer) BatchQueryNotifications(context.Context, *BatchQueryNotificationsRequest) (*BatchQueryNotificationsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BatchQueryNotifications not implemented")
+}
+
+func (UnimplementedNotificationServiceServer) TxPrepare(context.Context, *TxPrepareRequest) (*TxPrepareResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TxPrepare not implemented")
+}
+
+func (UnimplementedNotificationServiceServer) TxCommit(context.Context, *TxCommitRequest) (*TxCommitResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TxCommit not implemented")
+}
+
+func (UnimplementedNotificationServiceServer) TxCancel(context.Context, *TxCancelRequest) (*TxCancelResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TxCancel not implemented")
 }
 func (UnimplementedNotificationServiceServer) testEmbeddedByValue() {}
 
@@ -355,6 +406,60 @@ func _NotificationService_BatchQueryNotifications_Handler(srv interface{}, ctx c
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NotificationService_TxPrepare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TxPrepareRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NotificationServiceServer).TxPrepare(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NotificationService_TxPrepare_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NotificationServiceServer).TxPrepare(ctx, req.(*TxPrepareRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NotificationService_TxCommit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TxCommitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NotificationServiceServer).TxCommit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NotificationService_TxCommit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NotificationServiceServer).TxCommit(ctx, req.(*TxCommitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NotificationService_TxCancel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TxCancelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NotificationServiceServer).TxCancel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NotificationService_TxCancel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NotificationServiceServer).TxCancel(ctx, req.(*TxCancelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NotificationService_ServiceDesc is the grpc.ServiceDesc for NotificationService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -381,6 +486,18 @@ var NotificationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BatchQueryNotifications",
 			Handler:    _NotificationService_BatchQueryNotifications_Handler,
+		},
+		{
+			MethodName: "TxPrepare",
+			Handler:    _NotificationService_TxPrepare_Handler,
+		},
+		{
+			MethodName: "TxCommit",
+			Handler:    _NotificationService_TxCommit_Handler,
+		},
+		{
+			MethodName: "TxCancel",
+			Handler:    _NotificationService_TxCancel_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

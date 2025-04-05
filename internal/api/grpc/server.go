@@ -5,9 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
+
+	"gitee.com/flycash/notification-platform/internal/api/grpc/interceptor/jwt"
+	notificationSvc "gitee.com/flycash/notification-platform/internal/service/notification"
+	txnotification "gitee.com/flycash/notification-platform/internal/service/tx_notification"
 
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -15,36 +19,76 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/executor/service"
 )
 
+const (
+	BizIDName = "biz_id"
+)
+
 // NotificationServer 处理通知平台的gRPC请求
 type NotificationServer struct {
 	notificationv1.UnimplementedNotificationServiceServer
 	executor service.ExecutorService
 	// TODO: 配置服务 configService config.ConfigService
+	txnSvc txnotification.Service
 }
 
 // NewServer 创建通知平台gRPC服务器
-func NewServer(executor service.ExecutorService) *NotificationServer {
+func NewServer(executor service.ExecutorService, txnSvc txnotification.Service) *NotificationServer {
 	return &NotificationServer{
 		executor: executor,
+		txnSvc:   txnSvc,
 	}
 }
 
-// SendNotification 处理同步发送通知请求
-func (s *NotificationServer) SendNotification(ctx context.Context, req *notificationv1.SendNotificationRequest) (*notificationv1.SendNotificationResponse, error) {
+func (s *NotificationServer) TxPrepare(ctx context.Context, request *notificationv1.TxPrepareRequest) (*notificationv1.TxPrepareResponse, error) {
 	// 1. 从metadata中解析Authorization JWT Token
-	bizID, err := s.extractAndValidateBizID(ctx)
+	bizID, err := jwt.GetBizIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// 2. 将请求转换为领域对象
-	notification, err := s.convertToNotification(req.Notification, bizID)
+	txn, err := s.convertToTxNotification(request.Notification, bizID)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
+	}
+	_, err = s.txnSvc.Prepare(ctx, txn)
+	return &notificationv1.TxPrepareResponse{}, err
+}
+
+func (s *NotificationServer) TxCommit(ctx context.Context, request *notificationv1.TxCommitRequest) (*notificationv1.TxCommitResponse, error) {
+	bizID, err := jwt.GetBizIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = s.txnSvc.Commit(ctx, bizID, request.GetKey())
+	return &notificationv1.TxCommitResponse{}, err
+}
+
+func (s *NotificationServer) TxCancel(ctx context.Context, request *notificationv1.TxCancelRequest) (*notificationv1.TxCancelResponse, error) {
+	bizID, err := jwt.GetBizIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = s.txnSvc.Cancel(ctx, bizID, request.GetKey())
+	return &notificationv1.TxCancelResponse{}, err
+}
+
+// SendNotification 处理同步发送通知请求
+func (s *NotificationServer) SendNotification(ctx context.Context, req *notificationv1.SendNotificationRequest) (*notificationv1.SendNotificationResponse, error) {
+	// 1. 从metadata中解析Authorization JWT Token
+	bizID, err := jwt.GetBizIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. 将请求转换为领域对象
+	notification1, err := s.convertToNotification(req.Notification, bizID)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
 	}
 
 	// 3. 调用执行器
-	result, err := s.executor.SendNotification(ctx, notification)
+	result, err := s.executor.SendNotification(ctx, notification1)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "发送通知失败: %v", err)
 	}
@@ -56,7 +100,7 @@ func (s *NotificationServer) SendNotification(ctx context.Context, req *notifica
 // SendNotificationAsync 处理异步发送通知请求
 func (s *NotificationServer) SendNotificationAsync(ctx context.Context, req *notificationv1.SendNotificationAsyncRequest) (*notificationv1.SendNotificationAsyncResponse, error) {
 	// 1. 从metadata中解析Authorization JWT Token
-	bizID, err := s.extractAndValidateBizID(ctx)
+	bizID, err := jwt.GetBizIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +128,7 @@ func (s *NotificationServer) SendNotificationAsync(ctx context.Context, req *not
 // BatchSendNotifications 处理批量同步发送通知请求
 func (s *NotificationServer) BatchSendNotifications(ctx context.Context, req *notificationv1.BatchSendNotificationsRequest) (*notificationv1.BatchSendNotificationsResponse, error) {
 	// 1. 从metadata中解析Authorization JWT Token
-	bizID, err := s.extractAndValidateBizID(ctx)
+	bizID, err := jwt.GetBizIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +170,7 @@ func (s *NotificationServer) BatchSendNotifications(ctx context.Context, req *no
 // BatchSendNotificationsAsync 处理批量异步发送通知请求
 func (s *NotificationServer) BatchSendNotificationsAsync(ctx context.Context, req *notificationv1.BatchSendNotificationsAsyncRequest) (*notificationv1.BatchSendNotificationsAsyncResponse, error) {
 	// 1. 从metadata中解析Authorization JWT Token
-	bizID, err := s.extractAndValidateBizID(ctx)
+	bizID, err := jwt.GetBizIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +200,7 @@ func (s *NotificationServer) BatchSendNotificationsAsync(ctx context.Context, re
 // BatchQueryNotifications 处理批量查询通知请求
 func (s *NotificationServer) BatchQueryNotifications(ctx context.Context, req *notificationv1.BatchQueryNotificationsRequest) (*notificationv1.BatchQueryNotificationsResponse, error) {
 	// 1. 从metadata中解析Authorization JWT Token
-	_, err := s.extractAndValidateBizID(ctx)
+	_, err := jwt.GetBizIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -181,39 +225,6 @@ func (s *NotificationServer) BatchQueryNotifications(ctx context.Context, req *n
 	}
 
 	return response, nil
-}
-
-// extractAndValidateBizID 从请求中提取并验证BizID
-func (s *NotificationServer) extractAndValidateBizID(ctx context.Context) (int64, error) {
-	// 从metadata中获取Authorization header
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return 0, status.Errorf(codes.Unauthenticated, "缺少认证信息")
-	}
-
-	// 获取Authorization token
-	authHeaders := md.Get("Authorization")
-	if len(authHeaders) == 0 {
-		return 0, status.Errorf(codes.Unauthenticated, "缺少认证Token")
-	}
-
-	token := authHeaders[0]
-	if token == "" {
-		return 0, status.Errorf(codes.Unauthenticated, "无效的认证Token")
-	}
-
-	// TODO: 解析JWT Token获取BizID
-	// 这里仅作为示例，实际应该解析JWT并验证
-	// 临时使用固定的BizID
-	bizID := int64(101)
-
-	// TODO: 调用配置服务验证BizID是否有效
-	// 实际应该调用配置服务来验证
-	// if !s.configService.IsValidBizID(ctx, bizID) {
-	//     return 0, status.Errorf(codes.PermissionDenied, "无效的业务ID: %d", bizID)
-	// }
-
-	return bizID, nil
 }
 
 // convertToNotification 将请求转换为通知领域对象
@@ -330,4 +341,60 @@ func convertErrorCode(code service.ErrorCode) notificationv1.ErrorCode {
 	default:
 		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
 	}
+}
+
+func (s *NotificationServer) convertToTxNotification(n *notificationv1.Notification, bizID int64) (txnotification.TxNotification, error) {
+	if n == nil {
+		return txnotification.TxNotification{}, errors.New("通知不能为空")
+	}
+
+	// 转换TemplateID
+	tid, err := strconv.ParseInt(n.TemplateId, 10, 64)
+	if err != nil {
+		return txnotification.TxNotification{}, fmt.Errorf("无效的模板ID: %s", n.TemplateId)
+	}
+	// 构建基本Notification
+	noti := notificationSvc.Notification{
+		BizID:    bizID,
+		Key:      n.Key,
+		Receiver: n.Receiver,
+		Channel:  notificationSvc.Channel(n.Channel),
+		Template: notificationSvc.Template{
+			ID: tid,
+		},
+		Status: notificationSvc.StatusPrepare,
+	}
+	const (
+		d      = 24
+		second = 1000
+	)
+	now := time.Now()
+	if n.Strategy != nil {
+		switch s := n.Strategy.StrategyType.(type) {
+		case *notificationv1.SendStrategy_Immediate:
+			noti.ScheduledSTime = now.UnixMilli()
+			noti.ScheduledETime = now.Add(d * time.Hour).UnixMilli()
+		case *notificationv1.SendStrategy_Delayed:
+			if s.Delayed != nil && s.Delayed.DelaySeconds > 0 {
+				noti.ScheduledSTime = now.UnixMilli() + s.Delayed.DelaySeconds*second
+				noti.ScheduledETime = now.UnixMilli() + (s.Delayed.DelaySeconds+10)*second
+			}
+
+		case *notificationv1.SendStrategy_Scheduled:
+			if s.Scheduled != nil && s.Scheduled.SendTime != nil {
+				noti.ScheduledSTime = s.Scheduled.SendTime.AsTime().UnixMilli()
+				noti.ScheduledETime = s.Scheduled.SendTime.AsTime().UnixMilli() + 10*second
+			}
+		case *notificationv1.SendStrategy_TimeWindow:
+			if s.TimeWindow != nil {
+				noti.ScheduledSTime = s.TimeWindow.StartTimeMilliseconds
+				noti.ScheduledETime = s.TimeWindow.EndTimeMilliseconds
+			}
+		}
+	}
+	return txnotification.TxNotification{
+		BizID:        bizID,
+		Notification: noti,
+		Status:       txnotification.TxNotificationStatusPrepare,
+	}, nil
 }

@@ -5,7 +5,7 @@ import (
 	"log"
 	"net"
 
-	tx_notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/tx_notification/v1"
+	tx_notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	"github.com/ego-component/eetcd/registry"
 	"github.com/gotomicro/ego/core/constant"
 	"github.com/gotomicro/ego/server"
@@ -15,11 +15,11 @@ import (
 type Server struct {
 	name string
 	*grpc.Server
-	grpcServer tx_notificationv1.BackCheckServiceServer
+	grpcServer tx_notificationv1.TransactionCheckServiceServer
 	reg        *registry.Component
 }
 
-func NewServer(name string, reg *registry.Component, grpcServer tx_notificationv1.BackCheckServiceServer) *Server {
+func NewServer(name string, reg *registry.Component, grpcServer tx_notificationv1.TransactionCheckServiceServer) *Server {
 	return &Server{
 		name:       name,
 		reg:        reg,
@@ -33,7 +33,6 @@ func (s *Server) Start(addr string) error {
 	if err != nil {
 		return err
 	}
-
 	err = s.reg.RegisterService(context.Background(), &server.ServiceInfo{
 		Name:    s.name,
 		Address: listener.Addr().String(),
@@ -43,7 +42,7 @@ func (s *Server) Start(addr string) error {
 	if err != nil {
 		return err
 	}
-	tx_notificationv1.RegisterBackCheckServiceServer(s.Server, s.grpcServer)
+	tx_notificationv1.RegisterTransactionCheckServiceServer(s.Server, s.grpcServer)
 	log.Println("grpc server register success")
 	return s.Serve(listener)
 }

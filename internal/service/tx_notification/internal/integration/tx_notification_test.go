@@ -6,27 +6,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/integration/testgrpc"
-	"github.com/ego-component/eetcd/registry"
-	"github.com/gotomicro/ego/client/egrpc/resolver"
 	"gorm.io/gorm"
 
-	tx_notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/tx_notification/v1"
+	tx_notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	configmocks "gitee.com/flycash/notification-platform/internal/service/config/mocks"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
 	notificationmocks "gitee.com/flycash/notification-platform/internal/service/notification/mocks"
 	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/integration/startup"
+	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/integration/testgrpc"
 	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/repository/dao"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
+	"github.com/ego-component/eetcd/registry"
 	"github.com/ego-component/egorm"
+	"github.com/gotomicro/ego/client/egrpc/resolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -45,8 +44,8 @@ func (s *TxNotificationServiceTestSuite) SetupSuite() {
 	dao.InitTables(s.db)
 }
 
-func (s *TxNotificationServiceTestSuite) TearDownTest() {
-	// s.db.Exec("TRUNCATE TABLE `tx_notifications`")
+func (s *TxNotificationServiceTestSuite) TearDownSuite() {
+	s.db.Exec("TRUNCATE TABLE `tx_notifications`")
 }
 
 func (s *TxNotificationServiceTestSuite) TestPrepare() {
@@ -55,7 +54,8 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 		input           domain.TxNotification
 		configSvc       func(t *testing.T, ctrl *gomock.Controller) config.Service
 		notificationSvc func(t *testing.T, ctrl *gomock.Controller) notification.Service
-		after           func(t *testing.T, txId string, now int64)
+		after           func(t *testing.T, now int64)
+		wantID          uint64
 	}{
 		{
 			name: "正常响应",
@@ -79,7 +79,9 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 					SendTime:       123,
 				},
 				BizID: 3,
+				Key:   "case_01",
 			},
+			wantID: 10123,
 			configSvc: func(t *testing.T, ctrl *gomock.Controller) config.Service {
 				mockConfigServices := configmocks.NewMockBusinessConfigService(ctrl)
 				mockConfigServices.EXPECT().
@@ -132,11 +134,11 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 				}, nil)
 				return mockNotificationService
 			},
-			after: func(t *testing.T, txId string, now int64) {
+			after: func(t *testing.T, now int64) {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 				var actual dao.TxNotification
-				err := s.db.WithContext(ctx).Where("tx_id = ?", txId).First(&actual).Error
+				err := s.db.WithContext(ctx).Where("biz_id = ? AND `key` = ?", 3, "case_01").First(&actual).Error
 				require.NoError(s.T(), err)
 				require.True(t, actual.Ctime > 0)
 				require.True(t, actual.Utime > 0)
@@ -145,16 +147,19 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 				actual.Utime = 0
 				actual.Ctime = 0
 				actual.NextCheckTime = 0
+				assert.True(t, actual.TxID > 0)
+				actual.TxID = 0
 				assert.Equal(t, dao.TxNotification{
-					TxID:           txId,
 					NotificationID: 10123,
+					Key:            "case_01",
 					BizID:          3,
 					Status:         domain.TxNotificationStatusPrepare.String(),
 				}, actual)
 			},
 		},
 		{
-			name: "配置没找到，下一次更新时间为0",
+			name:   "配置没找到，下一次更新时间为0",
+			wantID: 10124,
 			input: domain.TxNotification{
 				Notification: notification.Notification{
 					BizID:    4,
@@ -175,6 +180,7 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 					SendTime:       123,
 				},
 				BizID: 4,
+				Key:   "case_02",
 			},
 			configSvc: func(t *testing.T, ctrl *gomock.Controller) config.Service {
 				mockConfigServices := configmocks.NewMockBusinessConfigService(ctrl)
@@ -225,20 +231,22 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 				}, nil)
 				return mockNotificationService
 			},
-			after: func(t *testing.T, txId string, now int64) {
+			after: func(t *testing.T, now int64) {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 				var actual dao.TxNotification
-				err := s.db.WithContext(ctx).Where("tx_id = ?", txId).First(&actual).Error
+				err := s.db.WithContext(ctx).Where("biz_id = ? AND `key` = ?", 4, "case_02").First(&actual).Error
 				require.NoError(s.T(), err)
 				require.True(t, actual.Ctime > 0)
 				require.True(t, actual.Utime > 0)
 				actual.Utime = 0
 				actual.Ctime = 0
+				assert.True(t, actual.TxID > 0)
+				actual.TxID = 0
 				assert.Equal(t, dao.TxNotification{
-					TxID:           txId,
 					NotificationID: 10124,
 					BizID:          4,
+					Key:            "case_02",
 					Status:         domain.TxNotificationStatusPrepare.String(),
 				}, actual)
 			},
@@ -259,9 +267,119 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 			})
 			txid, err := svc.Prepare(ctx, tc.input)
 			require.NoError(t, err)
-			tc.after(t, txid, now)
+			assert.Equal(t, tc.wantID, txid)
+			tc.after(t, now)
 		})
 	}
+}
+
+func (s *TxNotificationServiceTestSuite) TestCurPrepare() {
+	// 测试逻辑，开三个goroutine并发去调用，Prepare方法插入同一个bizid 和 key的数据，然后数据库只有一条数据，也就是测试幂等
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	ctrl := gomock.NewController(s.T())
+	defer ctrl.Finish()
+
+	// 准备测试数据
+	const bizID int64 = 100
+	const key string = "concurrent_test_key"
+
+	// 设置模拟服务
+	mockConfigSvc := configmocks.NewMockBusinessConfigService(ctrl)
+	mockConfigSvc.EXPECT().
+		GetByID(gomock.Any(), bizID).
+		Return(config.BusinessConfig{
+			ID:        bizID,
+			TxnConfig: `{"type":"normal","maxRetryTimes":3,"interval":10}`,
+		}, nil).
+		AnyTimes() // 因为会被多次调用，所以使用AnyTimes
+
+	mockNotificationSvc := notificationmocks.NewMockNotificationService(ctrl)
+	mockNotificationSvc.EXPECT().
+		CreateNotification(gomock.Any(), gomock.Any()).
+		Return(notification.Notification{
+			ID:       20001,
+			BizID:    bizID,
+			Key:      key,
+			Receiver: "13800138000",
+			Channel:  "SMS",
+			Status:   notification.StatusPending,
+		}, nil).
+		AnyTimes() // 因为会被多次调用，所以使用AnyTimes
+
+	// 初始化服务
+	svc := startup.InitTxNotificationService(notification.Module{
+		Svc: mockNotificationSvc,
+	}, config.Module{
+		Svc: mockConfigSvc,
+	})
+
+	// 创建相同的通知对象
+	txNotification := domain.TxNotification{
+		Notification: notification.Notification{
+			BizID:    bizID,
+			Key:      key,
+			Receiver: "13800138000",
+			Channel:  "SMS",
+			Template: notification.Template{
+				ID:        1,
+				VersionID: 10,
+				Params: map[string]string{
+					"code": "123456",
+				},
+			},
+			Status: notification.StatusPending,
+		},
+		BizID: bizID,
+		Key:   key,
+	}
+
+	// 使用WaitGroup等待所有goroutine完成
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	// 存储每个goroutine的结果
+	results := make([]uint64, 0, 3)
+	mu := &sync.Mutex{}
+
+	// 并发调用Prepare方法
+	for i := 0; i < 3; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			txid, err := svc.Prepare(ctx, txNotification)
+			fmt.Println("xxxxxxx", txid)
+			require.NoError(s.T(), err)
+			mu.Lock()
+			results = append(results, txid)
+			mu.Unlock()
+		}(i)
+	}
+
+	// 等待所有goroutine完成
+	wg.Wait()
+
+	// 至少有一个goroutine应该成功
+	assert.Equal(s.T(), 3, len(results))
+
+	// 验证数据库中只有一条记录
+	var count int64
+	err := s.db.Model(&dao.TxNotification{}).
+		Where("biz_id = ? AND `key` = ?", bizID, key).
+		Count(&count).Error
+
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), int64(1), count, "数据库中应该只有一条记录，证明幂等性")
+
+	// 检查记录内容
+	var txn dao.TxNotification
+	err = s.db.Where("biz_id = ? AND `key` = ?", bizID, key).First(&txn).Error
+	require.NoError(s.T(), err)
+
+	assert.Equal(s.T(), bizID, txn.BizID)
+	assert.Equal(s.T(), key, txn.Key)
+	assert.Equal(s.T(), uint64(20001), txn.NotificationID)
+	assert.Equal(s.T(), domain.TxNotificationStatusPrepare.String(), txn.Status)
 }
 
 func (s *TxNotificationServiceTestSuite) TestCommit() {
@@ -289,7 +407,7 @@ func (s *TxNotificationServiceTestSuite) TestCommit() {
 			before: func(t *testing.T) (int64, string) {
 				now := time.Now().UnixMilli()
 				txn := dao.TxNotification{
-					TxID:           "test-tx-id",
+					TxID:           201,
 					Key:            "case_02",
 					NotificationID: 10123,
 					BizID:          3,
@@ -391,7 +509,7 @@ func (s *TxNotificationServiceTestSuite) TestCancel() {
 			before: func(t *testing.T) (int64, string) {
 				now := time.Now().UnixMilli()
 				txn := dao.TxNotification{
-					TxID:           "test-tx-id-cancel",
+					TxID:           202,
 					NotificationID: 10123,
 					BizID:          5,
 					Key:            "question_02",
@@ -482,7 +600,7 @@ func (s *TxNotificationServiceTestSuite) TestGetNotification() {
 			before: func(t *testing.T) (int64, string) {
 				now := time.Now().UnixMilli()
 				txn := dao.TxNotification{
-					TxID:           "test-tx-id-get",
+					TxID:           101,
 					Key:            "get-test-case-01",
 					NotificationID: 10123,
 					BizID:          5,
@@ -526,7 +644,7 @@ func (s *TxNotificationServiceTestSuite) TestGetNotification() {
 			},
 			checkResult: func(t *testing.T, txn domain.TxNotification, err error) {
 				require.NoError(t, err)
-				assert.Equal(t, "test-tx-id-get", txn.TxID)
+				assert.Equal(t, int64(101), txn.TxID)
 				assert.Equal(t, int64(5), txn.BizID)
 				assert.Equal(t, "get-test-case-01", txn.Key)
 				assert.Equal(t, domain.TxNotificationStatusPrepare, txn.Status)
@@ -565,7 +683,7 @@ func (s *TxNotificationServiceTestSuite) TestGetNotification() {
 			before: func(t *testing.T) (int64, string) {
 				now := time.Now().UnixMilli()
 				txn := dao.TxNotification{
-					TxID:           "test-tx-id-notfound",
+					TxID:           104,
 					Key:            "get-test-case-notfound",
 					NotificationID: 10456,
 					BizID:          6,
@@ -653,40 +771,45 @@ func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
 
 	now := time.Now().UnixMilli()
 	// 事务1的会取出来，并且成功提交
-	tx1 := s.MockDaoTxn("tx1", 1, now-(time.Second*11).Milliseconds())
+	tx1 := s.MockDaoTxn(1, 1, now-(time.Second*11).Milliseconds())
 	tx1.Status = domain.TxNotificationStatusPrepare.String()
 	tx1.BizID = 1
 	// 事务2取不出来，因为已经提交
-	tx2 := s.MockDaoTxn("tx2", 2, 0)
+	tx2 := s.MockDaoTxn(2, 2, 0)
 	tx2.Status = domain.TxNotificationStatusCommit.String()
 	tx2.BizID = 2
 	// 事务3取不出来, 因为已经取消
-	tx3 := s.MockDaoTxn("tx3", 3, 0)
+	tx3 := s.MockDaoTxn(3, 3, 0)
 	tx3.Status = domain.TxNotificationStatusCancel.String()
 	tx3.BizID = 3
 	// 事务4取不出来, 因为已经失败
-	tx4 := s.MockDaoTxn("tx4", 4, 0)
+	tx4 := s.MockDaoTxn(4, 4, 0)
 	tx4.Status = domain.TxNotificationStatusFail.String()
 	tx4.BizID = 4
 	// 事务5取不出来，因为还没有到检查时间
-	tx5 := s.MockDaoTxn("tx5", 5, now+(time.Second*30).Milliseconds())
+	tx5 := s.MockDaoTxn(5, 5, now+(time.Second*30).Milliseconds())
 	tx5.Status = domain.TxNotificationStatusPrepare.String()
 	tx5.BizID = 5
 	// 事务11会取出来，但是他只有最后一次回查机会了，发送会成功
-	tx11 := s.MockDaoTxn("tx11", 11, now-(time.Second*11).Milliseconds())
+	tx11 := s.MockDaoTxn(11, 11, now-(time.Second*11).Milliseconds())
 	tx11.Status = domain.TxNotificationStatusPrepare.String()
 	tx11.BizID = 1
 	tx11.CheckCount = 2
-	// 事务22会取出来，但是他只有最后一次回查机会了，发送失败
-	tx22 := s.MockDaoTxn("tx22", 22, now-(time.Second*11).Milliseconds())
+	// 事务会取出来，但是他只有最后一次回查机会了，发送失败
+	tx22 := s.MockDaoTxn(22, 22, now-(time.Second*11).Milliseconds())
 	tx22.Status = domain.TxNotificationStatusPrepare.String()
 	tx22.BizID = 1
 	tx22.CheckCount = 2
 	// 事务23会取出来，但是他还有好几次次回查机会了，发送失败
-	tx23 := s.MockDaoTxn("tx23", 23, now-(time.Second*11).Milliseconds())
+	tx23 := s.MockDaoTxn(23, 23, now-(time.Second*11).Milliseconds())
 	tx23.Status = domain.TxNotificationStatusPrepare.String()
 	tx23.BizID = 2
 	tx23.CheckCount = 0
+	// 事务44h会取出来，回查一次然后取消
+	tx44 := s.MockDaoTxn(44, 44, now-(time.Second*11).Milliseconds())
+	tx44.Status = domain.TxNotificationStatusPrepare.String()
+	tx44.BizID = 2
+	tx44.CheckCount = 1
 	txns := []dao.TxNotification{
 		tx1,
 		tx2,
@@ -696,6 +819,7 @@ func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
 		tx11,
 		tx22,
 		tx23,
+		tx44,
 	}
 	err := s.db.WithContext(context.Background()).Create(txns).Error
 	require.NoError(s.T(), err)
@@ -705,7 +829,6 @@ func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
 	}, config.Module{
 		Svc: configSvc,
 	})
-	// time.Sleep(time.Second * 1000000)
 
 	// 初始化注册中心
 	etcdClient := testioc.InitEtcdClient()
@@ -741,23 +864,21 @@ func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
 	tx22.CheckCount = 1
 	tx22.Status = domain.TxNotificationStatusPrepare.String()
 	txns[7] = tx23
+	tx44.NextCheckTime = 0
+	tx44.CheckCount = 2
+	tx44.Status = domain.TxNotificationStatusCancel.String()
+	txns[8] = tx44
 	var notifications []dao.TxNotification
 	nctx, ncancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer ncancel()
 	err = s.db.WithContext(nctx).Model(&dao.TxNotification{}).Find(&notifications).Error
 	require.NoError(s.T(), err)
-	txnMap := make(map[string]dao.TxNotification, len(notifications))
+	txnMap := make(map[int64]dao.TxNotification, len(notifications))
 	for _, n := range notifications {
 		txnMap[n.TxID] = n
 	}
-	for k, v := range txnMap {
-		log.Println("xxxxxxxx tx: ", k, "status: ", v)
-	}
 	for _, n := range txns {
 		txn, ok := txnMap[n.TxID]
-		if !ok {
-			log.Println("xxxxxxxx", n.TxID)
-		}
 		require.True(s.T(), ok)
 		s.assertTxNotification(txn, n)
 	}
@@ -772,6 +893,10 @@ func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
 		},
 		{
 			ID:     22,
+			Status: notification.StatusCanceled,
+		},
+		{
+			ID:     44,
 			Status: notification.StatusCanceled,
 		},
 	}
@@ -807,7 +932,7 @@ func TestTxNotificationServiceSuite(t *testing.T) {
 	suite.Run(t, new(TxNotificationServiceTestSuite))
 }
 
-func (s *TxNotificationServiceTestSuite) MockDaoTxn(txid string, nid uint64, nextTime int64) dao.TxNotification {
+func (s *TxNotificationServiceTestSuite) MockDaoTxn(txid int64, nid uint64, nextTime int64) dao.TxNotification {
 	now := time.Now().UnixMilli()
 	return dao.TxNotification{
 		TxID:           txid,
@@ -820,21 +945,27 @@ func (s *TxNotificationServiceTestSuite) MockDaoTxn(txid string, nid uint64, nex
 }
 
 type MockGrpcServer struct {
-	tx_notificationv1.UnimplementedBackCheckServiceServer
+	tx_notificationv1.UnsafeTransactionCheckServiceServer
 }
 
-func (m *MockGrpcServer) BackCheck(ctx context.Context, request *tx_notificationv1.BackCheckRequest) (*tx_notificationv1.BackCheckResponse, error) {
+func (m *MockGrpcServer) Check(ctx context.Context, request *tx_notificationv1.TransactionCheckServiceCheckRequest) (*tx_notificationv1.TransactionCheckServiceCheckResponse, error) {
 	if strings.Contains(request.GetKey(), "1") {
-		return &tx_notificationv1.BackCheckResponse{
-			Status: tx_notificationv1.BackCheckResponse_SUCCESS,
+		return &tx_notificationv1.TransactionCheckServiceCheckResponse{
+			Status: tx_notificationv1.TransactionCheckServiceCheckResponse_COMMITTED,
 		}, nil
 	}
 	if strings.Contains(request.GetKey(), "2") {
-		return nil, errors.New("mock error")
+		return &tx_notificationv1.TransactionCheckServiceCheckResponse{
+			Status: tx_notificationv1.TransactionCheckServiceCheckResponse_UNKNOWN,
+		}, nil
 	}
-
-	return &tx_notificationv1.BackCheckResponse{
-		Status: tx_notificationv1.BackCheckResponse_FAILURE,
+	if strings.Contains(request.GetKey(), "4") {
+		return &tx_notificationv1.TransactionCheckServiceCheckResponse{
+			Status: tx_notificationv1.TransactionCheckServiceCheckResponse_CANCEL,
+		}, nil
+	}
+	return &tx_notificationv1.TransactionCheckServiceCheckResponse{
+		Status: tx_notificationv1.TransactionCheckServiceCheckResponse_UNKNOWN,
 	}, nil
 }
 

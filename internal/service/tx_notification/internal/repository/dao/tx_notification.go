@@ -2,18 +2,26 @@ package dao
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"gorm.io/gorm"
 
 	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/domain"
 
 	"github.com/ego-component/egorm"
 )
 
+var (
+	ErrDuplicatedTx       = errors.New("duplicated tx")
+	ErrUpdateStatusFailed = errors.New("没有更新")
+)
+
 type TxNotification struct {
 	// 事务id
-	TxID string `gorm:"column:tx_id;type:varchar(128);not null;primaryKey"`
+	TxID int64  `gorm:"column:tx_id;autoIncrement;primaryKey"`
 	Key  string `gorm:"type:VARCHAR(256);NOT NULL;uniqueIndex:idx_biz_id_key,priority:2;comment:'业务内唯一标识，区分同一个业务内的不同通知'"`
 	// 创建的通知id
 	NotificationID uint64 `gorm:"column:notification_id"`
@@ -38,23 +46,32 @@ func (t *TxNotification) TableName() string {
 
 type TxNotificationDAO interface {
 	// Create 直接保存即可
-	Create(ctx context.Context, notification TxNotification) error
+	Create(ctx context.Context, notification TxNotification) (int64, error)
 	// Find 查找需要回查的事务通知，筛选条件是status为PREPARE，并且下一次回查时间小于当前时间
 	Find(ctx context.Context, offset, limit int) ([]TxNotification, error)
 	// UpdateStatus 变更状态 用于用户提交/取消
-	UpdateStatus(ctx context.Context, txIDs []string, status string) error
+	UpdateStatus(ctx context.Context, txID int64, status string) error
 	// UpdateCheckStatus 更新回查状态用于回查任务，回查次数+1 更新下一次的回查时间戳，通知状态，utime
 	UpdateCheckStatus(ctx context.Context, txNotifications []TxNotification) error
 	// First 通过事务id查找对应的事务
-	First(ctx context.Context, txID string) (TxNotification, error)
+	First(ctx context.Context, txID int64) (TxNotification, error)
 	// BatchGetTxNotification 批量获取事务消息
-	BatchGetTxNotification(ctx context.Context, txIDs []string) (map[string]TxNotification, error)
-	//
+	BatchGetTxNotification(ctx context.Context, txIDs []int64) (map[int64]TxNotification, error)
+
 	GetByBizIDKey(ctx context.Context, bizID int64, key string) (TxNotification, error)
+	UpdateNotificationID(ctx context.Context, bizId int64, key string, notificationID uint64) error
 }
 
 type txNotificationDAO struct {
 	db *egorm.Component
+}
+
+func (t *txNotificationDAO) UpdateNotificationID(ctx context.Context, bizId int64, key string, notificationID uint64) error {
+	err := t.db.WithContext(ctx).
+		Model(&TxNotification{}).
+		Where("biz_id = ? AND `key` = ?", bizId, key).
+		Update("notification_id", notificationID).Error
+	return err
 }
 
 // NewTxNotificationDAO creates a new instance of TxNotificationDAO
@@ -73,13 +90,13 @@ func (t *txNotificationDAO) GetByBizIDKey(ctx context.Context, bizID int64, key 
 	return tx, err
 }
 
-func (t *txNotificationDAO) BatchGetTxNotification(ctx context.Context, txIDs []string) (map[string]TxNotification, error) {
+func (t *txNotificationDAO) BatchGetTxNotification(ctx context.Context, txIDs []int64) (map[int64]TxNotification, error) {
 	var txns []TxNotification
 	err := t.db.WithContext(ctx).Where("tx_id in (?)", txIDs).Find(&txns).Error
 	if err != nil {
 		return nil, err
 	}
-	result := make(map[string]TxNotification, len(txns))
+	result := make(map[int64]TxNotification, len(txns))
 	for id := range txns {
 		txn := txns[id]
 		result[txn.TxID] = txn
@@ -87,18 +104,22 @@ func (t *txNotificationDAO) BatchGetTxNotification(ctx context.Context, txIDs []
 	return result, nil
 }
 
-func (t *txNotificationDAO) First(ctx context.Context, txID string) (TxNotification, error) {
+func (t *txNotificationDAO) First(ctx context.Context, txID int64) (TxNotification, error) {
 	var notification TxNotification
 	err := t.db.WithContext(ctx).Where("tx_id = ?", txID).First(&notification).Error
 	return notification, err
 }
 
-func (t *txNotificationDAO) Create(ctx context.Context, notification TxNotification) error {
+func (t *txNotificationDAO) Create(ctx context.Context, notification TxNotification) (int64, error) {
 	// Set create and update time if not already set
 	now := time.Now().UnixMilli()
 	notification.Ctime = now
 	notification.Utime = now
-	return t.db.WithContext(ctx).Create(&notification).Error
+	err := t.db.WithContext(ctx).Create(&notification).Error
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return 0, ErrDuplicatedTx
+	}
+	return notification.TxID, err
 }
 
 func (t *txNotificationDAO) Find(ctx context.Context, offset, limit int) ([]TxNotification, error) {
@@ -115,16 +136,23 @@ func (t *txNotificationDAO) Find(ctx context.Context, offset, limit int) ([]TxNo
 	return notifications, err
 }
 
-func (t *txNotificationDAO) UpdateStatus(ctx context.Context, txIDs []string, status string) error {
+func (t *txNotificationDAO) UpdateStatus(ctx context.Context, txID int64, status string) error {
 	now := time.Now().UnixMilli()
 	// 只能更新Prepare状态的
-	return t.db.WithContext(ctx).
+	res := t.db.WithContext(ctx).
 		Model(&TxNotification{}).
-		Where("tx_id IN ? AND status = ?", txIDs, domain.TxNotificationStatusPrepare.String()).
+		Where("tx_id = ? AND status = ?", txID, domain.TxNotificationStatusPrepare.String()).
 		Updates(map[string]any{
 			"status": status,
 			"utime":  now,
-		}).Error
+		})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrUpdateStatusFailed
+	}
+	return nil
 }
 
 // 只更新
@@ -132,7 +160,7 @@ func (t *txNotificationDAO) UpdateCheckStatus(ctx context.Context, txNotificatio
 	sqls := make([]string, 0, len(txNotifications))
 	now := time.Now().UnixMilli()
 	for _, txNotification := range txNotifications {
-		updateSQL := fmt.Sprintf("UPDATE `tx_notifications` set `status` = '%s',`utime` = %d ,`next_check_time` = %d,`check_count` = %d WHERE `tx_id` = '%s' AND `status` = 'PREPARE'", txNotification.Status, now, txNotification.NextCheckTime, txNotification.CheckCount, txNotification.TxID)
+		updateSQL := fmt.Sprintf("UPDATE `tx_notifications` set `status` = '%s',`utime` = %d ,`next_check_time` = %d,`check_count` = %d WHERE `key` = %s AND `biz_id` = %d AND `status` = 'PREPARE'", txNotification.Status, now, txNotification.NextCheckTime, txNotification.CheckCount, txNotification.Key, txNotification.BizID)
 		sqls = append(sqls, updateSQL)
 	}
 	// 拼接所有SQL并执行

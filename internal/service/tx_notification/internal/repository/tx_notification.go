@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"gitee.com/flycash/notification-platform/internal/service/notification"
 
@@ -9,15 +10,18 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/repository/dao"
 )
 
+var ErrUpdateStatusFailed = errors.New("没有更新")
+
 type TxNotificationRepository interface {
-	Create(ctx context.Context, notification domain.TxNotification) error
+	Create(ctx context.Context, notification domain.TxNotification) (int64, error)
 	Find(ctx context.Context, offset, limit int) ([]domain.TxNotification, error)
-	UpdateStatus(ctx context.Context, txIDs []string, status string) error
+	UpdateStatus(ctx context.Context, txIDs int64, status string) error
 	UpdateCheckStatus(ctx context.Context, txNotifications []domain.TxNotification) error
 	// First 通过事务id查找对应的事务
-	First(ctx context.Context, txID string) (domain.TxNotification, error)
-	BatchGetTxNotification(ctx context.Context, txIDs []string) (map[string]domain.TxNotification, error)
+	First(ctx context.Context, txID int64) (domain.TxNotification, error)
+	BatchGetTxNotification(ctx context.Context, txIDs []int64) (map[int64]domain.TxNotification, error)
 	GetByBizIDKey(ctx context.Context, bizID int64, key string) (domain.TxNotification, error)
+	UpdateNotificationID(ctx context.Context, bizId int64, key string, notificationID uint64) error
 }
 
 type txNotificationRepo struct {
@@ -31,6 +35,10 @@ func NewTxNotificationRepository(txdao dao.TxNotificationDAO) TxNotificationRepo
 	}
 }
 
+func (t *txNotificationRepo) UpdateNotificationID(ctx context.Context, bizId int64, key string, notificationID uint64) error {
+	return t.txdao.UpdateNotificationID(ctx, bizId, key, notificationID)
+}
+
 func (t *txNotificationRepo) GetByBizIDKey(ctx context.Context, bizID int64, key string) (domain.TxNotification, error) {
 	notifyEntity, err := t.txdao.GetByBizIDKey(ctx, bizID, key)
 	if err != nil {
@@ -39,19 +47,19 @@ func (t *txNotificationRepo) GetByBizIDKey(ctx context.Context, bizID int64, key
 	return t.toDomain(notifyEntity), nil
 }
 
-func (t *txNotificationRepo) BatchGetTxNotification(ctx context.Context, txIDs []string) (map[string]domain.TxNotification, error) {
+func (t *txNotificationRepo) BatchGetTxNotification(ctx context.Context, txIDs []int64) (map[int64]domain.TxNotification, error) {
 	taMap, err := t.txdao.BatchGetTxNotification(ctx, txIDs)
 	if err != nil {
 		return nil, err
 	}
-	domainTxnMap := make(map[string]domain.TxNotification, len(taMap))
+	domainTxnMap := make(map[int64]domain.TxNotification, len(taMap))
 	for txid, tx := range taMap {
 		domainTxnMap[txid] = t.toDomain(tx)
 	}
 	return domainTxnMap, nil
 }
 
-func (t *txNotificationRepo) First(ctx context.Context, txID string) (domain.TxNotification, error) {
+func (t *txNotificationRepo) First(ctx context.Context, txID int64) (domain.TxNotification, error) {
 	noti, err := t.txdao.First(ctx, txID)
 	if err != nil {
 		return domain.TxNotification{}, err
@@ -59,7 +67,7 @@ func (t *txNotificationRepo) First(ctx context.Context, txID string) (domain.TxN
 	return t.toDomain(noti), nil
 }
 
-func (t *txNotificationRepo) Create(ctx context.Context, notification domain.TxNotification) error {
+func (t *txNotificationRepo) Create(ctx context.Context, notification domain.TxNotification) (int64, error) {
 	// 转换领域模型到DAO对象
 	daoNotification := t.toDao(notification)
 	// 调用DAO层创建记录
@@ -81,9 +89,9 @@ func (t *txNotificationRepo) Find(ctx context.Context, offset, limit int) ([]dom
 	return result, nil
 }
 
-func (t *txNotificationRepo) UpdateStatus(ctx context.Context, txIDs []string, status string) error {
+func (t *txNotificationRepo) UpdateStatus(ctx context.Context, txID int64, status string) error {
 	// 直接调用DAO层更新状态
-	return t.txdao.UpdateStatus(ctx, txIDs, status)
+	return t.txdao.UpdateStatus(ctx, txID, status)
 }
 
 func (t *txNotificationRepo) UpdateCheckStatus(ctx context.Context, txNotifications []domain.TxNotification) error {

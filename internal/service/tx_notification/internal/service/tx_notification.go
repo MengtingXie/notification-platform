@@ -2,8 +2,11 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/ecodeclub/ekit/syncx"
+	"github.com/gotomicro/ego/client/egrpc"
 	"github.com/meoying/dlock-go"
 
 	"gitee.com/flycash/notification-platform/internal/service/config"
@@ -12,12 +15,14 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/service/retry"
 	"github.com/gotomicro/ego/core/elog"
-	"github.com/lithammer/shortuuid/v4"
 )
 
+var ErrUpdateStatusFailed = errors.New("update status failed")
+
+//go:generate mockgen -source=./tx_notification.go -destination=../../mocks/tx_notification.mock.go -package=txnotificationmocks -typed TxNotificationService
 type TxNotificationService interface {
-	// Prepare 准备消息
-	Prepare(ctx context.Context, txNotification domain.TxNotification) (string, error)
+	// Prepare 准备消息,
+	Prepare(ctx context.Context, txNotification domain.TxNotification) (uint64, error)
 	// Commit 提交
 	Commit(ctx context.Context, bizID int64, key string) error
 	// Cancel 取消
@@ -55,7 +60,7 @@ func NewTxNotificationService(
 const defaultBatchSize = 10
 
 func (t *TxNotificationServiceV1) StartTask(ctx context.Context) {
-	task := &CheckBackTask{
+	task := &TxCheckTask{
 		repo:                 t.repo,
 		notificationSvc:      t.notificationSvc,
 		configSvc:            t.configSvc,
@@ -63,6 +68,7 @@ func (t *TxNotificationServiceV1) StartTask(ctx context.Context) {
 		logger:               t.logger,
 		lock:                 t.lock,
 		batchSize:            defaultBatchSize,
+		clientMap:            syncx.Map[string, *egrpc.Component]{},
 	}
 	go task.Start(ctx)
 }
@@ -80,21 +86,18 @@ func (t *TxNotificationServiceV1) GetNotification(ctx context.Context, bizID int
 	return txn, nil
 }
 
-func (t *TxNotificationServiceV1) Prepare(ctx context.Context, txNotification domain.TxNotification) (string, error) {
+func (t *TxNotificationServiceV1) Prepare(ctx context.Context, txNotification domain.TxNotification) (uint64, error) {
 	noti, err := t.notificationSvc.CreateNotification(ctx, txNotification.Notification)
 	if err != nil {
-		return "", fmt.Errorf("创建通知失败 err:%w", err)
+		return 0, fmt.Errorf("创建通知失败 err:%w", err)
 	}
-	// 获取配置
-	txNotification.TxID = shortuuid.New()
 	txNotification.Notification = noti
-
 	conf, err := t.configSvc.GetByID(ctx, txNotification.BizID)
 	if err == nil {
 		// 找到配置
 		retryStrategy, rerr := t.retryStrategyBuilder.Build(conf.TxnConfig)
 		if rerr != nil {
-			return "", rerr
+			return 0, rerr
 		}
 		nextCheckTime, ok := retryStrategy.NextTime(retry.Req{
 			CheckTimes: 0,
@@ -103,11 +106,8 @@ func (t *TxNotificationServiceV1) Prepare(ctx context.Context, txNotification do
 			txNotification.NextCheckTime = nextCheckTime
 		}
 	}
-	err = t.repo.Create(ctx, txNotification)
-	if err != nil {
-		return "", fmt.Errorf("创建通知失败 err:%w", err)
-	}
-	return txNotification.TxID, err
+	_, err = t.repo.Create(ctx, txNotification)
+	return noti.ID, err
 }
 
 func (t *TxNotificationServiceV1) Commit(ctx context.Context, bizID int64, key string) error {
@@ -120,7 +120,11 @@ func (t *TxNotificationServiceV1) Commit(ctx context.Context, bizID int64, key s
 	if err != nil {
 		return fmt.Errorf("更新事务失败 err:%w", err)
 	}
-	return t.repo.UpdateStatus(ctx, []string{noti.TxID}, domain.TxNotificationStatusCommit.String())
+	err = t.repo.UpdateStatus(ctx, noti.TxID, domain.TxNotificationStatusCommit.String())
+	if errors.Is(err, repository.ErrUpdateStatusFailed) {
+		return ErrUpdateStatusFailed
+	}
+	return err
 }
 
 func (t *TxNotificationServiceV1) Cancel(ctx context.Context, bizID int64, key string) error {
@@ -133,5 +137,9 @@ func (t *TxNotificationServiceV1) Cancel(ctx context.Context, bizID int64, key s
 	if err != nil {
 		return fmt.Errorf("更新事务失败 err:%w", err)
 	}
-	return t.repo.UpdateStatus(ctx, []string{noti.TxID}, domain.TxNotificationStatusCancel.String())
+	err = t.repo.UpdateStatus(ctx, noti.TxID, domain.TxNotificationStatusCancel.String())
+	if errors.Is(err, repository.ErrUpdateStatusFailed) {
+		return ErrUpdateStatusFailed
+	}
+	return err
 }
