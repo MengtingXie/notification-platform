@@ -16,3 +16,6 @@ func InitNotificationService() notificationsvc.Service {
 	)
 	return nil
 }
+
+func InitNotification() {
+}

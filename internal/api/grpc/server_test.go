@@ -10,9 +10,12 @@ import (
 
 	notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/notification/v1"
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
+	"gitee.com/flycash/notification-platform/internal/api/grpc/interceptor/jwt"
 	executorsvc "gitee.com/flycash/notification-platform/internal/service/executor"
 	executormocks "gitee.com/flycash/notification-platform/internal/service/executor/mocks"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
+	txnotification "gitee.com/flycash/notification-platform/internal/service/tx_notification"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/mock/gomock"
@@ -759,4 +762,367 @@ func (s *ServerTestSuite) TestQueryNotification() {
 			tc.after(t, resp)
 		})
 	}
+}
+
+func (s *ServerTestSuite) TestCommit() {
+	mockTxSvc := txnotificationmocks.NewMockTxNotificationService(s.ctrl)
+	mockTxSvc.EXPECT().Commit(gomock.Any(), int64(13), "case1").Return(nil)
+	// 创建内存监听器
+	lis := bufconn.Listen(1024 * 1024)
+	defer lis.Close()
+
+	// 创建gRPC服务器
+	server := grpc.NewServer(grpc.ChainUnaryInterceptor(
+		jwt.JwtAuthInterceptor(s.jwtAuth),
+	))
+	defer server.Stop()
+	notificationv1.RegisterNotificationServiceServer(server, grpcapi.NewServer(nil, mockTxSvc))
+	// 启动服务器
+	go func() {
+		if err := server.Serve(lis); err != nil {
+			s.T().Errorf("gRPC server failed: %v", err)
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 客户端连接配置
+	conn, err := grpc.DialContext(ctx, "bufnet",
+		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+			return lis.Dial()
+		}),
+		grpc.WithInsecure(),
+	)
+	require.NoError(s.T(), err)
+	defer conn.Close()
+
+	// 创建客户端
+	client := notificationv1.NewNotificationServiceClient(conn)
+
+	token, err := s.jwtAuth.Encode(map[string]any{
+		"biz_id": 13,
+	})
+	require.NoError(s.T(), err)
+	ctx = s.generalToken(ctx, token)
+	// 调用Commit方法
+	_, verr := client.TxCommit(ctx, &notificationv1.TxCommitRequest{
+		Key: "case1",
+	})
+	require.NoError(s.T(), verr)
+}
+
+func (s *ServerTestSuite) TestCancel() {
+	mockTxSvc := txnotificationmocks.NewMockTxNotificationService(s.ctrl)
+	mockTxSvc.EXPECT().Cancel(gomock.Any(), int64(13), "case1").Return(nil)
+	// 创建内存监听器
+	lis := bufconn.Listen(1024 * 1024)
+	defer lis.Close()
+
+	// 创建gRPC服务器
+	server := grpc.NewServer(grpc.ChainUnaryInterceptor(
+		jwt.JwtAuthInterceptor(s.jwtAuth),
+	))
+	defer server.Stop()
+	notificationv1.RegisterNotificationServiceServer(server, grpcapi.NewServer(nil, mockTxSvc))
+	// 启动服务器
+	go func() {
+		if err := server.Serve(lis); err != nil {
+			s.T().Errorf("gRPC server failed: %v", err)
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 客户端连接配置
+	conn, err := grpc.DialContext(ctx, "bufnet",
+		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+			return lis.Dial()
+		}),
+		grpc.WithInsecure(),
+	)
+	require.NoError(s.T(), err)
+	defer conn.Close()
+
+	// 创建客户端
+	client := notificationv1.NewNotificationServiceClient(conn)
+
+	token, err := s.jwtAuth.Encode(map[string]any{
+		"biz_id": 13,
+	})
+	require.NoError(s.T(), err)
+	ctx = s.generalToken(ctx, token)
+	// 调用Commit方法
+	_, verr := client.TxCancel(ctx, &notificationv1.TxCancelRequest{
+		Key: "case1",
+	})
+	require.NoError(s.T(), verr)
+}
+
+func (s *ServerTestSuite) TestPrepare() {
+	mockTxSvc := txnotificationmocks.NewMockTxNotificationService(s.ctrl)
+	timestamp := time.Now().UnixNano() // Use nanosecond timestamp for uniqueness
+
+	// Create test cases for different strategies
+	testCases := []struct {
+		name      string
+		input     notificationv1.Notification
+		setupMock func(t *testing.T, noti notificationv1.Notification)
+	}{
+		{
+			name: "Immediate strategy",
+			input: notificationv1.Notification{
+				Key:        fmt.Sprintf("test-key-immediate-%d", timestamp),
+				Receiver:   "13800138000",
+				Channel:    notificationv1.Channel_SMS,
+				TemplateId: "100",
+				TemplateParams: map[string]string{
+					"code": "123456",
+				},
+				Strategy: &notificationv1.SendStrategy{
+					StrategyType: &notificationv1.SendStrategy_Immediate{
+						Immediate: &notificationv1.SendStrategy_ImmediateStrategy{},
+					},
+				},
+			},
+			setupMock: func(t *testing.T, noti notificationv1.Notification) {
+				mockTxSvc.EXPECT().
+					Prepare(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(ctx context.Context, txn txnotification.TxNotification) (uint64, error) {
+						// Verify basic properties
+						now := time.Now()
+						assert.Equal(t, int64(13), txn.BizID)
+						assert.Equal(t, noti.Key, txn.Key)
+						assert.GreaterOrEqual(t, now.UnixMilli(), txn.Notification.ScheduledSTime)
+						assert.LessOrEqual(t, now.Add(-1*time.Second).UnixMilli(), txn.Notification.ScheduledSTime)
+						assert.LessOrEqual(t, now.Add(59*time.Minute).UnixMilli(), txn.Notification.ScheduledETime)
+						txn.Notification.ScheduledETime = 0
+						txn.Notification.ScheduledSTime = 0
+						assert.Equal(t, notificationsvc.Notification{
+							BizID:    13,
+							Key:      fmt.Sprintf("test-key-immediate-%d", timestamp),
+							Receiver: "13800138000",
+							Channel:  notificationsvc.ChannelSMS,
+							Template: notificationsvc.Template{
+								ID: 100,
+								Params: map[string]string{
+									"code": "123456",
+								},
+							},
+							Status: notificationsvc.SendStatusPrepare,
+						}, txn.Notification)
+						return 12345, nil
+					})
+			},
+		},
+		{
+			name: "Delayed strategy",
+			input: notificationv1.Notification{
+				Key:        fmt.Sprintf("test-key-delayed-%d", timestamp),
+				Receiver:   "13800138001",
+				Channel:    notificationv1.Channel_SMS,
+				TemplateId: "100",
+				TemplateParams: map[string]string{
+					"code": "234567",
+				},
+				Strategy: &notificationv1.SendStrategy{
+					StrategyType: &notificationv1.SendStrategy_Delayed{
+						Delayed: &notificationv1.SendStrategy_DelayedStrategy{
+							DelaySeconds: 60,
+						},
+					},
+				},
+			},
+			setupMock: func(t *testing.T, noti notificationv1.Notification) {
+				mockTxSvc.EXPECT().
+					Prepare(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(ctx context.Context, txn txnotification.TxNotification) (uint64, error) {
+						// Verify basic properties
+						now := time.Now()
+						assert.Equal(t, int64(13), txn.BizID)
+						assert.Equal(t, noti.Key, txn.Key)
+						assert.GreaterOrEqual(t, now.Add(60*time.Second).UnixMilli(), txn.Notification.ScheduledSTime)
+						assert.LessOrEqual(t, now.Add(59*time.Second).UnixMilli(), txn.Notification.ScheduledSTime)
+						assert.LessOrEqual(t, now.Add(69*time.Second).UnixMilli(), txn.Notification.ScheduledETime)
+						txn.Notification.ScheduledETime = 0
+						txn.Notification.ScheduledSTime = 0
+						assert.Equal(t, notificationsvc.Notification{
+							BizID:    13,
+							Key:      fmt.Sprintf("test-key-delayed-%d", timestamp),
+							Receiver: "13800138001",
+							Channel:  notificationsvc.ChannelSMS,
+							Template: notificationsvc.Template{
+								ID: 100,
+								Params: map[string]string{
+									"code": "234567",
+								},
+							},
+							Status: notificationsvc.SendStatusPrepare,
+						}, txn.Notification)
+						return 12345, nil
+					})
+			},
+		},
+		{
+			name: "Scheduled strategy",
+			input: notificationv1.Notification{
+				Key:        fmt.Sprintf("test-key-scheduled-%d", timestamp),
+				Receiver:   "13800138002",
+				Channel:    notificationv1.Channel_SMS,
+				TemplateId: "100",
+				TemplateParams: map[string]string{
+					"code": "345678",
+				},
+				Strategy: &notificationv1.SendStrategy{
+					StrategyType: &notificationv1.SendStrategy_Scheduled{
+						Scheduled: &notificationv1.SendStrategy_ScheduledStrategy{
+							SendTime: timestamppb.New(time.Now().Add(1 * time.Hour)),
+						},
+					},
+				},
+			},
+			setupMock: func(t *testing.T, noti notificationv1.Notification) {
+				mockTxSvc.EXPECT().
+					Prepare(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(ctx context.Context, txn txnotification.TxNotification) (uint64, error) {
+						// Verify basic properties
+						now := time.Now()
+						assert.Equal(t, int64(13), txn.BizID)
+						assert.Equal(t, noti.Key, txn.Key)
+						assert.GreaterOrEqual(t, now.Add(60*time.Minute).UnixMilli(), txn.Notification.ScheduledSTime)
+						assert.LessOrEqual(t, now.Add(59*time.Minute).UnixMilli(), txn.Notification.ScheduledSTime)
+						assert.LessOrEqual(t, now.Add(60*time.Second).UnixMilli(), txn.Notification.ScheduledETime)
+						txn.Notification.ScheduledETime = 0
+						txn.Notification.ScheduledSTime = 0
+						assert.Equal(t, notificationsvc.Notification{
+							BizID:    13,
+							Key:      fmt.Sprintf("test-key-scheduled-%d", timestamp),
+							Receiver: "13800138002",
+							Channel:  notificationsvc.ChannelSMS,
+							Template: notificationsvc.Template{
+								ID: 100,
+								Params: map[string]string{
+									"code": "345678",
+								},
+							},
+							Status: notificationsvc.SendStatusPrepare,
+						}, txn.Notification)
+						return 12345, nil
+					})
+			},
+		},
+		{
+			name: "TimeWindow strategy",
+			input: notificationv1.Notification{
+				Key:        fmt.Sprintf("test-key-timewindow-%d", timestamp),
+				Receiver:   "13800138003",
+				Channel:    notificationv1.Channel_SMS,
+				TemplateId: "100",
+				TemplateParams: map[string]string{
+					"code": "456789",
+				},
+				Strategy: &notificationv1.SendStrategy{
+					StrategyType: &notificationv1.SendStrategy_TimeWindow{
+						TimeWindow: &notificationv1.SendStrategy_TimeWindowStrategy{
+							StartTimeMilliseconds: time.Now().UnixMilli(),
+							EndTimeMilliseconds:   time.Now().Add(3 * time.Hour).UnixMilli(),
+						},
+					},
+				},
+			},
+			setupMock: func(t *testing.T, noti notificationv1.Notification) {
+				mockTxSvc.EXPECT().
+					Prepare(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(ctx context.Context, txn txnotification.TxNotification) (uint64, error) {
+						// Verify basic properties
+						now := time.Now()
+						assert.Equal(t, int64(13), txn.BizID)
+						assert.Equal(t, noti.Key, txn.Key)
+						assert.GreaterOrEqual(t, now.UnixMilli(), txn.Notification.ScheduledSTime)
+						assert.LessOrEqual(t, now.Add(-1*time.Second).UnixMilli(), txn.Notification.ScheduledSTime)
+						assert.LessOrEqual(t, now.Add(179*time.Minute).UnixMilli(), txn.Notification.ScheduledETime)
+						txn.Notification.ScheduledETime = 0
+						txn.Notification.ScheduledSTime = 0
+						assert.Equal(t, notificationsvc.Notification{
+							BizID:    13,
+							Key:      fmt.Sprintf("test-key-timewindow-%d", timestamp),
+							Receiver: "13800138003",
+							Channel:  notificationsvc.ChannelSMS,
+							Template: notificationsvc.Template{
+								ID: 100,
+								Params: map[string]string{
+									"code": "456789",
+								},
+							},
+							Status: notificationsvc.SendStatusPrepare,
+						}, txn.Notification)
+						return 12345, nil
+					})
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		s.T().Run(tc.name, func(t *testing.T) {
+			// Create memory listener
+			lis := bufconn.Listen(1024 * 1024)
+			defer lis.Close()
+
+			// Create gRPC server with the mock service
+			server := grpc.NewServer(grpc.ChainUnaryInterceptor(
+				jwt.JwtAuthInterceptor(s.jwtAuth),
+			))
+			defer server.Stop()
+			notificationv1.RegisterNotificationServiceServer(server, grpcapi.NewServer(nil, mockTxSvc))
+
+			// Start server
+			go func() {
+				if err := server.Serve(lis); err != nil {
+					t.Errorf("gRPC server failed: %v", err)
+				}
+			}()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			// Client connection setup
+			conn, err := grpc.DialContext(ctx, "bufnet",
+				grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+					return lis.Dial()
+				}),
+				grpc.WithInsecure(),
+			)
+			require.NoError(t, err)
+			defer conn.Close()
+
+			// Create client
+			client := notificationv1.NewNotificationServiceClient(conn)
+
+			// Setup mock expectations
+			tc.setupMock(t, tc.input)
+
+			// Generate token with biz_id
+			token, err := s.jwtAuth.Encode(map[string]any{
+				"biz_id": 13,
+			})
+			require.NoError(t, err)
+			ctx = s.generalToken(ctx, token)
+
+			// Call TxPrepare method
+			response, err := client.TxPrepare(ctx, &notificationv1.TxPrepareRequest{
+				Notification: &tc.input,
+			})
+
+			// Verify results
+			require.NoError(t, err)
+			require.NotNil(t, response)
+		})
+	}
+}
+
+func (s *ServerTestSuite) generalToken(ctx context.Context, token string) context.Context {
+	md := metadata.Pairs(
+		"authorization", token,
+	)
+	ctx = metadata.NewOutgoingContext(ctx, md)
+	return ctx
 }

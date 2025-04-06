@@ -91,27 +91,6 @@ message SendStrategy {
   }
 }
 
-service CallbackService {
-  // 业务方需要实现的回调接口
-  rpc HandleNotificationResult(HandleNotificationResultRequest) returns (HandleNotificationResultResponse);
-}
-
-// 回调请求
-message HandleNotificationResultRequest {
-  // 通知平台生成的通知id
-  uint64 notification_id = 1;
-  // 原始请求
-  SendNotificationRequest original_request = 2;
-  // 发送结果
-  SendNotificationResponse result = 3;
-}
-
-// 回调响应
-message HandleNotificationResultResponse {
-  // 回调是否成功处理
-  bool success = 1;
-}
-
 service NotificationService {
   // 同步单条发送
   rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse);
@@ -124,6 +103,13 @@ service NotificationService {
 
   // 异步批量发送
   rpc BatchSendNotificationsAsync(BatchSendNotificationsAsyncRequest) returns (BatchSendNotificationsAsyncResponse);
+
+  // 准备事务
+  rpc TxPrepare(TxPrepareRequest) returns (TxPrepareResponse);
+  // 提交事务
+  rpc TxCommit(TxCommitRequest) returns (TxCommitResponse);
+  // 取消事务
+  rpc TxCancel(TxCancelRequest) returns (TxCancelResponse);
 }
 
 // 通知
@@ -199,3 +185,27 @@ message BatchSendNotificationsAsyncResponse {
   // 通知平台生成的通知ID
   repeated uint64 notification_ids = 1;
 }
+
+// 准备事务请求
+message TxPrepareRequest {
+  notification.v1.Notification notification = 1;
+}
+
+// 准备事务响应
+message TxPrepareResponse {}
+
+// 提交事务请求
+message TxCommitRequest {
+  string key = 1; // 事务唯一标识
+}
+
+// 提交事务响应
+message TxCommitResponse {}
+
+// 回滚事务请求
+message TxCancelRequest {
+  string key = 1; // 事务唯一标识
+}
+
+// 回滚事务响应
+message TxCancelResponse {}

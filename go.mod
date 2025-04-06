@@ -7,19 +7,22 @@ require (
 	github.com/alibabacloud-go/dysmsapi-20170525/v3 v3.0.6
 	github.com/alibabacloud-go/tea v1.3.7
 	github.com/ecodeclub/ecache v0.0.0-20240111145855-75679834beca
-	github.com/ecodeclub/ekit v0.0.9
+	github.com/ecodeclub/ekit v0.0.9-0.20250308133608-b832b6e50738
 	github.com/ecodeclub/mq-api v0.0.0-20240508035004-fd7de3346cfe
+	github.com/ego-component/eetcd v1.0.0
 	github.com/ego-component/egorm v1.1.4
 	github.com/go-sql-driver/mysql v1.7.1
+	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/wire v0.6.0
-	github.com/gotomicro/ego v1.0.3
+	github.com/gotomicro/ego v1.2.3
+	github.com/meoying/dlock-go v0.0.0-20250327141213-0dffbb87db24
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/sony/sonyflake v1.2.0
 	github.com/stretchr/testify v1.10.0
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.1134
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms v1.0.1115
-	go.etcd.io/etcd/client/v3 v3.5.20
 	go.uber.org/mock v0.3.0
+	golang.org/x/sync v0.12.0
 	google.golang.org/grpc v1.71.0
 	google.golang.org/protobuf v1.36.5
 	gorm.io/gorm v1.25.12
@@ -41,15 +44,17 @@ require (
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
-	github.com/felixge/fgprof v0.9.1 // indirect
+	github.com/felixge/fgprof v0.9.2 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
 	github.com/golang-sql/sqlexp v0.1.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/google/pprof v0.0.0-20200708004538-1a94d8640e99 // indirect
-	github.com/gotomicro/logrotate v0.0.0-20211108024517-45d1f9a03ff5 // indirect
+	github.com/google/pprof v0.0.0-20211214055906-6f57359322fd // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/gotomicro/logrotate v0.0.0-20211108034117-46d53eedc960 // indirect
+	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/hashicorp/go-version v1.4.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.12.0 // indirect
@@ -64,7 +69,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/microsoft/go-mssqldb v1.1.0 // indirect
-	github.com/mitchellh/mapstructure v1.3.2 // indirect
+	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -73,10 +78,12 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
-	github.com/spf13/cast v1.3.1 // indirect
+	github.com/samber/lo v1.39.0 // indirect
+	github.com/spf13/cast v1.4.1 // indirect
 	github.com/tjfoc/gmsm v1.4.1 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.20 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.20 // indirect
+	go.etcd.io/etcd/client/v3 v3.5.20 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/otel v1.34.0 // indirect
 	go.opentelemetry.io/otel/metric v1.34.0 // indirect

@@ -8,6 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/api/grpc/interceptor/jwt"
+	txnotification "gitee.com/flycash/notification-platform/internal/service/tx_notification"
+
 	executorsvc "gitee.com/flycash/notification-platform/internal/service/executor"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 	"google.golang.org/grpc/codes"
@@ -17,19 +20,59 @@ import (
 	notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/notification/v1"
 )
 
+const (
+	BizIDName = "biz_id"
+)
+
 // NotificationServer 处理通知平台的gRPC请求
 type NotificationServer struct {
 	notificationv1.UnimplementedNotificationServiceServer
 	notificationv1.UnimplementedNotificationQueryServiceServer
 	executor executorsvc.Service
 	// TODO: 配置服务 configService config.ConfigService
+	txnSvc txnotification.Service
 }
 
 // NewServer 创建通知平台gRPC服务器
-func NewServer(executor executorsvc.Service) *NotificationServer {
+func NewServer(executor executorsvc.Service, txnSvc txnotification.Service) *NotificationServer {
 	return &NotificationServer{
 		executor: executor,
+		txnSvc:   txnSvc,
 	}
+}
+
+func (s *NotificationServer) TxPrepare(ctx context.Context, request *notificationv1.TxPrepareRequest) (*notificationv1.TxPrepareResponse, error) {
+	// 1. 从metadata中解析Authorization JWT Token
+	bizID, err := jwt.GetBizIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. 将请求转换为领域对象
+	txn, err := s.convertToTxNotification(request.Notification, bizID)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
+	}
+	_, err = s.txnSvc.Prepare(ctx, txn)
+	return &notificationv1.TxPrepareResponse{}, err
+}
+
+func (s *NotificationServer) TxCommit(ctx context.Context, request *notificationv1.TxCommitRequest) (*notificationv1.TxCommitResponse, error) {
+	bizID, err := jwt.GetBizIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = s.txnSvc.Commit(ctx, bizID, request.GetKey())
+	return &notificationv1.TxCommitResponse{}, err
+}
+
+func (s *NotificationServer) TxCancel(ctx context.Context, request *notificationv1.TxCancelRequest) (*notificationv1.TxCancelResponse, error) {
+	bizID, err := jwt.GetBizIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = s.txnSvc.Cancel(ctx, bizID, request.GetKey())
+	return &notificationv1.TxCancelResponse{}, err
 }
 
 // SendNotification 处理同步发送通知请求
@@ -427,4 +470,62 @@ func convertSendStatus(status notificationsvc.SendStatus) notificationv1.SendSta
 	default:
 		return notificationv1.SendStatus_SEND_STATUS_UNSPECIFIED
 	}
+}
+
+func (s *NotificationServer) convertToTxNotification(n *notificationv1.Notification, bizID int64) (txnotification.TxNotification, error) {
+	if n == nil {
+		return txnotification.TxNotification{}, errors.New("通知不能为空")
+	}
+
+	// 转换TemplateID
+	tid, err := strconv.ParseInt(n.TemplateId, 10, 64)
+	if err != nil {
+		return txnotification.TxNotification{}, fmt.Errorf("无效的模板ID: %s", n.TemplateId)
+	}
+	// 构建基本Notification
+	noti := notificationsvc.Notification{
+		BizID:    bizID,
+		Key:      n.Key,
+		Receiver: n.Receiver,
+		Channel:  notificationsvc.Channel(n.Channel.String()),
+		Template: notificationsvc.Template{
+			ID:     tid,
+			Params: n.TemplateParams,
+		},
+		Status: notificationsvc.SendStatusPrepare,
+	}
+	const (
+		d      = 24
+		second = 1000
+	)
+	now := time.Now()
+	if n.Strategy != nil {
+		switch s := n.Strategy.StrategyType.(type) {
+		case *notificationv1.SendStrategy_Immediate:
+			noti.ScheduledSTime = now.UnixMilli()
+			noti.ScheduledETime = now.Add(d * time.Hour).UnixMilli()
+		case *notificationv1.SendStrategy_Delayed:
+			if s.Delayed != nil && s.Delayed.DelaySeconds > 0 {
+				noti.ScheduledSTime = now.UnixMilli() + s.Delayed.DelaySeconds*second
+				noti.ScheduledETime = now.UnixMilli() + (s.Delayed.DelaySeconds+10)*second
+			}
+
+		case *notificationv1.SendStrategy_Scheduled:
+			if s.Scheduled != nil && s.Scheduled.SendTime != nil {
+				noti.ScheduledSTime = s.Scheduled.SendTime.AsTime().UnixMilli()
+				noti.ScheduledETime = s.Scheduled.SendTime.AsTime().UnixMilli() + 10*second
+			}
+		case *notificationv1.SendStrategy_TimeWindow:
+			if s.TimeWindow != nil {
+				noti.ScheduledSTime = s.TimeWindow.StartTimeMilliseconds
+				noti.ScheduledETime = s.TimeWindow.EndTimeMilliseconds
+			}
+		}
+	}
+	return txnotification.TxNotification{
+		BizID:        bizID,
+		Key:          n.Key,
+		Notification: noti,
+		Status:       txnotification.TxNotificationStatusPrepare,
+	}, nil
 }
