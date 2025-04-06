@@ -15,6 +15,7 @@ import (
 	executormocks "gitee.com/flycash/notification-platform/internal/service/executor/mocks"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 	txnotification "gitee.com/flycash/notification-platform/internal/service/tx_notification"
+	txnotificationmocks "gitee.com/flycash/notification-platform/internal/service/tx_notification/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -42,10 +43,27 @@ func (s *ServerTestSuite) newGRPCServer(ctrl *gomock.Controller) (*grpc.Server, 
 
 	// 启动grpc.Server
 	grpcServer := grpc.NewServer()
-	notificationv1.RegisterNotificationServiceServer(grpcServer, grpcapi.NewServer(mockExecutor))
-	notificationv1.RegisterNotificationQueryServiceServer(grpcServer, grpcapi.NewServer(mockExecutor))
+	notificationv1.RegisterNotificationServiceServer(grpcServer, grpcapi.NewServer(mockExecutor, nil))
+	notificationv1.RegisterNotificationQueryServiceServer(grpcServer, grpcapi.NewServer(mockExecutor, nil))
 
 	return grpcServer, listener, mockExecutor
+}
+
+// 新增方法，支持同时创建执行器和事务通知服务的mock
+func (s *ServerTestSuite) newGRPCServerWithTx(ctrl *gomock.Controller, jwtKey string) (*grpc.Server, *jwt.JwtAuth, *bufconn.Listener, *txnotificationmocks.MockTxNotificationService) {
+	listener := bufconn.Listen(1024 * 1024)
+
+	// 创建mock控制器
+	mockTxSvc := txnotificationmocks.NewMockTxNotificationService(ctrl)
+
+	// 启动grpc.Server，添加JWT认证拦截器
+	jwtAuth := jwt.NewJwtAuth(jwtKey)
+	grpcServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
+		jwt.JwtAuthInterceptor(jwtAuth),
+	))
+	notificationv1.RegisterNotificationServiceServer(grpcServer, grpcapi.NewServer(nil, mockTxSvc))
+
+	return grpcServer, jwtAuth, listener, mockTxSvc
 }
 
 func (s *ServerTestSuite) newGRPCClientConn(listener *bufconn.Listener) *grpc.ClientConn {
@@ -765,112 +783,114 @@ func (s *ServerTestSuite) TestQueryNotification() {
 }
 
 func (s *ServerTestSuite) TestCommit() {
-	mockTxSvc := txnotificationmocks.NewMockTxNotificationService(s.ctrl)
-	mockTxSvc.EXPECT().Commit(gomock.Any(), int64(13), "case1").Return(nil)
-	// 创建内存监听器
-	lis := bufconn.Listen(1024 * 1024)
-	defer lis.Close()
+	// 设置mock期望
+	t := s.T()
 
-	// 创建gRPC服务器
-	server := grpc.NewServer(grpc.ChainUnaryInterceptor(
-		jwt.JwtAuthInterceptor(s.jwtAuth),
-	))
-	defer server.Stop()
-	notificationv1.RegisterNotificationServiceServer(server, grpcapi.NewServer(nil, mockTxSvc))
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// 测试用JWT密钥
+	jwtKey := "test-secret-key"
+
+	// 创建服务器和客户端
+	server, jwtAuth, listener, mockTxSvc := s.newGRPCServerWithTx(ctrl, jwtKey)
+	mockTxSvc.EXPECT().Commit(gomock.Any(), int64(13), "case1").Return(nil)
+
 	// 启动服务器
+	ready := make(chan struct{})
 	go func() {
-		if err := server.Serve(lis); err != nil {
-			s.T().Errorf("gRPC server failed: %v", err)
+		close(ready)
+		if err := server.Serve(listener); err != nil {
+			t.Logf("gRPC Server exited: %v", err)
 		}
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	<-ready
 
-	// 客户端连接配置
-	conn, err := grpc.DialContext(ctx, "bufnet",
-		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-			return lis.Dial()
-		}),
-		grpc.WithInsecure(),
-	)
-	require.NoError(s.T(), err)
+	defer server.Stop()
+
+	conn := s.newGRPCClientConn(listener)
 	defer conn.Close()
 
-	// 创建客户端
 	client := notificationv1.NewNotificationServiceClient(conn)
 
-	token, err := s.jwtAuth.Encode(map[string]any{
+	// 生成带有业务ID的token
+	token, err := jwtAuth.Encode(map[string]any{
 		"biz_id": 13,
 	})
-	require.NoError(s.T(), err)
-	ctx = s.generalToken(ctx, token)
+	assert.NoError(t, err)
+
+	// 创建带有认证信息的上下文
+	ctx := s.generalToken(context.Background(), token)
+
 	// 调用Commit方法
-	_, verr := client.TxCommit(ctx, &notificationv1.TxCommitRequest{
+	resp, err := client.TxCommit(ctx, &notificationv1.TxCommitRequest{
 		Key: "case1",
 	})
-	require.NoError(s.T(), verr)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
 }
 
 func (s *ServerTestSuite) TestCancel() {
-	mockTxSvc := txnotificationmocks.NewMockTxNotificationService(s.ctrl)
-	mockTxSvc.EXPECT().Cancel(gomock.Any(), int64(13), "case1").Return(nil)
-	// 创建内存监听器
-	lis := bufconn.Listen(1024 * 1024)
-	defer lis.Close()
+	t := s.T()
 
-	// 创建gRPC服务器
-	server := grpc.NewServer(grpc.ChainUnaryInterceptor(
-		jwt.JwtAuthInterceptor(s.jwtAuth),
-	))
-	defer server.Stop()
-	notificationv1.RegisterNotificationServiceServer(server, grpcapi.NewServer(nil, mockTxSvc))
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// 测试用JWT密钥
+	jwtKey := "test-secret-key"
+
+	// 创建服务器和客户端
+	server, jwtAuth, listener, mockTxSvc := s.newGRPCServerWithTx(ctrl, jwtKey)
+	mockTxSvc.EXPECT().Cancel(gomock.Any(), int64(13), "case1").Return(nil)
+
 	// 启动服务器
+	ready := make(chan struct{})
 	go func() {
-		if err := server.Serve(lis); err != nil {
-			s.T().Errorf("gRPC server failed: %v", err)
+		close(ready)
+		if err := server.Serve(listener); err != nil {
+			t.Logf("gRPC Server exited: %v", err)
 		}
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	<-ready
 
-	// 客户端连接配置
-	conn, err := grpc.DialContext(ctx, "bufnet",
-		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-			return lis.Dial()
-		}),
-		grpc.WithInsecure(),
-	)
-	require.NoError(s.T(), err)
+	defer server.Stop()
+
+	conn := s.newGRPCClientConn(listener)
 	defer conn.Close()
 
-	// 创建客户端
 	client := notificationv1.NewNotificationServiceClient(conn)
 
-	token, err := s.jwtAuth.Encode(map[string]any{
+	// 生成带有业务ID的token
+	token, err := jwtAuth.Encode(map[string]any{
 		"biz_id": 13,
 	})
-	require.NoError(s.T(), err)
-	ctx = s.generalToken(ctx, token)
-	// 调用Commit方法
-	_, verr := client.TxCancel(ctx, &notificationv1.TxCancelRequest{
+	assert.NoError(t, err)
+
+	// 创建带有认证信息的上下文
+	ctx := s.generalToken(context.Background(), token)
+
+	// 调用Cancel方法
+	resp, err := client.TxCancel(ctx, &notificationv1.TxCancelRequest{
 		Key: "case1",
 	})
-	require.NoError(s.T(), verr)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
 }
 
 func (s *ServerTestSuite) TestPrepare() {
-	mockTxSvc := txnotificationmocks.NewMockTxNotificationService(s.ctrl)
-	timestamp := time.Now().UnixNano() // Use nanosecond timestamp for uniqueness
+	timestamp := time.Now().UnixNano() // 使用纳秒级时间戳确保唯一性
+	t := s.T()
 
-	// Create test cases for different strategies
+	// 创建不同策略的测试用例
 	testCases := []struct {
 		name      string
-		input     notificationv1.Notification
-		setupMock func(t *testing.T, noti notificationv1.Notification)
+		input     *notificationv1.Notification
+		setupMock func(mockTxSvc *txnotificationmocks.MockTxNotificationService, noti *notificationv1.Notification)
 	}{
 		{
-			name: "Immediate strategy",
-			input: notificationv1.Notification{
+			name: "立即发送策略",
+			input: &notificationv1.Notification{
 				Key:        fmt.Sprintf("test-key-immediate-%d", timestamp),
 				Receiver:   "13800138000",
 				Channel:    notificationv1.Channel_SMS,
@@ -884,20 +904,20 @@ func (s *ServerTestSuite) TestPrepare() {
 					},
 				},
 			},
-			setupMock: func(t *testing.T, noti notificationv1.Notification) {
+			setupMock: func(mockTxSvc *txnotificationmocks.MockTxNotificationService, noti *notificationv1.Notification) {
 				mockTxSvc.EXPECT().
 					Prepare(gomock.Any(), gomock.Any()).
 					DoAndReturn(func(ctx context.Context, txn txnotification.TxNotification) (uint64, error) {
-						// Verify basic properties
+						// 验证基本属性
 						now := time.Now()
-						assert.Equal(t, int64(13), txn.BizID)
-						assert.Equal(t, noti.Key, txn.Key)
-						assert.GreaterOrEqual(t, now.UnixMilli(), txn.Notification.ScheduledSTime)
-						assert.LessOrEqual(t, now.Add(-1*time.Second).UnixMilli(), txn.Notification.ScheduledSTime)
-						assert.LessOrEqual(t, now.Add(59*time.Minute).UnixMilli(), txn.Notification.ScheduledETime)
+						assert.Equal(s.T(), int64(13), txn.BizID)
+						assert.Equal(s.T(), noti.Key, txn.Key)
+						assert.GreaterOrEqual(s.T(), now.UnixMilli(), txn.Notification.ScheduledSTime)
+						assert.LessOrEqual(s.T(), now.Add(-1*time.Second).UnixMilli(), txn.Notification.ScheduledSTime)
+						assert.LessOrEqual(s.T(), now.Add(59*time.Minute).UnixMilli(), txn.Notification.ScheduledETime)
 						txn.Notification.ScheduledETime = 0
 						txn.Notification.ScheduledSTime = 0
-						assert.Equal(t, notificationsvc.Notification{
+						assert.Equal(s.T(), notificationsvc.Notification{
 							BizID:    13,
 							Key:      fmt.Sprintf("test-key-immediate-%d", timestamp),
 							Receiver: "13800138000",
@@ -915,8 +935,8 @@ func (s *ServerTestSuite) TestPrepare() {
 			},
 		},
 		{
-			name: "Delayed strategy",
-			input: notificationv1.Notification{
+			name: "延迟发送策略",
+			input: &notificationv1.Notification{
 				Key:        fmt.Sprintf("test-key-delayed-%d", timestamp),
 				Receiver:   "13800138001",
 				Channel:    notificationv1.Channel_SMS,
@@ -932,20 +952,20 @@ func (s *ServerTestSuite) TestPrepare() {
 					},
 				},
 			},
-			setupMock: func(t *testing.T, noti notificationv1.Notification) {
+			setupMock: func(mockTxSvc *txnotificationmocks.MockTxNotificationService, noti *notificationv1.Notification) {
 				mockTxSvc.EXPECT().
 					Prepare(gomock.Any(), gomock.Any()).
 					DoAndReturn(func(ctx context.Context, txn txnotification.TxNotification) (uint64, error) {
-						// Verify basic properties
+						// 验证基本属性
 						now := time.Now()
-						assert.Equal(t, int64(13), txn.BizID)
-						assert.Equal(t, noti.Key, txn.Key)
-						assert.GreaterOrEqual(t, now.Add(60*time.Second).UnixMilli(), txn.Notification.ScheduledSTime)
-						assert.LessOrEqual(t, now.Add(59*time.Second).UnixMilli(), txn.Notification.ScheduledSTime)
-						assert.LessOrEqual(t, now.Add(69*time.Second).UnixMilli(), txn.Notification.ScheduledETime)
+						assert.Equal(s.T(), int64(13), txn.BizID)
+						assert.Equal(s.T(), noti.Key, txn.Key)
+						assert.GreaterOrEqual(s.T(), now.Add(60*time.Second).UnixMilli(), txn.Notification.ScheduledSTime)
+						assert.LessOrEqual(s.T(), now.Add(59*time.Second).UnixMilli(), txn.Notification.ScheduledSTime)
+						assert.LessOrEqual(s.T(), now.Add(69*time.Second).UnixMilli(), txn.Notification.ScheduledETime)
 						txn.Notification.ScheduledETime = 0
 						txn.Notification.ScheduledSTime = 0
-						assert.Equal(t, notificationsvc.Notification{
+						assert.Equal(s.T(), notificationsvc.Notification{
 							BizID:    13,
 							Key:      fmt.Sprintf("test-key-delayed-%d", timestamp),
 							Receiver: "13800138001",
@@ -963,8 +983,8 @@ func (s *ServerTestSuite) TestPrepare() {
 			},
 		},
 		{
-			name: "Scheduled strategy",
-			input: notificationv1.Notification{
+			name: "定时发送策略",
+			input: &notificationv1.Notification{
 				Key:        fmt.Sprintf("test-key-scheduled-%d", timestamp),
 				Receiver:   "13800138002",
 				Channel:    notificationv1.Channel_SMS,
@@ -980,20 +1000,20 @@ func (s *ServerTestSuite) TestPrepare() {
 					},
 				},
 			},
-			setupMock: func(t *testing.T, noti notificationv1.Notification) {
+			setupMock: func(mockTxSvc *txnotificationmocks.MockTxNotificationService, noti *notificationv1.Notification) {
 				mockTxSvc.EXPECT().
 					Prepare(gomock.Any(), gomock.Any()).
 					DoAndReturn(func(ctx context.Context, txn txnotification.TxNotification) (uint64, error) {
-						// Verify basic properties
+						// 验证基本属性
 						now := time.Now()
-						assert.Equal(t, int64(13), txn.BizID)
-						assert.Equal(t, noti.Key, txn.Key)
-						assert.GreaterOrEqual(t, now.Add(60*time.Minute).UnixMilli(), txn.Notification.ScheduledSTime)
-						assert.LessOrEqual(t, now.Add(59*time.Minute).UnixMilli(), txn.Notification.ScheduledSTime)
-						assert.LessOrEqual(t, now.Add(60*time.Second).UnixMilli(), txn.Notification.ScheduledETime)
+						assert.Equal(s.T(), int64(13), txn.BizID)
+						assert.Equal(s.T(), noti.Key, txn.Key)
+						assert.GreaterOrEqual(s.T(), now.Add(60*time.Minute).UnixMilli(), txn.Notification.ScheduledSTime)
+						assert.LessOrEqual(s.T(), now.Add(59*time.Minute).UnixMilli(), txn.Notification.ScheduledSTime)
+						assert.LessOrEqual(s.T(), now.Add(60*time.Second).UnixMilli(), txn.Notification.ScheduledETime)
 						txn.Notification.ScheduledETime = 0
 						txn.Notification.ScheduledSTime = 0
-						assert.Equal(t, notificationsvc.Notification{
+						assert.Equal(s.T(), notificationsvc.Notification{
 							BizID:    13,
 							Key:      fmt.Sprintf("test-key-scheduled-%d", timestamp),
 							Receiver: "13800138002",
@@ -1011,8 +1031,8 @@ func (s *ServerTestSuite) TestPrepare() {
 			},
 		},
 		{
-			name: "TimeWindow strategy",
-			input: notificationv1.Notification{
+			name: "时间窗口策略",
+			input: &notificationv1.Notification{
 				Key:        fmt.Sprintf("test-key-timewindow-%d", timestamp),
 				Receiver:   "13800138003",
 				Channel:    notificationv1.Channel_SMS,
@@ -1029,20 +1049,20 @@ func (s *ServerTestSuite) TestPrepare() {
 					},
 				},
 			},
-			setupMock: func(t *testing.T, noti notificationv1.Notification) {
+			setupMock: func(mockTxSvc *txnotificationmocks.MockTxNotificationService, noti *notificationv1.Notification) {
 				mockTxSvc.EXPECT().
 					Prepare(gomock.Any(), gomock.Any()).
 					DoAndReturn(func(ctx context.Context, txn txnotification.TxNotification) (uint64, error) {
-						// Verify basic properties
+						// 验证基本属性
 						now := time.Now()
-						assert.Equal(t, int64(13), txn.BizID)
-						assert.Equal(t, noti.Key, txn.Key)
-						assert.GreaterOrEqual(t, now.UnixMilli(), txn.Notification.ScheduledSTime)
-						assert.LessOrEqual(t, now.Add(-1*time.Second).UnixMilli(), txn.Notification.ScheduledSTime)
-						assert.LessOrEqual(t, now.Add(179*time.Minute).UnixMilli(), txn.Notification.ScheduledETime)
+						assert.Equal(s.T(), int64(13), txn.BizID)
+						assert.Equal(s.T(), noti.Key, txn.Key)
+						assert.GreaterOrEqual(s.T(), now.UnixMilli(), txn.Notification.ScheduledSTime)
+						assert.LessOrEqual(s.T(), now.Add(-1*time.Second).UnixMilli(), txn.Notification.ScheduledSTime)
+						assert.LessOrEqual(s.T(), now.Add(179*time.Minute).UnixMilli(), txn.Notification.ScheduledETime)
 						txn.Notification.ScheduledETime = 0
 						txn.Notification.ScheduledSTime = 0
-						assert.Equal(t, notificationsvc.Notification{
+						assert.Equal(s.T(), notificationsvc.Notification{
 							BizID:    13,
 							Key:      fmt.Sprintf("test-key-timewindow-%d", timestamp),
 							Receiver: "13800138003",
@@ -1062,59 +1082,52 @@ func (s *ServerTestSuite) TestPrepare() {
 	}
 
 	for _, tc := range testCases {
-		s.T().Run(tc.name, func(t *testing.T) {
-			// Create memory listener
-			lis := bufconn.Listen(1024 * 1024)
-			defer lis.Close()
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-			// Create gRPC server with the mock service
-			server := grpc.NewServer(grpc.ChainUnaryInterceptor(
-				jwt.JwtAuthInterceptor(s.jwtAuth),
-			))
-			defer server.Stop()
-			notificationv1.RegisterNotificationServiceServer(server, grpcapi.NewServer(nil, mockTxSvc))
+			jwtKey := "test-secret-key"
 
-			// Start server
+			// 创建服务器和客户端
+			server, jwtAuth, listener, mockTxSvc := s.newGRPCServerWithTx(ctrl, jwtKey)
+
+			// 启动服务器
+			ready := make(chan struct{})
 			go func() {
-				if err := server.Serve(lis); err != nil {
-					t.Errorf("gRPC server failed: %v", err)
+				close(ready)
+				if err := server.Serve(listener); err != nil {
+					t.Logf("gRPC Server exited: %v", err)
 				}
 			}()
+			<-ready
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
+			defer server.Stop()
 
-			// Client connection setup
-			conn, err := grpc.DialContext(ctx, "bufnet",
-				grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-					return lis.Dial()
-				}),
-				grpc.WithInsecure(),
-			)
-			require.NoError(t, err)
+			conn := s.newGRPCClientConn(listener)
 			defer conn.Close()
 
-			// Create client
 			client := notificationv1.NewNotificationServiceClient(conn)
 
-			// Setup mock expectations
-			tc.setupMock(t, tc.input)
+			// 设置mock期望
+			tc.setupMock(mockTxSvc, tc.input)
 
-			// Generate token with biz_id
-			token, err := s.jwtAuth.Encode(map[string]any{
+			// 生成带有业务ID的token
+			token, err := jwtAuth.Encode(map[string]any{
 				"biz_id": 13,
 			})
 			require.NoError(t, err)
-			ctx = s.generalToken(ctx, token)
 
-			// Call TxPrepare method
-			response, err := client.TxPrepare(ctx, &notificationv1.TxPrepareRequest{
-				Notification: &tc.input,
+			// 创建带有认证信息的上下文
+			ctx := s.generalToken(t.Context(), token)
+
+			// 调用Prepare方法
+			resp, err := client.TxPrepare(ctx, &notificationv1.TxPrepareRequest{
+				Notification: tc.input,
 			})
 
-			// Verify results
+			// 验证结果
 			require.NoError(t, err)
-			require.NotNil(t, response)
+			require.NotNil(t, resp)
 		})
 	}
 }
