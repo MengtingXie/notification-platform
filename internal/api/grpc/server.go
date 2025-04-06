@@ -15,7 +15,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/notification/v1"
 )
@@ -27,6 +26,7 @@ const (
 // NotificationServer 处理通知平台的gRPC请求
 type NotificationServer struct {
 	notificationv1.UnimplementedNotificationServiceServer
+	notificationv1.UnimplementedNotificationQueryServiceServer
 	executor executorsvc.Service
 	// TODO: 配置服务 configService config.ConfigService
 	txnSvc txnotification.Service
@@ -201,13 +201,13 @@ func (s *NotificationServer) BatchSendNotificationsAsync(ctx context.Context, re
 // BatchQueryNotifications 处理批量查询通知请求
 func (s *NotificationServer) BatchQueryNotifications(ctx context.Context, req *notificationv1.BatchQueryNotificationsRequest) (*notificationv1.BatchQueryNotificationsResponse, error) {
 	// 1. 从metadata中解析Authorization JWT Token
-	_, err := s.extractAndValidateBizID(ctx)
+	bizID, err := s.extractAndValidateBizID(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// 2. 调用执行器
-	results, err := s.executor.BatchQueryNotifications(ctx, req.Keys...)
+	results, err := s.executor.BatchQueryNotifications(ctx, bizID, req.Keys...)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "批量查询通知失败: %v", err)
 	}
@@ -218,14 +218,39 @@ func (s *NotificationServer) BatchQueryNotifications(ctx context.Context, req *n
 	}
 
 	for _, r := range results {
-		resp, err := s.convertToSendResponse(r)
+		sendResp, err := s.convertToSendResponse(r)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "转换响应失败: %v", err)
 		}
-		response.Results = append(response.Results, resp)
+		response.Results = append(response.Results, sendResp)
 	}
 
 	return response, nil
+}
+
+// QueryNotification 处理单条查询通知请求
+func (s *NotificationServer) QueryNotification(ctx context.Context, req *notificationv1.QueryNotificationRequest) (*notificationv1.QueryNotificationResponse, error) {
+	// 1. 从metadata中解析Authorization JWT Token
+	bizID, err := s.extractAndValidateBizID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. 调用执行器
+	result, err := s.executor.QueryNotification(ctx, bizID, req.Key)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "查询通知失败: %v", err)
+	}
+
+	// 3. 将结果转换为响应
+	sendResp, err := s.convertToSendResponse(result)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "转换响应失败: %v", err)
+	}
+
+	return &notificationv1.QueryNotificationResponse{
+		Result: sendResp,
+	}, nil
 }
 
 // extractAndValidateBizID 从请求中提取并验证BizID
@@ -319,13 +344,7 @@ func (s *NotificationServer) convertToNotification(n *notificationv1.Notificatio
 	// 构建最终的Notification
 	return executorsvc.Notification{
 		Notification: notification,
-		SendStrategyConfig: struct {
-			Type                  executorsvc.SendStrategyType
-			DelaySeconds          int64
-			ScheduledTime         time.Time
-			StartTimeMilliseconds int64
-			EndTimeMilliseconds   int64
-		}{
+		SendStrategyConfig: executorsvc.SendStrategyConfig{
 			Type:                  sendStrategyType,
 			DelaySeconds:          delaySeconds,
 			ScheduledTime:         scheduledTime,
@@ -357,11 +376,6 @@ func (s *NotificationServer) convertToSendResponse(result executorsvc.SendRespon
 		ErrorCode:      convertErrorCode(result.ErrorCode),
 		ErrorMessage:   result.ErrorMessage,
 	}
-
-	if !result.SendTime.IsZero() {
-		response.SendTime = timestamppb.New(result.SendTime)
-	}
-
 	return response, nil
 }
 

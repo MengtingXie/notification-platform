@@ -26,6 +26,7 @@ const (
 	SendStrategyDelayed    SendStrategyType = "DELAYED"     // 延迟发送
 	SendStrategyScheduled  SendStrategyType = "SCHEDULED"   // 定时发送
 	SendStrategyTimeWindow SendStrategyType = "TIME_WINDOW" // 时间窗口发送
+	SendStrategyDeadline   SendStrategyType = "DEADLINE"    // 截止日期发送
 )
 
 // SendStrategyConfig 发送策略配置
@@ -35,6 +36,7 @@ type SendStrategyConfig struct {
 	ScheduledTime         time.Time        // 定时发送策略使用，计划发送时间
 	StartTimeMilliseconds int64            // 窗口发送策略使用，开始时间（毫秒）
 	EndTimeMilliseconds   int64            // 窗口发送策略使用，结束时间（毫秒）
+	DeadlineTime          time.Time        // 截止日期策略使用，截止日期
 }
 
 // Notification 通知模型
@@ -47,7 +49,6 @@ type Notification struct {
 type SendResponse struct {
 	NotificationID uint64                  // 通知ID
 	Status         notification.SendStatus // 发送状态
-	SendTime       time.Time               // 发送时间
 	RetryCount     int8                    // 重试次数
 	ErrorCode      ErrorCode               // 错误代码
 	ErrorMessage   string                  // 错误信息

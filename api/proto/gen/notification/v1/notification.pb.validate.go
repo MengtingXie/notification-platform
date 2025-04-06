@@ -222,6 +222,47 @@ func (m *SendStrategy) validate(all bool) error {
 			}
 		}
 
+	case *SendStrategy_Deadline:
+		if v == nil {
+			err := SendStrategyValidationError{
+				field:  "StrategyType",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+		if all {
+			switch v := interface{}(m.GetDeadline()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, SendStrategyValidationError{
+						field:  "Deadline",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, SendStrategyValidationError{
+						field:  "Deadline",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetDeadline()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return SendStrategyValidationError{
+					field:  "Deadline",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
 	default:
 		_ = v // ensures v is used
 	}
@@ -302,276 +343,6 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = SendStrategyValidationError{}
-
-// Validate checks the field values on HandleNotificationResultRequest with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *HandleNotificationResultRequest) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on HandleNotificationResultRequest with
-// the rules defined in the proto definition for this message. If any rules
-// are violated, the result is a list of violation errors wrapped in
-// HandleNotificationResultRequestMultiError, or nil if none found.
-func (m *HandleNotificationResultRequest) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *HandleNotificationResultRequest) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	// no validation rules for NotificationId
-
-	if all {
-		switch v := interface{}(m.GetOriginalRequest()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, HandleNotificationResultRequestValidationError{
-					field:  "OriginalRequest",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, HandleNotificationResultRequestValidationError{
-					field:  "OriginalRequest",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetOriginalRequest()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return HandleNotificationResultRequestValidationError{
-				field:  "OriginalRequest",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
-	if all {
-		switch v := interface{}(m.GetResult()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, HandleNotificationResultRequestValidationError{
-					field:  "Result",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, HandleNotificationResultRequestValidationError{
-					field:  "Result",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetResult()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return HandleNotificationResultRequestValidationError{
-				field:  "Result",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
-	if len(errors) > 0 {
-		return HandleNotificationResultRequestMultiError(errors)
-	}
-
-	return nil
-}
-
-// HandleNotificationResultRequestMultiError is an error wrapping multiple
-// validation errors returned by HandleNotificationResultRequest.ValidateAll()
-// if the designated constraints aren't met.
-type HandleNotificationResultRequestMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m HandleNotificationResultRequestMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m HandleNotificationResultRequestMultiError) AllErrors() []error { return m }
-
-// HandleNotificationResultRequestValidationError is the validation error
-// returned by HandleNotificationResultRequest.Validate if the designated
-// constraints aren't met.
-type HandleNotificationResultRequestValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e HandleNotificationResultRequestValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e HandleNotificationResultRequestValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e HandleNotificationResultRequestValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e HandleNotificationResultRequestValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e HandleNotificationResultRequestValidationError) ErrorName() string {
-	return "HandleNotificationResultRequestValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e HandleNotificationResultRequestValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sHandleNotificationResultRequest.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = HandleNotificationResultRequestValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = HandleNotificationResultRequestValidationError{}
-
-// Validate checks the field values on HandleNotificationResultResponse with
-// the rules defined in the proto definition for this message. If any rules
-// are violated, the first error encountered is returned, or nil if there are
-// no violations.
-func (m *HandleNotificationResultResponse) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on HandleNotificationResultResponse with
-// the rules defined in the proto definition for this message. If any rules
-// are violated, the result is a list of violation errors wrapped in
-// HandleNotificationResultResponseMultiError, or nil if none found.
-func (m *HandleNotificationResultResponse) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *HandleNotificationResultResponse) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	// no validation rules for Success
-
-	if len(errors) > 0 {
-		return HandleNotificationResultResponseMultiError(errors)
-	}
-
-	return nil
-}
-
-// HandleNotificationResultResponseMultiError is an error wrapping multiple
-// validation errors returned by
-// HandleNotificationResultResponse.ValidateAll() if the designated
-// constraints aren't met.
-type HandleNotificationResultResponseMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m HandleNotificationResultResponseMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m HandleNotificationResultResponseMultiError) AllErrors() []error { return m }
-
-// HandleNotificationResultResponseValidationError is the validation error
-// returned by HandleNotificationResultResponse.Validate if the designated
-// constraints aren't met.
-type HandleNotificationResultResponseValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e HandleNotificationResultResponseValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e HandleNotificationResultResponseValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e HandleNotificationResultResponseValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e HandleNotificationResultResponseValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e HandleNotificationResultResponseValidationError) ErrorName() string {
-	return "HandleNotificationResultResponseValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e HandleNotificationResultResponseValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sHandleNotificationResultResponse.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = HandleNotificationResultResponseValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = HandleNotificationResultResponseValidationError{}
 
 // Validate checks the field values on Notification with the rules defined in
 // the proto definition for this message. If any rules are violated, the first
@@ -867,35 +638,6 @@ func (m *SendNotificationResponse) validate(all bool) error {
 	// no validation rules for NotificationId
 
 	// no validation rules for Status
-
-	if all {
-		switch v := interface{}(m.GetSendTime()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, SendNotificationResponseValidationError{
-					field:  "SendTime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, SendNotificationResponseValidationError{
-					field:  "SendTime",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetSendTime()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return SendNotificationResponseValidationError{
-				field:  "SendTime",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
 
 	// no validation rules for ErrorCode
 
@@ -1743,246 +1485,6 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = BatchSendNotificationsAsyncResponseValidationError{}
-
-// Validate checks the field values on BatchQueryNotificationsRequest with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *BatchQueryNotificationsRequest) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on BatchQueryNotificationsRequest with
-// the rules defined in the proto definition for this message. If any rules
-// are violated, the result is a list of violation errors wrapped in
-// BatchQueryNotificationsRequestMultiError, or nil if none found.
-func (m *BatchQueryNotificationsRequest) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *BatchQueryNotificationsRequest) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if len(errors) > 0 {
-		return BatchQueryNotificationsRequestMultiError(errors)
-	}
-
-	return nil
-}
-
-// BatchQueryNotificationsRequestMultiError is an error wrapping multiple
-// validation errors returned by BatchQueryNotificationsRequest.ValidateAll()
-// if the designated constraints aren't met.
-type BatchQueryNotificationsRequestMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m BatchQueryNotificationsRequestMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m BatchQueryNotificationsRequestMultiError) AllErrors() []error { return m }
-
-// BatchQueryNotificationsRequestValidationError is the validation error
-// returned by BatchQueryNotificationsRequest.Validate if the designated
-// constraints aren't met.
-type BatchQueryNotificationsRequestValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e BatchQueryNotificationsRequestValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e BatchQueryNotificationsRequestValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e BatchQueryNotificationsRequestValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e BatchQueryNotificationsRequestValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e BatchQueryNotificationsRequestValidationError) ErrorName() string {
-	return "BatchQueryNotificationsRequestValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e BatchQueryNotificationsRequestValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sBatchQueryNotificationsRequest.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = BatchQueryNotificationsRequestValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = BatchQueryNotificationsRequestValidationError{}
-
-// Validate checks the field values on BatchQueryNotificationsResponse with the
-// rules defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *BatchQueryNotificationsResponse) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on BatchQueryNotificationsResponse with
-// the rules defined in the proto definition for this message. If any rules
-// are violated, the result is a list of violation errors wrapped in
-// BatchQueryNotificationsResponseMultiError, or nil if none found.
-func (m *BatchQueryNotificationsResponse) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *BatchQueryNotificationsResponse) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	for idx, item := range m.GetResults() {
-		_, _ = idx, item
-
-		if all {
-			switch v := interface{}(item).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, BatchQueryNotificationsResponseValidationError{
-						field:  fmt.Sprintf("Results[%v]", idx),
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, BatchQueryNotificationsResponseValidationError{
-						field:  fmt.Sprintf("Results[%v]", idx),
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return BatchQueryNotificationsResponseValidationError{
-					field:  fmt.Sprintf("Results[%v]", idx),
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return BatchQueryNotificationsResponseMultiError(errors)
-	}
-
-	return nil
-}
-
-// BatchQueryNotificationsResponseMultiError is an error wrapping multiple
-// validation errors returned by BatchQueryNotificationsResponse.ValidateAll()
-// if the designated constraints aren't met.
-type BatchQueryNotificationsResponseMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m BatchQueryNotificationsResponseMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m BatchQueryNotificationsResponseMultiError) AllErrors() []error { return m }
-
-// BatchQueryNotificationsResponseValidationError is the validation error
-// returned by BatchQueryNotificationsResponse.Validate if the designated
-// constraints aren't met.
-type BatchQueryNotificationsResponseValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e BatchQueryNotificationsResponseValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e BatchQueryNotificationsResponseValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e BatchQueryNotificationsResponseValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e BatchQueryNotificationsResponseValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e BatchQueryNotificationsResponseValidationError) ErrorName() string {
-	return "BatchQueryNotificationsResponseValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e BatchQueryNotificationsResponseValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sBatchQueryNotificationsResponse.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = BatchQueryNotificationsResponseValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = BatchQueryNotificationsResponseValidationError{}
 
 // Validate checks the field values on TxPrepareRequest with the rules defined
 // in the proto definition for this message. If any rules are violated, the
@@ -3065,3 +2567,135 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = SendStrategy_TimeWindowStrategyValidationError{}
+
+// Validate checks the field values on SendStrategy_DeadlineStrategy with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *SendStrategy_DeadlineStrategy) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on SendStrategy_DeadlineStrategy with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the result is a list of violation errors wrapped in
+// SendStrategy_DeadlineStrategyMultiError, or nil if none found.
+func (m *SendStrategy_DeadlineStrategy) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *SendStrategy_DeadlineStrategy) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if all {
+		switch v := interface{}(m.GetDeadline()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, SendStrategy_DeadlineStrategyValidationError{
+					field:  "Deadline",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, SendStrategy_DeadlineStrategyValidationError{
+					field:  "Deadline",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetDeadline()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return SendStrategy_DeadlineStrategyValidationError{
+				field:  "Deadline",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return SendStrategy_DeadlineStrategyMultiError(errors)
+	}
+
+	return nil
+}
+
+// SendStrategy_DeadlineStrategyMultiError is an error wrapping multiple
+// validation errors returned by SendStrategy_DeadlineStrategy.ValidateAll()
+// if the designated constraints aren't met.
+type SendStrategy_DeadlineStrategyMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m SendStrategy_DeadlineStrategyMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m SendStrategy_DeadlineStrategyMultiError) AllErrors() []error { return m }
+
+// SendStrategy_DeadlineStrategyValidationError is the validation error
+// returned by SendStrategy_DeadlineStrategy.Validate if the designated
+// constraints aren't met.
+type SendStrategy_DeadlineStrategyValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e SendStrategy_DeadlineStrategyValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e SendStrategy_DeadlineStrategyValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e SendStrategy_DeadlineStrategyValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e SendStrategy_DeadlineStrategyValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e SendStrategy_DeadlineStrategyValidationError) ErrorName() string {
+	return "SendStrategy_DeadlineStrategyValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e SendStrategy_DeadlineStrategyValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sSendStrategy_DeadlineStrategy.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = SendStrategy_DeadlineStrategyValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = SendStrategy_DeadlineStrategyValidationError{}

@@ -20,113 +20,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CallbackService_HandleNotificationResult_FullMethodName = "/notification.v1.CallbackService/HandleNotificationResult"
-)
-
-// CallbackServiceClient is the client API for CallbackService service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type CallbackServiceClient interface {
-	// 业务方需要实现的回调接口
-	HandleNotificationResult(ctx context.Context, in *HandleNotificationResultRequest, opts ...grpc.CallOption) (*HandleNotificationResultResponse, error)
-}
-
-type callbackServiceClient struct {
-	cc grpc.ClientConnInterface
-}
-
-func NewCallbackServiceClient(cc grpc.ClientConnInterface) CallbackServiceClient {
-	return &callbackServiceClient{cc}
-}
-
-func (c *callbackServiceClient) HandleNotificationResult(ctx context.Context, in *HandleNotificationResultRequest, opts ...grpc.CallOption) (*HandleNotificationResultResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(HandleNotificationResultResponse)
-	err := c.cc.Invoke(ctx, CallbackService_HandleNotificationResult_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// CallbackServiceServer is the server API for CallbackService service.
-// All implementations should embed UnimplementedCallbackServiceServer
-// for forward compatibility.
-type CallbackServiceServer interface {
-	// 业务方需要实现的回调接口
-	HandleNotificationResult(context.Context, *HandleNotificationResultRequest) (*HandleNotificationResultResponse, error)
-}
-
-// UnimplementedCallbackServiceServer should be embedded to have
-// forward compatible implementations.
-//
-// NOTE: this should be embedded by value instead of pointer to avoid a nil
-// pointer dereference when methods are called.
-type UnimplementedCallbackServiceServer struct{}
-
-func (UnimplementedCallbackServiceServer) HandleNotificationResult(context.Context, *HandleNotificationResultRequest) (*HandleNotificationResultResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method HandleNotificationResult not implemented")
-}
-func (UnimplementedCallbackServiceServer) testEmbeddedByValue() {}
-
-// UnsafeCallbackServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to CallbackServiceServer will
-// result in compilation errors.
-type UnsafeCallbackServiceServer interface {
-	mustEmbedUnimplementedCallbackServiceServer()
-}
-
-func RegisterCallbackServiceServer(s grpc.ServiceRegistrar, srv CallbackServiceServer) {
-	// If the following call pancis, it indicates UnimplementedCallbackServiceServer was
-	// embedded by pointer and is nil.  This will cause panics if an
-	// unimplemented method is ever invoked, so we test this at initialization
-	// time to prevent it from happening at runtime later due to I/O.
-	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
-		t.testEmbeddedByValue()
-	}
-	s.RegisterService(&CallbackService_ServiceDesc, srv)
-}
-
-func _CallbackService_HandleNotificationResult_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(HandleNotificationResultRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(CallbackServiceServer).HandleNotificationResult(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: CallbackService_HandleNotificationResult_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CallbackServiceServer).HandleNotificationResult(ctx, req.(*HandleNotificationResultRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-// CallbackService_ServiceDesc is the grpc.ServiceDesc for CallbackService service.
-// It's only intended for direct use with grpc.RegisterService,
-// and not to be introspected or modified (even as a copy)
-var CallbackService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "notification.v1.CallbackService",
-	HandlerType: (*CallbackServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "HandleNotificationResult",
-			Handler:    _CallbackService_HandleNotificationResult_Handler,
-		},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "notification/v1/notification.proto",
-}
-
-const (
 	NotificationService_SendNotification_FullMethodName            = "/notification.v1.NotificationService/SendNotification"
 	NotificationService_SendNotificationAsync_FullMethodName       = "/notification.v1.NotificationService/SendNotificationAsync"
 	NotificationService_BatchSendNotifications_FullMethodName      = "/notification.v1.NotificationService/BatchSendNotifications"
 	NotificationService_BatchSendNotificationsAsync_FullMethodName = "/notification.v1.NotificationService/BatchSendNotificationsAsync"
-	NotificationService_BatchQueryNotifications_FullMethodName     = "/notification.v1.NotificationService/BatchQueryNotifications"
 	NotificationService_TxPrepare_FullMethodName                   = "/notification.v1.NotificationService/TxPrepare"
 	NotificationService_TxCommit_FullMethodName                    = "/notification.v1.NotificationService/TxCommit"
 	NotificationService_TxCancel_FullMethodName                    = "/notification.v1.NotificationService/TxCancel"
@@ -144,10 +41,11 @@ type NotificationServiceClient interface {
 	BatchSendNotifications(ctx context.Context, in *BatchSendNotificationsRequest, opts ...grpc.CallOption) (*BatchSendNotificationsResponse, error)
 	// 异步批量发送
 	BatchSendNotificationsAsync(ctx context.Context, in *BatchSendNotificationsAsyncRequest, opts ...grpc.CallOption) (*BatchSendNotificationsAsyncResponse, error)
-	// 同步批量查询
-	BatchQueryNotifications(ctx context.Context, in *BatchQueryNotificationsRequest, opts ...grpc.CallOption) (*BatchQueryNotificationsResponse, error)
+	// 准备事务
 	TxPrepare(ctx context.Context, in *TxPrepareRequest, opts ...grpc.CallOption) (*TxPrepareResponse, error)
+	// 提交事务
 	TxCommit(ctx context.Context, in *TxCommitRequest, opts ...grpc.CallOption) (*TxCommitResponse, error)
+	// 取消事务
 	TxCancel(ctx context.Context, in *TxCancelRequest, opts ...grpc.CallOption) (*TxCancelResponse, error)
 }
 
@@ -199,16 +97,6 @@ func (c *notificationServiceClient) BatchSendNotificationsAsync(ctx context.Cont
 	return out, nil
 }
 
-func (c *notificationServiceClient) BatchQueryNotifications(ctx context.Context, in *BatchQueryNotificationsRequest, opts ...grpc.CallOption) (*BatchQueryNotificationsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(BatchQueryNotificationsResponse)
-	err := c.cc.Invoke(ctx, NotificationService_BatchQueryNotifications_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *notificationServiceClient) TxPrepare(ctx context.Context, in *TxPrepareRequest, opts ...grpc.CallOption) (*TxPrepareResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(TxPrepareResponse)
@@ -251,10 +139,11 @@ type NotificationServiceServer interface {
 	BatchSendNotifications(context.Context, *BatchSendNotificationsRequest) (*BatchSendNotificationsResponse, error)
 	// 异步批量发送
 	BatchSendNotificationsAsync(context.Context, *BatchSendNotificationsAsyncRequest) (*BatchSendNotificationsAsyncResponse, error)
-	// 同步批量查询
-	BatchQueryNotifications(context.Context, *BatchQueryNotificationsRequest) (*BatchQueryNotificationsResponse, error)
+	// 准备事务
 	TxPrepare(context.Context, *TxPrepareRequest) (*TxPrepareResponse, error)
+	// 提交事务
 	TxCommit(context.Context, *TxCommitRequest) (*TxCommitResponse, error)
+	// 取消事务
 	TxCancel(context.Context, *TxCancelRequest) (*TxCancelResponse, error)
 }
 
@@ -279,10 +168,6 @@ func (UnimplementedNotificationServiceServer) BatchSendNotifications(context.Con
 
 func (UnimplementedNotificationServiceServer) BatchSendNotificationsAsync(context.Context, *BatchSendNotificationsAsyncRequest) (*BatchSendNotificationsAsyncResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BatchSendNotificationsAsync not implemented")
-}
-
-func (UnimplementedNotificationServiceServer) BatchQueryNotifications(context.Context, *BatchQueryNotificationsRequest) (*BatchQueryNotificationsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method BatchQueryNotifications not implemented")
 }
 
 func (UnimplementedNotificationServiceServer) TxPrepare(context.Context, *TxPrepareRequest) (*TxPrepareResponse, error) {
@@ -388,24 +273,6 @@ func _NotificationService_BatchSendNotificationsAsync_Handler(srv interface{}, c
 	return interceptor(ctx, in, info, handler)
 }
 
-func _NotificationService_BatchQueryNotifications_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(BatchQueryNotificationsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NotificationServiceServer).BatchQueryNotifications(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NotificationService_BatchQueryNotifications_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NotificationServiceServer).BatchQueryNotifications(ctx, req.(*BatchQueryNotificationsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _NotificationService_TxPrepare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(TxPrepareRequest)
 	if err := dec(in); err != nil {
@@ -482,10 +349,6 @@ var NotificationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BatchSendNotificationsAsync",
 			Handler:    _NotificationService_BatchSendNotificationsAsync_Handler,
-		},
-		{
-			MethodName: "BatchQueryNotifications",
-			Handler:    _NotificationService_BatchQueryNotifications_Handler,
 		},
 		{
 			MethodName: "TxPrepare",

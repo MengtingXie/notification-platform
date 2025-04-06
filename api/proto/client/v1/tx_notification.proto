@@ -4,7 +4,7 @@ package client.v1;
 
 // 引入Notification定义
 
-option go_package = "gitee.com/flycash/notification-platform/api/gen/client/tx_notification/v1;tx_notification";
+option go_package = "gitee.com/flycash/notification-platform/api/gen/client/v1;clientv1";
 service TransactionCheckService {
   // 通知平台调用业务方的接口
   rpc Check(TransactionCheckServiceCheckRequest) returns (TransactionCheckServiceCheckResponse) {}

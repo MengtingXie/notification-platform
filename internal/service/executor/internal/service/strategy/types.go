@@ -34,12 +34,14 @@ type Dispatcher struct {
 	scheduledStrategyOnce  sync.Once
 	delayedStrategyOnce    sync.Once
 	timeWindowStrategyOnce sync.Once
+	deadlineStrategyOnce   sync.Once
 
 	// 缓存已创建的策略实例
 	immediateStrategy  *ImmediateSendStrategy
 	scheduledStrategy  *ScheduledSendStrategy
 	delayedStrategy    *DelayedSendStrategy
 	timeWindowStrategy *TimeWindowSendStrategy
+	deadlineStrategy   *DeadlineSendStrategy
 }
 
 // NewDispatcher 创建通知发送分发器
@@ -79,6 +81,8 @@ func (d *Dispatcher) getStrategy(strategyType domain.SendStrategyType) (SendStra
 		return d.getDelayedStrategy(), nil
 	case domain.SendStrategyTimeWindow:
 		return d.getTimeWindowStrategy(), nil
+	case domain.SendStrategyDeadline:
+		return d.getDeadlineStrategy(), nil
 	default:
 		return nil, fmt.Errorf("%w: 无效的发送策略类型 %s", ErrInvalidParameter, strategyType)
 	}
@@ -114,4 +118,12 @@ func (d *Dispatcher) getTimeWindowStrategy() *TimeWindowSendStrategy {
 		d.timeWindowStrategy = newTimeWindowStrategy(d.notificationSvc)
 	})
 	return d.timeWindowStrategy
+}
+
+// getDeadlineStrategy 获取截止日期发送策略（线程安全的单例模式）
+func (d *Dispatcher) getDeadlineStrategy() *DeadlineSendStrategy {
+	d.deadlineStrategyOnce.Do(func() {
+		d.deadlineStrategy = newDeadlineStrategy(d.notificationSvc)
+	})
+	return d.deadlineStrategy
 }

@@ -147,13 +147,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 							Params: req.Notification.TemplateParams,
 						},
 					},
-					SendStrategyConfig: struct {
-						Type                  executorsvc.SendStrategyType
-						DelaySeconds          int64
-						ScheduledTime         time.Time
-						StartTimeMilliseconds int64
-						EndTimeMilliseconds   int64
-					}{
+					SendStrategyConfig: executorsvc.SendStrategyConfig{
 						Type: executorsvc.SendStrategyImmediate,
 					},
 				}
@@ -171,14 +165,12 @@ func (s *ServerTestSuite) TestSendNotification() {
 						return executorsvc.SendResponse{
 							NotificationID: notificationID,
 							Status:         notificationsvc.SendStatusSucceeded,
-							SendTime:       time.Now(),
 						}, nil
 					})
 			},
 			after: func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse) {
 				require.NotEmpty(t, resp.NotificationId)
 				require.Equal(t, notificationv1.SendStatus_SUCCEEDED, resp.Status)
-				require.NotNil(t, resp.SendTime)
 			},
 			wantErr: nil,
 		},
@@ -208,13 +200,11 @@ func (s *ServerTestSuite) TestSendNotification() {
 					Return(executorsvc.SendResponse{
 						NotificationID: notificationID,
 						Status:         notificationsvc.SendStatusSucceeded,
-						SendTime:       time.Now(),
 					}, nil)
 			},
 			after: func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse) {
 				require.NotEmpty(t, resp.NotificationId)
 				require.Equal(t, notificationv1.SendStatus_SUCCEEDED, resp.Status)
-				require.NotNil(t, resp.SendTime)
 			},
 			wantErr: nil,
 		},
@@ -250,14 +240,12 @@ func (s *ServerTestSuite) TestSendNotification() {
 						return executorsvc.SendResponse{
 							NotificationID: notificationID,
 							Status:         notificationsvc.SendStatusSucceeded,
-							SendTime:       time.Now(),
 						}, nil
 					})
 			},
 			after: func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse) {
 				require.NotEmpty(t, resp.NotificationId)
 				require.Equal(t, notificationv1.SendStatus_SUCCEEDED, resp.Status)
-				require.NotNil(t, resp.SendTime)
 			},
 			wantErr: nil,
 		},
@@ -293,14 +281,12 @@ func (s *ServerTestSuite) TestSendNotification() {
 						return executorsvc.SendResponse{
 							NotificationID: notificationID,
 							Status:         notificationsvc.SendStatusSucceeded,
-							SendTime:       time.Now(),
 						}, nil
 					})
 			},
 			after: func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse) {
 				require.NotEmpty(t, resp.NotificationId)
 				require.Equal(t, notificationv1.SendStatus_SUCCEEDED, resp.Status)
-				require.NotNil(t, resp.SendTime)
 			},
 			wantErr: nil,
 		},
@@ -338,14 +324,12 @@ func (s *ServerTestSuite) TestSendNotification() {
 						return executorsvc.SendResponse{
 							NotificationID: notificationID,
 							Status:         notificationsvc.SendStatusSucceeded,
-							SendTime:       time.Now(),
 						}, nil
 					})
 			},
 			after: func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse) {
 				require.NotEmpty(t, resp.NotificationId)
 				require.Equal(t, notificationv1.SendStatus_SUCCEEDED, resp.Status)
-				require.NotNil(t, resp.SendTime)
 			},
 			wantErr: nil,
 		},

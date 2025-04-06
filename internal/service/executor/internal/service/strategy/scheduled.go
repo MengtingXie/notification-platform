@@ -27,12 +27,11 @@ func (s *ScheduledSendStrategy) Send(ctx context.Context, ns []domain.Notificati
 		return nil, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)
 	}
 
-	now := time.Now()
 	notificationSvcDomains := make([]notificationsvc.Notification, len(ns))
 	for i := range ns {
 		// 根据发送策略，计算调度窗口
 		scheduledTime := ns[i].SendStrategyConfig.ScheduledTime
-		if scheduledTime.Before(now) {
+		if scheduledTime.Before(time.Now()) {
 			return nil, fmt.Errorf("%w: 定时参数已过期", ErrInvalidParameter)
 		}
 		ns[i].Notification.ScheduledSTime = scheduledTime.UnixMilli()
@@ -43,7 +42,7 @@ func (s *ScheduledSendStrategy) Send(ctx context.Context, ns []domain.Notificati
 	}
 
 	// 创建通知记录
-	createdNotifications, err := s.notificationSvc.BatchCreateNotifications(ctx, notificationSvcDomains)
+	createdNotifications, err := s.notificationSvc.BatchCreate(ctx, notificationSvcDomains)
 	if err != nil {
 		return nil, fmt.Errorf("创建定时通知失败: %w", err)
 	}

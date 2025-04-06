@@ -76,7 +76,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 					RetryCount:     9,
 					ScheduledETime: 123,
 					ScheduledSTime: 321,
-					SendTime:       123,
 				},
 				BizID: 3,
 				Key:   "case_01",
@@ -96,7 +95,7 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 				mockNotificationService := notificationmocks.NewMockNotificationService(ctrl)
 				mockNotificationService.
 					EXPECT().
-					CreateNotification(gomock.Any(), notification.Notification{
+					Create(gomock.Any(), notification.Notification{
 						BizID:    3,
 						Key:      "case_01",
 						Receiver: "18248842099",
@@ -112,7 +111,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 						RetryCount:     9,
 						ScheduledETime: 123,
 						ScheduledSTime: 321,
-						SendTime:       123,
 					}).Return(notification.Notification{
 					ID:       10123,
 					BizID:    3,
@@ -130,7 +128,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 					RetryCount:     9,
 					ScheduledETime: 123,
 					ScheduledSTime: 321,
-					SendTime:       123,
 				}, nil)
 				return mockNotificationService
 			},
@@ -177,7 +174,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 					RetryCount:     9,
 					ScheduledETime: 123,
 					ScheduledSTime: 321,
-					SendTime:       123,
 				},
 				BizID: 4,
 				Key:   "case_02",
@@ -193,7 +189,7 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 				mockNotificationService := notificationmocks.NewMockNotificationService(ctrl)
 				mockNotificationService.
 					EXPECT().
-					CreateNotification(gomock.Any(), notification.Notification{
+					Create(gomock.Any(), notification.Notification{
 						BizID:    4,
 						Key:      "case_02",
 						Receiver: "18248842099",
@@ -209,7 +205,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 						RetryCount:     9,
 						ScheduledETime: 123,
 						ScheduledSTime: 321,
-						SendTime:       123,
 					}).Return(notification.Notification{
 					ID:       10124,
 					BizID:    4,
@@ -227,7 +222,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 					RetryCount:     9,
 					ScheduledETime: 123,
 					ScheduledSTime: 321,
-					SendTime:       123,
 				}, nil)
 				return mockNotificationService
 			},
@@ -291,7 +285,7 @@ func (s *TxNotificationServiceTestSuite) TestCommit() {
 			notificationSvc: func(t *testing.T, ctrl *gomock.Controller) notification.Service {
 				mockNotificationService := notificationmocks.NewMockNotificationService(ctrl)
 				mockNotificationService.EXPECT().
-					UpdateNotificationStatus(gomock.Any(), uint64(10123), notification.SendStatusPending).
+					BatchUpdateStatus(gomock.Any(), []uint64{10123}, notification.SendStatusPending).
 					Return(nil)
 				return mockNotificationService
 			},
@@ -393,7 +387,7 @@ func (s *TxNotificationServiceTestSuite) TestCancel() {
 			notificationSvc: func(t *testing.T, ctrl *gomock.Controller) notification.Service {
 				mockNotificationService := notificationmocks.NewMockNotificationService(ctrl)
 				mockNotificationService.EXPECT().
-					UpdateNotificationStatus(gomock.Any(), uint64(10123), notification.SendStatusCanceled).
+					BatchUpdateStatus(gomock.Any(), []uint64{10123}, notification.SendStatusCanceled).
 					Return(nil)
 				return mockNotificationService
 			},
@@ -508,7 +502,7 @@ func (s *TxNotificationServiceTestSuite) TestGetNotification() {
 			notificationSvc: func(t *testing.T, ctrl *gomock.Controller) notification.Service {
 				mockNotificationService := notificationmocks.NewMockNotificationService(ctrl)
 				mockNotificationService.EXPECT().
-					GetNotificationByID(gomock.Any(), uint64(10123)).
+					GetByID(gomock.Any(), uint64(10123)).
 					Return(notification.Notification{
 						ID:       10123,
 						BizID:    5,
@@ -526,7 +520,6 @@ func (s *TxNotificationServiceTestSuite) TestGetNotification() {
 						RetryCount:     0,
 						ScheduledSTime: 0,
 						ScheduledETime: 0,
-						SendTime:       0,
 					}, nil)
 				return mockNotificationService
 			},
@@ -591,7 +584,7 @@ func (s *TxNotificationServiceTestSuite) TestGetNotification() {
 			notificationSvc: func(t *testing.T, ctrl *gomock.Controller) notification.Service {
 				mockNotificationService := notificationmocks.NewMockNotificationService(ctrl)
 				mockNotificationService.EXPECT().
-					GetNotificationByID(gomock.Any(), uint64(10456)).
+					GetByID(gomock.Any(), uint64(10456)).
 					Return(notification.Notification{}, errors.New("通知不存在"))
 				return mockNotificationService
 			},
@@ -648,12 +641,12 @@ func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
 		return res, nil
 	}).AnyTimes()
 	// 记录更新的消息
-	notificationSvc.EXPECT().BatchUpdateNotificationStatus(gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(ctx context.Context, ids []uint64, status string) error {
+	notificationSvc.EXPECT().BatchUpdateStatus(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, ids []uint64, status notification.SendStatus) error {
 			mu.Lock()
 			defer mu.Unlock()
 			for _, id := range ids {
-				notificationMap[id] = status
+				notificationMap[id] = string(status)
 			}
 			return nil
 		}).AnyTimes()
