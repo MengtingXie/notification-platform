@@ -164,21 +164,21 @@ func (r *notificationRepository) toDomain(n dao.Notification) domain.Notificatio
 	_ = json.Unmarshal([]byte(n.TemplateParams), &templateParams)
 
 	return domain.Notification{
-		ID:             n.ID,
-		BizID:          n.BizID,
-		Key:            n.Key,
-		Receiver:       n.Receiver,
-		Channel:        domain.Channel(n.Channel),
-		Status:         domain.Status(n.Status),
-		RetryCount:     n.RetryCount,
-		ScheduledSTime: n.ScheduledSTime,
-		ScheduledETime: n.ScheduledETime,
-		Version:        n.Version,
+		ID:       n.ID,
+		BizID:    n.BizID,
+		Key:      n.Key,
+		Receiver: n.Receiver,
+		Channel:  domain.Channel(n.Channel),
 		Template: domain.Template{
 			ID:        n.TemplateID,
 			VersionID: n.TemplateVersionID,
 			Params:    templateParams,
 		},
+		Status:         domain.Status(n.Status),
+		RetryCount:     n.RetryCount,
+		ScheduledSTime: n.ScheduledSTime,
+		ScheduledETime: n.ScheduledETime,
+		Version:        n.Version,
 	}
 }
 

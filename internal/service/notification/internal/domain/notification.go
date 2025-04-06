@@ -38,6 +38,5 @@ type Notification struct {
 	RetryCount     int8     // 当前重试次数
 	ScheduledSTime int64    // 计划发送开始时间
 	ScheduledETime int64    // 计划发送结束时间
-	SendTime       int64    // 实际发送时间
 	Version        int      // 版本号
 }
