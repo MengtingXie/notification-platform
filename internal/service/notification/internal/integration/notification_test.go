@@ -604,59 +604,203 @@ func (s *NotificationServiceTestSuite) TestUpdateStatus() {
 
 func (s *NotificationServiceTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	t := s.T()
+	ctx := t.Context()
+
+	// 准备测试数据 - 创建多条通知记录
+	bizID := int64(10)
+	notifications := []domain.Notification{
+		s.createTestNotification(bizID),
+		s.createTestNotification(bizID),
+		s.createTestNotification(bizID),
+		s.createTestNotification(bizID),
+		s.createTestNotification(bizID),
+		s.createTestNotification(bizID),
+		s.createTestNotification(bizID),
+	}
 
 	// 批量创建通知记录
-	bizID := int64(10)
-	ns, err := s.svc.BatchCreate(t.Context(), []domain.Notification{
-		s.createTestNotification(bizID),
-		s.createTestNotification(bizID),
-		s.createTestNotification(bizID),
-	})
+	createdNotifications, err := s.svc.BatchCreate(ctx, notifications)
 	require.NoError(t, err)
+	require.Len(t, createdNotifications, len(notifications))
 
-	// 批量更新状态
-	succeeded := []domain.Notification{ns[0], ns[1]}
-	failed := []domain.Notification{ns[2]}
-	err = s.svc.BatchUpdateStatusSucceededOrFailed(t.Context(), succeeded, failed)
-	require.NoError(t, err)
-
-	// 验证状态已更新
-	for _, n := range succeeded {
-		updated, err := s.svc.GetByID(t.Context(), n.ID)
-		require.NoError(t, err)
-		assert.Equal(t, domain.StatusSucceeded, updated.Status)
+	// 记录初始版本号
+	initialVersions := make(map[uint64]int)
+	for _, n := range createdNotifications {
+		initialVersions[n.ID] = n.Version
 	}
-	for _, n := range failed {
-		updated, err := s.svc.GetByID(t.Context(), n.ID)
-		require.NoError(t, err)
-		assert.Equal(t, domain.StatusFailed, updated.Status)
-	}
-}
 
-func (s *NotificationServiceTestSuite) TestBatchUpdateStatusSucceededOrFailedFailed() {
-	t := s.T()
-
+	// 定义测试场景
 	tests := []struct {
 		name                   string
-		succeededNotifications []domain.Notification
-		failedNotifications    []domain.Notification
-		assertErrFunc          assert.ErrorAssertionFunc
+		succeededNotifications []domain.Notification // 要更新为成功状态的通知
+		failedNotifications    []domain.Notification // 要更新为失败状态的通知
+		assertFunc             func(t *testing.T, err error, initialVersions map[uint64]int)
 	}{
 		{
-			name:                   "成功和失败的通知列表都为空",
+			name: "仅更新成功状态但不更新重试次数",
+			succeededNotifications: []domain.Notification{
+				{
+					ID:      createdNotifications[0].ID,
+					Version: initialVersions[createdNotifications[0].ID],
+				},
+				{
+					ID:      createdNotifications[1].ID,
+					Version: initialVersions[createdNotifications[1].ID],
+				},
+			},
+			failedNotifications: nil,
+			assertFunc: func(t *testing.T, err error, initialVersions map[uint64]int) {
+				require.NoError(t, err)
+
+				// 验证成功状态更新
+				for _, id := range []uint64{createdNotifications[0].ID, createdNotifications[1].ID} {
+					updated, err := s.svc.GetByID(ctx, id)
+					require.NoError(t, err)
+					assert.Equal(t, domain.StatusSucceeded, updated.Status)
+					assert.Greater(t, updated.Version, initialVersions[id])
+				}
+
+				// 验证其他通知状态未变
+				unchanged, err := s.svc.GetByID(ctx, createdNotifications[2].ID)
+				require.NoError(t, err)
+				assert.Equal(t, domain.StatusPending, unchanged.Status)
+				assert.Equal(t, initialVersions[createdNotifications[2].ID], unchanged.Version)
+			},
+		},
+		{
+			name: "更新成功状态同时更新重试次数",
+			succeededNotifications: []domain.Notification{
+				{
+					ID:         createdNotifications[6].ID,
+					RetryCount: 5,
+					Version:    initialVersions[createdNotifications[6].ID],
+				},
+			},
+			failedNotifications: nil,
+			assertFunc: func(t *testing.T, err error, initialVersions map[uint64]int) {
+				require.NoError(t, err)
+
+				// 验证成功状态和重试次数更新
+				updated, err := s.svc.GetByID(ctx, createdNotifications[6].ID)
+				require.NoError(t, err)
+				assert.Equal(t, domain.StatusSucceeded, updated.Status)
+				assert.Equal(t, int8(5), updated.RetryCount) // 验证重试次数已更新
+				assert.Greater(t, updated.Version, initialVersions[createdNotifications[6].ID])
+			},
+		},
+		{
+			name:                   "仅更新失败状态但不更新重试次数",
 			succeededNotifications: nil,
-			failedNotifications:    nil,
-			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, notificationsvc.ErrInvalidParameter)
+			failedNotifications: []domain.Notification{
+				{
+					ID:      createdNotifications[2].ID,
+					Version: initialVersions[createdNotifications[2].ID],
+				},
+			},
+			assertFunc: func(t *testing.T, err error, initialVersions map[uint64]int) {
+				require.NoError(t, err)
+
+				// 验证失败状态更新
+				updated, err := s.svc.GetByID(ctx, createdNotifications[2].ID)
+				require.NoError(t, err)
+				assert.Equal(t, domain.StatusFailed, updated.Status)
+				assert.Greater(t, updated.Version, initialVersions[createdNotifications[2].ID])
+			},
+		},
+		{
+			name:                   "更新失败状态同时更新重试次数",
+			succeededNotifications: nil,
+			failedNotifications: []domain.Notification{
+				{
+					ID:         createdNotifications[3].ID,
+					RetryCount: 2,
+					Version:    initialVersions[createdNotifications[3].ID],
+				},
+			},
+			assertFunc: func(t *testing.T, err error, initialVersions map[uint64]int) {
+				require.NoError(t, err)
+
+				// 验证失败状态和重试次数更新
+				updated, err := s.svc.GetByID(ctx, createdNotifications[3].ID)
+				require.NoError(t, err)
+				assert.Equal(t, domain.StatusFailed, updated.Status)
+				assert.Equal(t, int8(2), updated.RetryCount)
+				assert.Greater(t, updated.Version, initialVersions[createdNotifications[3].ID])
+			},
+		},
+		{
+			name: "更新成功状态和失败状态的组合",
+			succeededNotifications: []domain.Notification{
+				{
+					ID:         createdNotifications[4].ID,
+					RetryCount: 4,
+					Version:    initialVersions[createdNotifications[4].ID],
+				},
+			},
+			failedNotifications: []domain.Notification{
+				{
+					ID:         createdNotifications[5].ID,
+					RetryCount: 3,
+					Version:    initialVersions[createdNotifications[5].ID],
+				},
+			},
+			assertFunc: func(t *testing.T, err error, initialVersions map[uint64]int) {
+				require.NoError(t, err)
+
+				// 验证成功状态更新
+				updated1, err := s.svc.GetByID(ctx, createdNotifications[4].ID)
+				require.NoError(t, err)
+				assert.Equal(t, domain.StatusSucceeded, updated1.Status)
+				assert.Equal(t, int8(4), updated1.RetryCount)
+				assert.Greater(t, updated1.Version, initialVersions[createdNotifications[4].ID])
+
+				// 验证失败状态和重试次数更新
+				updated2, err := s.svc.GetByID(ctx, createdNotifications[5].ID)
+				require.NoError(t, err)
+				assert.Equal(t, domain.StatusFailed, updated2.Status)
+				assert.Equal(t, int8(3), updated2.RetryCount)
+				assert.Greater(t, updated2.Version, initialVersions[createdNotifications[5].ID])
+			},
+		},
+		{
+			name:                   "空的参数列表",
+			succeededNotifications: []domain.Notification{},
+			failedNotifications:    []domain.Notification{},
+			assertFunc: func(t *testing.T, err error, initialVersions map[uint64]int) {
+				assert.Error(t, err)
+				assert.ErrorIs(t, err, notificationsvc.ErrInvalidParameter)
+			},
+		},
+		{
+			name:                   "版本号不匹配的情况",
+			succeededNotifications: nil,
+			failedNotifications: []domain.Notification{
+				{
+					ID:      createdNotifications[0].ID,
+					Version: 999, // 错误的版本号
+				},
+			},
+			assertFunc: func(t *testing.T, err error, initialVersions map[uint64]int) {
+				assert.Error(t, err)
+				// 状态应该保持不变
+				unchanged, err := s.svc.GetByID(ctx, createdNotifications[0].ID)
+				require.NoError(t, err)
+				// 此时应该是成功状态，因为前面的测试已经更新过了
+				assert.Equal(t, domain.StatusSucceeded, unchanged.Status)
+				// 版本号应该是前面测试增加后的值，而不是999
+				assert.NotEqual(t, 999, unchanged.Version)
 			},
 		},
 	}
 
+	// 执行测试场景
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := s.svc.BatchUpdateStatusSucceededOrFailed(t.Context(), tt.succeededNotifications, tt.failedNotifications)
-			assert.Error(t, err)
-			tt.assertErrFunc(t, err)
+			// 更新状态
+			err := s.svc.BatchUpdateStatusSucceededOrFailed(ctx, tt.succeededNotifications, tt.failedNotifications)
+
+			// 断言结果
+			tt.assertFunc(t, err, initialVersions)
 		})
 	}
 }
@@ -689,14 +833,16 @@ func (s *NotificationServiceTestSuite) TestBatchUpdateStatus() {
 	require.NoError(t, err)
 
 	// 验证已更新的通知状态
-	for _, id := range ids {
-		updated, err := s.svc.GetByID(ctx, id)
+	for i := range ids {
+		updated, err := s.svc.GetByID(ctx, ids[i])
 		require.NoError(t, err)
 		assert.Equal(t, newStatus, updated.Status)
+		assert.Greater(t, updated.Version, createdNotifications[i].Version)
 	}
 
 	// 验证未更新的通知状态未变
 	unaffected, err := s.svc.GetByID(ctx, createdNotifications[2].ID)
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusPending, unaffected.Status)
+	assert.Equal(t, unaffected.Version, createdNotifications[2].Version)
 }

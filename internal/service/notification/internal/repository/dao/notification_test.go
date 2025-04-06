@@ -476,6 +476,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ScheduledETime:    now + 3600,
 			Ctime:             now,
 			Utime:             now,
+			Version:           1,
 		},
 		{
 			ID:                202,
@@ -491,6 +492,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ScheduledETime:    now + 3600,
 			Ctime:             now,
 			Utime:             now,
+			Version:           1,
 		},
 		{
 			ID:                203,
@@ -506,6 +508,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ScheduledETime:    now + 3600,
 			Ctime:             now,
 			Utime:             now,
+			Version:           1,
 		},
 		{
 			ID:                204,
@@ -521,6 +524,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ScheduledETime:    now + 3600,
 			Ctime:             now,
 			Utime:             now,
+			Version:           1,
 		},
 		{
 			ID:                205,
@@ -536,6 +540,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ScheduledETime:    now + 3600,
 			Ctime:             now,
 			Utime:             now,
+			Version:           1,
 		},
 		{
 			ID:                206,
@@ -551,6 +556,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ScheduledETime:    now + 3600,
 			Ctime:             now,
 			Utime:             now,
+			Version:           1,
 		},
 		{
 			ID:                207,
@@ -566,6 +572,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ScheduledETime:    now + 3600,
 			Ctime:             now,
 			Utime:             now,
+			Version:           1,
 		},
 		{
 			ID:                208,
@@ -581,6 +588,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ScheduledETime:    now + 3600,
 			Ctime:             now,
 			Utime:             now,
+			Version:           1,
 		},
 		{
 			ID:                209,
@@ -596,28 +604,34 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ScheduledETime:    now + 3600,
 			Ctime:             now,
 			Utime:             now,
+			Version:           1,
 		},
 	}
 
 	err := s.db.CreateInBatches(notifications, len(notifications)).Error
 	assert.NoError(t, err)
 
-	// 场景1: 仅更新成功状态
-	err = s.dao.BatchUpdateStatusSucceededOrFailed(ctx, []uint64{201, 202, 203}, nil)
+	// 场景1: 仅更新成功状态但不更新重试次数
+	successNotifications := []Notification{
+		{ID: 201, Version: 1},
+		{ID: 202, Version: 1},
+		{ID: 203, Version: 1},
+	}
+	err = s.dao.BatchUpdateStatusSucceededOrFailed(ctx, successNotifications, nil)
 	assert.NoError(t, err)
 
 	// 验证更新结果 - 检查每个成功状态的记录
-	for _, id := range []uint64{201, 202, 203} {
+	for _, n := range successNotifications {
 		var result Notification
 		// 使用新的GORM会话避免条件累加
-		err = s.db.Session(&gorm.Session{}).Where("id = ?", id).First(&result).Error
+		err = s.db.Session(&gorm.Session{}).Where("id = ?", n.ID).First(&result).Error
 		assert.NoError(t, err)
 
 		// 查找原始记录进行比较
 		var original Notification
-		for _, n := range notifications {
-			if n.ID == id {
-				original = n
+		for _, on := range notifications {
+			if on.ID == n.ID {
+				original = on
 				break
 			}
 		}
@@ -632,13 +646,47 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 		assert.Equal(t, original.ScheduledSTime, result.ScheduledSTime)
 		assert.Equal(t, original.ScheduledETime, result.ScheduledETime)
 		assert.Greater(t, result.Utime, original.Utime)
+		assert.Equal(t, 2, result.Version)
 	}
+
+	// 场景1b: 更新成功状态同时更新重试次数
+	successWithRetryNotifications := []Notification{
+		{ID: 204, RetryCount: 5, Version: 1},
+	}
+	err = s.dao.BatchUpdateStatusSucceededOrFailed(ctx, successWithRetryNotifications, nil)
+	assert.NoError(t, err)
+
+	// 验证更新结果 - 检查成功状态和重试次数的更新
+	var resultWithRetry Notification
+	err = s.db.Session(&gorm.Session{}).Where("id = ?", 204).First(&resultWithRetry).Error
+	assert.NoError(t, err)
+
+	// 查找原始记录进行比较
+	var originalWithRetry Notification
+	for _, n := range notifications {
+		if n.ID == 204 {
+			originalWithRetry = n
+			break
+		}
+	}
+
+	// 验证状态和重试次数已更新，其他字段保持不变
+	assert.Equal(t, notificationStatusSucceeded, resultWithRetry.Status)
+	assert.Equal(t, int8(5), resultWithRetry.RetryCount) // 更新为新的重试次数
+	assert.Equal(t, originalWithRetry.BizID, resultWithRetry.BizID)
+	assert.Equal(t, originalWithRetry.Receiver, resultWithRetry.Receiver)
+	assert.Equal(t, originalWithRetry.Channel, resultWithRetry.Channel)
+	assert.Equal(t, originalWithRetry.TemplateID, resultWithRetry.TemplateID)
+	assert.Equal(t, originalWithRetry.ScheduledSTime, resultWithRetry.ScheduledSTime)
+	assert.Equal(t, originalWithRetry.ScheduledETime, resultWithRetry.ScheduledETime)
+	assert.Greater(t, resultWithRetry.Utime, originalWithRetry.Utime)
+	assert.Equal(t, 2, resultWithRetry.Version)
 
 	// 场景2: 仅更新失败状态但不更新重试次数
 	failedItems1 := []Notification{
 		{
-			ID:         204,
-			RetryCount: 0, // 不更新重试次数
+			ID:      205,
+			Version: 1,
 		},
 	}
 	err = s.dao.BatchUpdateStatusSucceededOrFailed(ctx, nil, failedItems1)
@@ -646,13 +694,13 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 
 	// 验证更新结果 - 检查失败状态的记录
 	var result Notification
-	err = s.db.Session(&gorm.Session{}).Where("id = ?", 204).First(&result).Error
+	err = s.db.Session(&gorm.Session{}).Where("id = ?", 205).First(&result).Error
 	assert.NoError(t, err)
 
 	// 查找原始记录进行比较
 	var original Notification
 	for _, n := range notifications {
-		if n.ID == 204 {
+		if n.ID == 205 {
 			original = n
 			break
 		}
@@ -668,12 +716,14 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	assert.Equal(t, original.ScheduledSTime, result.ScheduledSTime)
 	assert.Equal(t, original.ScheduledETime, result.ScheduledETime)
 	assert.Greater(t, result.Utime, original.Utime)
+	assert.Equal(t, 2, result.Version)
 
-	// 场景3: 仅更新失败状态并更新重试次数
+	// 场景3: 更新失败状态同时更新重试次数
 	failedItems2 := []Notification{
 		{
-			ID:         205,
-			RetryCount: 2, // 设置新的重试次数
+			ID:         206,
+			RetryCount: 2,
+			Version:    1,
 		},
 	}
 	err = s.dao.BatchUpdateStatusSucceededOrFailed(ctx, nil, failedItems2)
@@ -682,12 +732,12 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	// 验证更新结果 - 检查失败状态和重试次数的记录
 	// 使用新的变量和新的会话
 	var result2 Notification
-	err = s.db.Session(&gorm.Session{}).Where("id = ?", 205).First(&result2).Error
+	err = s.db.Session(&gorm.Session{}).Where("id = ?", 206).First(&result2).Error
 	assert.NoError(t, err)
 
 	// 查找原始记录进行比较
 	for _, n := range notifications {
-		if n.ID == 205 {
+		if n.ID == 206 {
 			original = n
 			break
 		}
@@ -703,45 +753,31 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	assert.Equal(t, original.ScheduledSTime, result2.ScheduledSTime)
 	assert.Equal(t, original.ScheduledETime, result2.ScheduledETime)
 	assert.Greater(t, result2.Utime, original.Utime)
+	assert.Equal(t, 2, result2.Version)
 
 	// 场景4: 更新成功状态和失败状态的组合
-	successIDs := []uint64{206}
+	successNotifications2 := []Notification{
+		{ID: 207, RetryCount: 4, Version: 1},
+	}
 	failedItems3 := []Notification{
 		{
-			ID:         207,
-			RetryCount: 0, // 不更新重试次数
+			ID:      208,
+			Version: 1,
 		},
 		{
-			ID:         208,
-			RetryCount: 3, // 更新重试次数
+			ID:         209,
+			RetryCount: 3,
+			Version:    1,
 		},
 	}
-	err = s.dao.BatchUpdateStatusSucceededOrFailed(ctx, successIDs, failedItems3)
+	err = s.dao.BatchUpdateStatusSucceededOrFailed(ctx, successNotifications2, failedItems3)
 	assert.NoError(t, err)
 
 	// 验证成功状态更新
 	var result3 Notification
-	err = s.db.Session(&gorm.Session{}).Where("id = ?", 206).First(&result3).Error
+	err = s.db.Session(&gorm.Session{}).Where("id = ?", 207).First(&result3).Error
 	assert.NoError(t, err)
 	assert.Equal(t, notificationStatusSucceeded, result3.Status)
-
-	// 查找原始记录进行比较
-	for _, n := range notifications {
-		if n.ID == 206 {
-			original = n
-			break
-		}
-	}
-	assert.Equal(t, original.RetryCount, result3.RetryCount)
-	assert.Equal(t, original.BizID, result3.BizID)
-	assert.Equal(t, original.Receiver, result3.Receiver)
-	assert.Equal(t, original.Channel, result3.Channel)
-
-	// 验证失败状态不更新重试次数
-	var result4 Notification
-	err = s.db.Session(&gorm.Session{}).Where("id = ?", 207).First(&result4).Error
-	assert.NoError(t, err)
-	assert.Equal(t, notificationStatusFailed, result4.Status)
 
 	// 查找原始记录进行比较
 	for _, n := range notifications {
@@ -750,16 +786,17 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			break
 		}
 	}
-	assert.Equal(t, original.RetryCount, result4.RetryCount) // 保持原始重试次数不变
-	assert.Equal(t, original.BizID, result4.BizID)
-	assert.Equal(t, original.Receiver, result4.Receiver)
-	assert.Equal(t, original.Channel, result4.Channel)
+	assert.Equal(t, int8(4), result3.RetryCount) // 更新为新的重试次数
+	assert.Equal(t, original.BizID, result3.BizID)
+	assert.Equal(t, original.Receiver, result3.Receiver)
+	assert.Equal(t, original.Channel, result3.Channel)
+	assert.Equal(t, 2, result3.Version)
 
-	// 验证失败状态更新重试次数
-	var result5 Notification
-	err = s.db.Session(&gorm.Session{}).Where("id = ?", 208).First(&result5).Error
+	// 验证失败状态不更新重试次数
+	var result4 Notification
+	err = s.db.Session(&gorm.Session{}).Where("id = ?", 208).First(&result4).Error
 	assert.NoError(t, err)
-	assert.Equal(t, notificationStatusFailed, result5.Status)
+	assert.Equal(t, notificationStatusFailed, result4.Status)
 
 	// 查找原始记录进行比较
 	for _, n := range notifications {
@@ -768,14 +805,63 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			break
 		}
 	}
+	assert.Equal(t, original.RetryCount, result4.RetryCount) // 保持原始重试次数不变
+	assert.Equal(t, original.BizID, result4.BizID)
+	assert.Equal(t, original.Receiver, result4.Receiver)
+	assert.Equal(t, original.Channel, result4.Channel)
+	assert.Equal(t, 2, result4.Version)
+
+	// 验证失败状态更新重试次数
+	var result5 Notification
+	err = s.db.Session(&gorm.Session{}).Where("id = ?", 209).First(&result5).Error
+	assert.NoError(t, err)
+	assert.Equal(t, notificationStatusFailed, result5.Status)
+
+	// 查找原始记录进行比较
+	for _, n := range notifications {
+		if n.ID == 209 {
+			original = n
+			break
+		}
+	}
 	assert.Equal(t, int8(3), result5.RetryCount) // 更新为新的重试次数
 	assert.Equal(t, original.BizID, result5.BizID)
 	assert.Equal(t, original.Receiver, result5.Receiver)
 	assert.Equal(t, original.Channel, result5.Channel)
+	assert.Equal(t, 2, result5.Version)
 
 	// 场景5: 空的参数列表
-	err = s.dao.BatchUpdateStatusSucceededOrFailed(ctx, []uint64{}, []Notification{})
+	err = s.dao.BatchUpdateStatusSucceededOrFailed(ctx, []Notification{}, []Notification{})
 	assert.NoError(t, err)
+
+	// 场景6: 版本号不匹配的情况 - 使用一个新的通知记录
+	wrongVersionNotification := Notification{
+		ID:                210,
+		BizID:             1210,
+		Key:               "batch_update_key_10",
+		Receiver:          "user10@example.com",
+		Channel:           notificationChannelEmail,
+		TemplateID:        210,
+		TemplateVersionID: 2010,
+		Status:            notificationStatusPending,
+		RetryCount:        0,
+		ScheduledSTime:    now,
+		ScheduledETime:    now + 3600,
+		Ctime:             now,
+		Utime:             now,
+		Version:           1,
+	}
+
+	// 创建一条用于测试版本不匹配的记录
+	err = s.db.Create(&wrongVersionNotification).Error
+	assert.NoError(t, err)
+
+	wrongVersionNotifications := []Notification{
+		{ID: 210, Version: 999}, // 错误的版本号
+	}
+	err = s.dao.BatchUpdateStatusSucceededOrFailed(ctx, wrongVersionNotifications, nil)
+	assert.Error(t, err)                     // 应当返回错误
+	assert.Contains(t, err.Error(), "版本不匹配") // 错误信息应当包含版本不匹配信息
 }
 
 func (s *NotificationDAOTestSuite) TestBatchUpdateStatus() {
@@ -795,6 +881,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatus() {
 			Status:            notificationStatusPending,
 			ScheduledSTime:    time.Now().Unix(),
 			ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+			Version:           1,
 		},
 		{
 			ID:                10002,
@@ -807,6 +894,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatus() {
 			Status:            notificationStatusPending,
 			ScheduledSTime:    time.Now().Unix(),
 			ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+			Version:           1,
 		},
 		{
 			ID:                10003,
@@ -819,6 +907,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatus() {
 			Status:            notificationStatusPending,
 			ScheduledSTime:    time.Now().Unix(),
 			ScheduledETime:    time.Now().Add(time.Hour).Unix(),
+			Version:           1,
 		},
 	}
 
@@ -847,6 +936,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatus() {
 		assert.NoError(t, err)
 		assert.Equal(t, newStatus, result.Status)
 		assert.Greater(t, result.Utime, beforeUpdateTime)
+		assert.Equal(t, 2, result.Version)
 	}
 
 	// 验证未更新的通知状态未变
@@ -854,6 +944,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatus() {
 	err = s.db.First(&unaffectedNotification, 10003).Error
 	assert.NoError(t, err)
 	assert.Equal(t, notificationStatusPending, unaffectedNotification.Status)
+	assert.Equal(t, 1, unaffectedNotification.Version) // 验证版本号未变化
 }
 
 func (s *NotificationDAOTestSuite) TestBatchGetByIDs() {

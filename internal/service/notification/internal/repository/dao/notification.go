@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ego-component/egorm"
@@ -34,10 +33,10 @@ type NotificationDAO interface {
 	// BatchCreate 批量创建通知记录
 	BatchCreate(ctx context.Context, dataList []Notification) ([]Notification, error)
 
-	// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
-	// successIDs: 更新为成功状态的ID列表
-	// failedNotifications: 更新为失败状态的通知列表，包含ID和重试次数
-	BatchUpdateStatusSucceededOrFailed(ctx context.Context, successIDs []uint64, failedNotifications []Notification) error
+	// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败，使用乐观锁控制并发
+	// successNotifications: 更新为成功状态的通知列表，包含ID、Version和重试次数
+	// failedNotifications: 更新为失败状态的通知列表，包含ID、Version和重试次数
+	BatchUpdateStatusSucceededOrFailed(ctx context.Context, successNotifications, failedNotifications []Notification) error
 
 	// GetByID 根据ID查询通知
 	GetByID(ctx context.Context, id uint64) (Notification, error)
@@ -252,79 +251,88 @@ func (d *notificationDAO) ListByScheduleTime(ctx context.Context, startTime, end
 	return notifications, err
 }
 
-// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
-// 使用多语句批处理方式: 成功的通知合并为一条语句，失败的每条单独一条语句
-func (d *notificationDAO) BatchUpdateStatusSucceededOrFailed(ctx context.Context, successIDs []uint64, failedNotifications []Notification) error {
-	if len(successIDs) == 0 && len(failedNotifications) == 0 {
+// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败，使用乐观锁控制并发
+// successNotifications: 更新为成功状态的通知列表，包含ID、Version和重试次数
+// failedNotifications: 更新为失败状态的通知列表，包含ID、Version和重试次数
+func (d *notificationDAO) BatchUpdateStatusSucceededOrFailed(ctx context.Context, successNotifications, failedNotifications []Notification) error {
+	if len(successNotifications) == 0 && len(failedNotifications) == 0 {
 		return nil
 	}
 
 	// 开启事务
 	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		now := time.Now().Unix()
+		var updateErrors []error
 
-		// 构建SQL语句
-		var sqls []string
-
-		// 处理成功状态的通知 - 合并为一条SQL
-		if len(successIDs) > 0 {
-			idStrs := make([]string, len(successIDs))
-			for i := range successIDs {
-				idStrs[i] = fmt.Sprintf("%d", successIDs[i])
+		// 处理成功状态的通知
+		for i := range successNotifications {
+			if err := d.updateNotificationStatus(tx, successNotifications[i], notificationStatusSucceeded, now); err != nil {
+				updateErrors = append(updateErrors, err)
 			}
-
-			// 直接构建完整SQL，不使用参数绑定
-			successSQL := fmt.Sprintf(
-				"UPDATE `notifications` SET `status` = '%s', `utime` = %d WHERE `id` IN (%s)",
-				notificationStatusSucceeded,
-				now,
-				strings.Join(idStrs, ", "),
-			)
-			sqls = append(sqls, successSQL)
 		}
 
-		// 处理失败状态的通知 - 每条单独一条SQL
+		// 处理失败状态的通知
 		for i := range failedNotifications {
-			var failedSQL string
-			n := failedNotifications[i]
-			if n.RetryCount > 0 {
-				// 更新状态和重试次数
-				failedSQL = fmt.Sprintf(
-					"UPDATE `notifications` SET `status` = '%s', `retry_count` = %d, `utime` = %d WHERE `id` = %d",
-					"FAILED",
-					n.RetryCount,
-					now,
-					n.ID,
-				)
-			} else {
-				// 只更新状态
-				failedSQL = fmt.Sprintf(
-					"UPDATE `notifications` SET `status` = '%s', `utime` = %d WHERE `id` = %d",
-					notificationStatusFailed,
-					now,
-					n.ID,
-				)
+			if err := d.updateNotificationStatus(tx, failedNotifications[i], notificationStatusFailed, now); err != nil {
+				updateErrors = append(updateErrors, err)
 			}
-
-			sqls = append(sqls, failedSQL)
 		}
 
-		// 拼接所有SQL并执行
-		if len(sqls) > 0 {
-			combinedSQL := strings.Join(sqls, "; ")
-			return tx.Exec(combinedSQL).Error
+		// 如果有任何更新错误，则回滚事务
+		if len(updateErrors) > 0 {
+			return fmt.Errorf("批量更新通知状态失败: %v", updateErrors)
 		}
 
 		return nil
 	})
 }
 
+// updateNotificationStatus 更新单个通知的状态，处理乐观锁和重试次数
+func (d *notificationDAO) updateNotificationStatus(tx *gorm.DB, notification Notification, status string, now int64) error {
+	// 设置基本更新字段
+	updates := map[string]interface{}{
+		"status":  status,
+		"utime":   now,
+		"version": gorm.Expr("version + 1"),
+	}
+
+	// 如果设置了重试次数，也需要更新
+	if notification.RetryCount > 0 {
+		updates["retry_count"] = notification.RetryCount
+	}
+
+	result := tx.Model(&Notification{}).
+		Where("id = ? AND version = ?", notification.ID, notification.Version).
+		Updates(updates)
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		// 版本不匹配或记录不存在
+		var exists int64
+		if err := tx.Model(&Notification{}).Where("id = ?", notification.ID).Count(&exists).Error; err != nil {
+			return err
+		}
+
+		if exists == 0 {
+			return fmt.Errorf("未找到ID为%d的通知记录", notification.ID)
+		}
+
+		return fmt.Errorf("ID为%d的通知记录版本不匹配", notification.ID)
+	}
+
+	return nil
+}
+
 func (d *notificationDAO) BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error {
 	result := d.db.WithContext(ctx).Model(&Notification{}).
 		Where("id in ?", ids).
 		Updates(map[string]interface{}{
-			"status": status,
-			"utime":  time.Now().Unix(),
+			"status":  status,
+			"utime":   time.Now().Unix(),
+			"version": gorm.Expr("version + 1"),
 		})
 	return result.Error
 }

@@ -135,9 +135,10 @@ func (r *notificationRepository) UpdateStatus(ctx context.Context, id uint64, st
 
 // BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
 func (r *notificationRepository) BatchUpdateStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error {
-	successIDs := make([]uint64, len(succeededNotifications))
+	// 转换成功的通知为DAO层的实体
+	successItems := make([]dao.Notification, len(succeededNotifications))
 	for i := range succeededNotifications {
-		successIDs[i] = succeededNotifications[i].ID
+		successItems[i] = r.toEntity(succeededNotifications[i])
 	}
 
 	// 转换失败的通知为DAO层的实体
@@ -146,7 +147,7 @@ func (r *notificationRepository) BatchUpdateStatusSucceededOrFailed(ctx context.
 		failedItems[i] = r.toEntity(failedNotifications[i])
 	}
 
-	return r.dao.BatchUpdateStatusSucceededOrFailed(ctx, successIDs, failedItems)
+	return r.dao.BatchUpdateStatusSucceededOrFailed(ctx, successItems, failedItems)
 }
 
 // GetByID 根据ID获取通知

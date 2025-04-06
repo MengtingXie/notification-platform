@@ -2,6 +2,7 @@ package strategy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -43,10 +44,47 @@ func (s *ImmediateSendStrategy) Send(ctx context.Context, ns []domain.Notificati
 
 	// 创建通知记录
 	createdNotifications, err := s.notificationSvc.BatchCreate(ctx, notificationSvcDomains)
-	if err != nil {
+	if err == nil {
+		// 立即发送
+		return s.sender.Send(ctx, createdNotifications)
+	}
+
+	// 批量操作直接返回错误
+	if len(ns) > 1 || !errors.Is(err, notificationsvc.ErrNotificationDuplicate) {
 		return nil, fmt.Errorf("创建通知失败: %w", err)
 	}
 
-	// 立即发送
+	// 单个操作， 错误为索引冲突，表示业务方重试
+	const first = 0
+	n := ns[first].Notification
+	notifications, err := s.notificationSvc.GetByKeys(ctx, n.BizID, n.Key)
+	if err != nil {
+		return nil, fmt.Errorf("获取通知失败: %w", err)
+	}
+
+	// 已经发送成功了
+	if notifications[first].Status == notificationsvc.SendStatusSucceeded {
+		return []domain.SendResponse{
+			{
+				NotificationID: notifications[first].ID,
+				Status:         notifications[first].Status,
+			},
+		}, nil
+	}
+
+	// 事务消息直接返回错误
+	if notifications[first].Status == notificationsvc.SendStatusPrepare ||
+		notifications[first].Status == notificationsvc.SendStatusCanceled {
+		return nil, fmt.Errorf("事务消息")
+	}
+
+	// 更新通知状态为PENDING同时获取乐观锁（版本号）
+	notifications[first].Status = notificationsvc.SendStatusPending
+	err = s.notificationSvc.UpdateStatus(ctx, notifications[first].ID, notifications[first].Status, notifications[first].Version)
+	if err != nil {
+		return nil, fmt.Errorf("更新通知状态失败: %w", err)
+	}
+
+	// 再次立即发送
 	return s.sender.Send(ctx, createdNotifications)
 }
