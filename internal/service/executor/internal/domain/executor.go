@@ -6,18 +6,6 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/notification"
 )
 
-// ErrorCode 错误代码
-type ErrorCode int
-
-const (
-	ErrorCodeUnspecified              ErrorCode = 0 // 未指定错误码
-	ErrorCodeInvalidParameter         ErrorCode = 1 // 无效参数
-	ErrorCodeRateLimited              ErrorCode = 2 // 频率限制
-	ErrorCodeTemplateNotFound         ErrorCode = 3 // 模板未找到
-	ErrorCodeChannelDisabled          ErrorCode = 4 // 渠道被禁用
-	ErrorCodeCreateNotificationFailed ErrorCode = 5 // 创建通知失败
-)
-
 // SendStrategyType 发送策略类型
 type SendStrategyType string
 
@@ -50,8 +38,6 @@ type SendResponse struct {
 	NotificationID uint64                  // 通知ID
 	Status         notification.SendStatus // 发送状态
 	RetryCount     int8                    // 重试次数
-	ErrorCode      ErrorCode               // 错误代码
-	ErrorMessage   string                  // 错误信息
 }
 
 // BatchSendResponse 批量发送响应
@@ -63,7 +49,5 @@ type BatchSendResponse struct {
 
 // BatchSendAsyncResponse 批量异步发送响应
 type BatchSendAsyncResponse struct {
-	NotificationIDs []uint64  // 生成的通知ID列表
-	ErrorCode       ErrorCode // 错误代码
-	ErrorMessage    string    // 错误信息
+	NotificationIDs []uint64 // 生成的通知ID列表
 }

@@ -357,17 +357,17 @@ func (c *MockNotificationServiceGetByKeysCall) DoAndReturn(f func(context.Contex
 }
 
 // UpdateStatus mocks base method.
-func (m *MockNotificationService) UpdateStatus(ctx context.Context, id uint64, status domain.Status) error {
+func (m *MockNotificationService) UpdateStatus(ctx context.Context, id uint64, status domain.Status, version int) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateStatus", ctx, id, status)
+	ret := m.ctrl.Call(m, "UpdateStatus", ctx, id, status, version)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UpdateStatus indicates an expected call of UpdateStatus.
-func (mr *MockNotificationServiceMockRecorder) UpdateStatus(ctx, id, status any) *MockNotificationServiceUpdateStatusCall {
+func (mr *MockNotificationServiceMockRecorder) UpdateStatus(ctx, id, status, version any) *MockNotificationServiceUpdateStatusCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateStatus", reflect.TypeOf((*MockNotificationService)(nil).UpdateStatus), ctx, id, status)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateStatus", reflect.TypeOf((*MockNotificationService)(nil).UpdateStatus), ctx, id, status, version)
 	return &MockNotificationServiceUpdateStatusCall{Call: call}
 }
 
@@ -383,13 +383,13 @@ func (c *MockNotificationServiceUpdateStatusCall) Return(arg0 error) *MockNotifi
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockNotificationServiceUpdateStatusCall) Do(f func(context.Context, uint64, domain.Status) error) *MockNotificationServiceUpdateStatusCall {
+func (c *MockNotificationServiceUpdateStatusCall) Do(f func(context.Context, uint64, domain.Status, int) error) *MockNotificationServiceUpdateStatusCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockNotificationServiceUpdateStatusCall) DoAndReturn(f func(context.Context, uint64, domain.Status) error) *MockNotificationServiceUpdateStatusCall {
+func (c *MockNotificationServiceUpdateStatusCall) DoAndReturn(f func(context.Context, uint64, domain.Status, int) error) *MockNotificationServiceUpdateStatusCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

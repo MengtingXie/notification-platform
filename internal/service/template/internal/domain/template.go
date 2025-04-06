@@ -54,6 +54,11 @@ type ChannelTemplate struct {
 	Versions []ChannelTemplateVersion // 关联的所有版本
 }
 
+// HasPublished 是否已发布
+func (t *ChannelTemplate) HasPublished() bool {
+	return t.ActiveVersionID != 0
+}
+
 // ActiveVersion 获取当前活跃版本
 func (t *ChannelTemplate) ActiveVersion() *ChannelTemplateVersion {
 	if t.ActiveVersionID == 0 {

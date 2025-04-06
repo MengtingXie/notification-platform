@@ -28,6 +28,8 @@ type ChannelTemplateService interface {
 	GetTemplates(ctx context.Context, ownerID int64, ownerType domain.OwnerType) ([]domain.ChannelTemplate, error)
 	// GetTemplate 获取模版
 	GetTemplate(ctx context.Context, templateID, versionID int64, providerName string, channel domain.Channel) (domain.ChannelTemplate, error)
+	// GetTemplateByID 根据模版ID获取模版
+	GetTemplateByID(ctx context.Context, templateID int64) (domain.ChannelTemplate, error)
 	// CreateTemplate 创建模板
 	CreateTemplate(ctx context.Context, template domain.ChannelTemplate) (domain.ChannelTemplate, error)
 	// UpdateTemplate 更新模板
@@ -92,6 +94,11 @@ func (t *templateService) GetTemplates(ctx context.Context, ownerID int64, owner
 func (t *templateService) GetTemplate(ctx context.Context, templateID, versionID int64, providerName string, channel domain.Channel) (domain.ChannelTemplate, error) {
 	// TODO implement me
 	panic("implement me" + fmt.Sprintf("%v %v, %v, %v, %v", ctx, templateID, versionID, providerName, channel))
+}
+
+func (t *templateService) GetTemplateByID(ctx context.Context, templateID int64) (domain.ChannelTemplate, error) {
+	// TODO implement me
+	panic("implement me" + fmt.Sprintf("%v %v", ctx, templateID))
 }
 
 func (t *templateService) CreateTemplate(ctx context.Context, template domain.ChannelTemplate) (domain.ChannelTemplate, error) {

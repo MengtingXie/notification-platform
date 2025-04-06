@@ -196,6 +196,45 @@ func (c *MockChannelTemplateServiceGetTemplateCall) DoAndReturn(f func(context.C
 	return c
 }
 
+// GetTemplateByID mocks base method.
+func (m *MockChannelTemplateService) GetTemplateByID(ctx context.Context, templateID int64) (domain.ChannelTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTemplateByID", ctx, templateID)
+	ret0, _ := ret[0].(domain.ChannelTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTemplateByID indicates an expected call of GetTemplateByID.
+func (mr *MockChannelTemplateServiceMockRecorder) GetTemplateByID(ctx, templateID any) *MockChannelTemplateServiceGetTemplateByIDCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTemplateByID", reflect.TypeOf((*MockChannelTemplateService)(nil).GetTemplateByID), ctx, templateID)
+	return &MockChannelTemplateServiceGetTemplateByIDCall{Call: call}
+}
+
+// MockChannelTemplateServiceGetTemplateByIDCall wrap *gomock.Call
+type MockChannelTemplateServiceGetTemplateByIDCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockChannelTemplateServiceGetTemplateByIDCall) Return(arg0 domain.ChannelTemplate, arg1 error) *MockChannelTemplateServiceGetTemplateByIDCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockChannelTemplateServiceGetTemplateByIDCall) Do(f func(context.Context, int64) (domain.ChannelTemplate, error)) *MockChannelTemplateServiceGetTemplateByIDCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockChannelTemplateServiceGetTemplateByIDCall) DoAndReturn(f func(context.Context, int64) (domain.ChannelTemplate, error)) *MockChannelTemplateServiceGetTemplateByIDCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // GetTemplates mocks base method.
 func (m *MockChannelTemplateService) GetTemplates(ctx context.Context, ownerID int64, ownerType domain.OwnerType) ([]domain.ChannelTemplate, error) {
 	m.ctrl.T.Helper()

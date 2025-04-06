@@ -4,12 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/service/executor/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/executor/internal/service/strategy"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
+	templatesvc "gitee.com/flycash/notification-platform/internal/service/template"
+	"github.com/gotomicro/ego/core/elog"
 	"github.com/sony/sonyflake"
+)
+
+// 定义通用错误
+var (
+	ErrInvalidParameter        = errors.New("参数错误")
+	ErrNotificationNotFound    = errors.New("通知不存在")
+	ErrSendNotificationFailed  = errors.New("发送通知失败")
+	ErrQueryNotificationFailed = errors.New("查询通知失败")
 )
 
 // ExecutorService 执行器
@@ -24,23 +35,26 @@ type ExecutorService interface {
 	BatchSendNotifications(ctx context.Context, ns ...domain.Notification) (domain.BatchSendResponse, error)
 	// BatchSendNotificationsAsync 异步批量发送
 	BatchSendNotificationsAsync(ctx context.Context, ns ...domain.Notification) (domain.BatchSendAsyncResponse, error)
+	// QueryNotification 同步单条查询
+	QueryNotification(ctx context.Context, bizID int64, key string) (domain.SendResponse, error)
 	// BatchQueryNotifications 同步批量查询
 	BatchQueryNotifications(ctx context.Context, bizID int64, keys ...string) ([]domain.SendResponse, error)
-	// QueryNotification 单条查询
-	QueryNotification(ctx context.Context, bizID int64, key string) (domain.SendResponse, error)
 }
 
 // executor 执行器实现
 type executor struct {
 	notificationSvc notificationsvc.Service
+	templateSvc     templatesvc.Service
 	idGenerator     *sonyflake.Sonyflake
 	sendStrategy    strategy.SendStrategy
+	logger          *elog.Component
 }
 
 // NewExecutorService 创建执行器实例
-func NewExecutorService(notificationSvc notificationsvc.Service, idGenerator *sonyflake.Sonyflake, sendStrategy strategy.SendStrategy) ExecutorService {
+func NewExecutorService(templateSvc templatesvc.Service, notificationSvc notificationsvc.Service, idGenerator *sonyflake.Sonyflake, sendStrategy strategy.SendStrategy) ExecutorService {
 	return &executor{
 		notificationSvc: notificationSvc,
+		templateSvc:     templateSvc,
 		idGenerator:     idGenerator,
 		sendStrategy:    sendStrategy,
 	}
@@ -48,17 +62,29 @@ func NewExecutorService(notificationSvc notificationsvc.Service, idGenerator *so
 
 // SendNotification 同步单条发送
 func (e *executor) SendNotification(ctx context.Context, n domain.Notification) (domain.SendResponse, error) {
-	resp := domain.SendResponse{}
+	resp := domain.SendResponse{
+		Status: notificationsvc.SendStatusFailed,
+	}
 
-	if ok := e.isValidateRequest(n, &resp); !ok {
-		return resp, nil
+	// 参数校验
+	if err := e.validateNotification(n); err != nil {
+		return resp, err
+	}
+
+	template, err := e.templateSvc.GetTemplateByID(ctx, n.Notification.Template.ID)
+	if err != nil {
+		e.logger.Warn("同步单条发送通知失败", elog.Any("获取模版失败", err))
+		return resp, fmt.Errorf("%w", ErrSendNotificationFailed)
+	}
+	if !template.HasPublished() {
+		return resp, fmt.Errorf("%w: 模板ID=%d未发布", ErrInvalidParameter, n.Notification.Template.ID)
 	}
 
 	// 生成通知ID
 	id, err := e.idGenerator.NextID()
 	if err != nil {
-		resp.Status = notificationsvc.SendStatusFailed
-		return resp, fmt.Errorf("通知ID生成失败: %w", err)
+		e.logger.Warn("同步单条发送通知失败", elog.Any("通知ID生成失败", err))
+		return resp, fmt.Errorf("%w", ErrSendNotificationFailed)
 	}
 
 	// 调用服务发送通知
@@ -69,310 +95,364 @@ func (e *executor) SendNotification(ctx context.Context, n domain.Notification) 
 	responses, err := e.sendStrategy.Send(ctx, notifications)
 	// 处理策略错误
 	if err != nil {
-		// 仅检查是否为已知业务错误
-		if errors.Is(err, strategy.ErrInvalidParameter) ||
-			errors.Is(err, notificationsvc.ErrInvalidParameter) ||
-			errors.Is(err, notificationsvc.ErrCreateNotificationFailed) {
 
-			// 直接使用mapErrorToResponse处理错误
-			resp.Status = notificationsvc.SendStatusFailed
-			resp.ErrorCode, resp.ErrorMessage = e.convertToErrorCodeAndErrorMessage(err)
+		e.logger.Warn("同步单条发送通知失败", elog.Any("Error", err))
 
-			return resp, nil
+		// 对不同类型的错误进行通用包装
+		if errors.Is(err, strategy.ErrInvalidParameter) || errors.Is(err, notificationsvc.ErrInvalidParameter) {
+			return resp, fmt.Errorf("%w: %s", ErrInvalidParameter, err.Error())
 		}
-		// 未知的系统错误，返回原始错误
-		return resp, fmt.Errorf("发送通知系统错误: %w", err)
+		// 通用的发送失败错误
+		return resp, fmt.Errorf("%w", ErrSendNotificationFailed)
 	}
 
-	// 从响应中提取结果
+	// 从响应获取结果
 	const zero = 0
 	return responses[zero], nil
 }
 
-// isValidateRequest 检查通知参数是否有效
-func (e *executor) isValidateRequest(n domain.Notification, resp *domain.SendResponse) bool {
+// validateNotification 检查通知参数是否有效
+func (e *executor) validateNotification(n domain.Notification) error {
 	// 参数校验
-	if n.Notification.BizID <= 0 {
-		resp.Status = notificationsvc.SendStatusFailed
-		resp.ErrorCode = domain.ErrorCodeInvalidParameter
-		resp.ErrorMessage = "业务ID不能为空"
-		return false
+	if err := e.validateBizID(n.Notification.BizID); err != nil {
+		return err
 	}
 
-	if n.Notification.Key == "" {
-		resp.Status = notificationsvc.SendStatusFailed
-		resp.ErrorCode = domain.ErrorCodeInvalidParameter
-		resp.ErrorMessage = "业务唯一标识不能为空"
-		return false
+	if err := e.validateKey(n.Notification.Key); err != nil {
+		return err
 	}
 
 	// 接受者
 	if n.Notification.Receiver == "" {
-		resp.Status = notificationsvc.SendStatusFailed
-		resp.ErrorCode = domain.ErrorCodeInvalidParameter
-		resp.ErrorMessage = "接收者不能为空"
-		return false
+		return fmt.Errorf("%w: key = %s, 接收者不能为空", ErrInvalidParameter, n.Notification.Key)
 	}
 
 	// 校验渠道
 	if n.Notification.Channel != notificationsvc.ChannelSMS &&
 		n.Notification.Channel != notificationsvc.ChannelEmail &&
 		n.Notification.Channel != notificationsvc.ChannelInApp {
-		resp.Status = notificationsvc.SendStatusFailed
-		resp.ErrorCode = domain.ErrorCodeInvalidParameter
-		resp.ErrorMessage = "不支持的通知渠道"
-		return false
+		return fmt.Errorf("%w: key = %s, 不支持的通知渠道", ErrInvalidParameter, n.Notification.Key)
 	}
 
 	// 校验模板ID
 	if n.Notification.Template.ID <= 0 {
-		resp.Status = notificationsvc.SendStatusFailed
-		resp.ErrorCode = domain.ErrorCodeInvalidParameter
-		resp.ErrorMessage = "无效的模板ID"
-		return false
+		return fmt.Errorf("%w: key = %s, 无效的模板ID", ErrInvalidParameter, n.Notification.Key)
 	}
 
-	return e.isValidSendStrategy(n, resp)
+	return e.validateSendStrategy(n)
 }
 
-func (e *executor) isValidSendStrategy(n domain.Notification, resp *domain.SendResponse) bool {
+func (e *executor) validateBizID(bizID int64) error {
+	if bizID <= 0 {
+		return fmt.Errorf("%w: 业务ID不能为空", ErrInvalidParameter)
+	}
+	return nil
+}
+
+func (e *executor) validateKey(key string) error {
+	if key == "" {
+		return fmt.Errorf("%w: 业务唯一标识不能为空", ErrInvalidParameter)
+	}
+	return nil
+}
+
+func (e *executor) validateSendStrategy(n domain.Notification) error {
 	// 校验策略相关字段
 	switch n.SendStrategyConfig.Type {
 	case domain.SendStrategyImmediate:
-		return true
+		return nil
 	case domain.SendStrategyDelayed:
 		if n.SendStrategyConfig.DelaySeconds <= 0 {
-			resp.Status = notificationsvc.SendStatusFailed
-			resp.ErrorCode = domain.ErrorCodeInvalidParameter
-			resp.ErrorMessage = "延迟发送策略需要指定正数的延迟秒数"
-			return false
+			return fmt.Errorf("%w: key = %s, 延迟发送策略需要指定正数的延迟秒数", ErrInvalidParameter, n.Notification.Key)
 		}
 	case domain.SendStrategyScheduled:
 		if n.SendStrategyConfig.ScheduledTime.IsZero() || n.SendStrategyConfig.ScheduledTime.Before(time.Now()) {
-			resp.Status = notificationsvc.SendStatusFailed
-			resp.ErrorCode = domain.ErrorCodeInvalidParameter
-			resp.ErrorMessage = "定时发送策略需要指定未来的发送时间"
-			return false
+			return fmt.Errorf("%w: key = %s, 定时发送策略需要指定未来的发送时间", ErrInvalidParameter, n.Notification.Key)
 		}
 	case domain.SendStrategyTimeWindow:
 		if n.SendStrategyConfig.StartTimeMilliseconds <= 0 || n.SendStrategyConfig.EndTimeMilliseconds <= n.SendStrategyConfig.StartTimeMilliseconds {
-			resp.Status = notificationsvc.SendStatusFailed
-			resp.ErrorCode = domain.ErrorCodeInvalidParameter
-			resp.ErrorMessage = "时间窗口发送策略需要指定有效的开始和结束时间"
-			return false
+			return fmt.Errorf("%w: key = %s, 时间窗口发送策略需要指定有效的开始和结束时间", ErrInvalidParameter, n.Notification.Key)
 		}
 	case domain.SendStrategyDeadline:
 		if n.SendStrategyConfig.DeadlineTime.IsZero() || n.SendStrategyConfig.DeadlineTime.Before(time.Now()) {
-			resp.Status = notificationsvc.SendStatusFailed
-			resp.ErrorCode = domain.ErrorCodeInvalidParameter
-			resp.ErrorMessage = "截止日期发送策略需要指定未来的发送时间"
-			return false
+			return fmt.Errorf("%w: key = %s, 截止日期发送策略需要指定未来的发送时间", ErrInvalidParameter, n.Notification.Key)
 		}
 	}
-	return true
-}
-
-// convertToErrorCodeAndErrorMessage 将错误映射为错误代码和错误消息
-func (e *executor) convertToErrorCodeAndErrorMessage(err error) (code domain.ErrorCode, message string) {
-	if err == nil {
-		return domain.ErrorCodeUnspecified, ""
-	}
-
-	// 错误消息直接使用错误字符串
-	errorMessage := err.Error()
-
-	// 映射错误代码
-	switch {
-	// 参数错误
-	case errors.Is(err, strategy.ErrInvalidParameter):
-		return domain.ErrorCodeInvalidParameter, errorMessage
-	case errors.Is(err, notificationsvc.ErrInvalidParameter):
-		return domain.ErrorCodeInvalidParameter, errorMessage
-
-	// 通知服务错误
-	case errors.Is(err, notificationsvc.ErrCreateNotificationFailed):
-		return domain.ErrorCodeCreateNotificationFailed, errorMessage
-	case errors.Is(err, notificationsvc.ErrNotificationNotFound):
-		return domain.ErrorCodeUnspecified, errorMessage
-
-	// 其他错误
-	default:
-		return domain.ErrorCodeUnspecified, errorMessage
-	}
+	return nil
 }
 
 // SendNotificationAsync 异步单条发送
 func (e *executor) SendNotificationAsync(ctx context.Context, n domain.Notification) (domain.SendResponse, error) {
-	resp := domain.SendResponse{}
+	resp := domain.SendResponse{
+		Status: notificationsvc.SendStatusFailed,
+	}
 
-	if ok := e.isValidateRequest(n, &resp); !ok {
-		return resp, nil
+	// 参数校验
+	if err := e.validateNotification(n); err != nil {
+		return resp, err
+	}
+
+	template, err := e.templateSvc.GetTemplateByID(ctx, n.Notification.Template.ID)
+	if err != nil {
+		e.logger.Warn("异步单条发送通知失败", elog.Any("获取模版失败", err))
+		return resp, fmt.Errorf("%w", ErrSendNotificationFailed)
+	}
+	if !template.HasPublished() {
+		return resp, fmt.Errorf("%w: 模板ID=%d未发布", ErrInvalidParameter, n.Notification.Template.ID)
 	}
 
 	// 生成通知ID
 	id, err := e.idGenerator.NextID()
 	if err != nil {
-		return resp, fmt.Errorf("通知ID生成失败: %w", err)
+		e.logger.Warn("异步单条发送通知失败", elog.Any("通知ID生成失败", err))
+		return resp, fmt.Errorf("%w", ErrSendNotificationFailed)
 	}
 
 	// 创建通知记录
 	n.Notification.ID = id
-	createdNotification, err := e.notificationSvc.Create(ctx, n.Notification)
-	if err != nil {
-		// 直接处理错误
-		resp.Status = notificationsvc.SendStatusFailed
-		resp.ErrorCode, resp.ErrorMessage = e.convertToErrorCodeAndErrorMessage(err)
-		return resp, nil
+
+	// 使用异步接口但要立即发送，修改为延时发送
+	if n.SendStrategyConfig.Type == domain.SendStrategyImmediate {
+		n.SendStrategyConfig.DeadlineTime = time.Now().Add(time.Minute)
 	}
 
-	// 设置响应
-	resp.NotificationID = createdNotification.ID
-	resp.Status = notificationsvc.SendStatusPending
-	return resp, nil
+	// 发送通知
+	notifications := []domain.Notification{n}
+	responses, err := e.sendStrategy.Send(ctx, notifications)
+	// 处理策略错误
+	if err != nil {
+
+		e.logger.Warn("异步单条发送通知失败", elog.Any("Error", err))
+
+		// 对不同类型的错误进行通用包装
+		if errors.Is(err, strategy.ErrInvalidParameter) || errors.Is(err, notificationsvc.ErrInvalidParameter) {
+			return resp, fmt.Errorf("%w: %s", ErrInvalidParameter, err.Error())
+		}
+		// 通用的发送失败错误
+		return resp, fmt.Errorf("%w", ErrSendNotificationFailed)
+	}
+
+	// 从响应获取结果
+	const zero = 0
+	return responses[zero], nil
 }
 
 // BatchSendNotifications 同步批量发送
-func (e *executor) BatchSendNotifications(ctx context.Context, ns ...domain.Notification) (domain.BatchSendResponse, error) {
+func (e *executor) BatchSendNotifications(ctx context.Context, notifications ...domain.Notification) (domain.BatchSendResponse, error) {
 	response := domain.BatchSendResponse{
-		TotalCount: len(ns),
-		Results:    make([]domain.SendResponse, 0, len(ns)),
+		TotalCount: len(notifications),
+		Results:    make([]domain.SendResponse, 0, len(notifications)),
 	}
 
 	// 参数校验
-	if len(ns) == 0 {
-		singleResponse := domain.SendResponse{
-			Status:       notificationsvc.SendStatusFailed,
-			ErrorCode:    domain.ErrorCodeInvalidParameter,
-			ErrorMessage: "通知列表不能为空",
-		}
-		response.Results = append(response.Results, singleResponse)
-		return response, nil
+	if len(notifications) == 0 {
+		return response, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)
 	}
 
-	// 进行批量处理
-	responses, err := e.sendStrategy.Send(ctx, ns)
-	// 处理错误
-	if err != nil {
-		errorResp := domain.SendResponse{
-			Status: notificationsvc.SendStatusFailed,
+	resp := domain.SendResponse{Status: notificationsvc.SendStatusFailed}
+	errMessages := make([]string, 0, len(notifications))
+	for i := range notifications {
+
+		if err := e.validateNotification(notifications[i]); err != nil {
+			response.Results = append(response.Results, resp)
+			errMessages = append(errMessages, err.Error())
 		}
 
-		errorResp.ErrorCode, errorResp.ErrorMessage = e.convertToErrorCodeAndErrorMessage(err)
-
-		// 如果是已知业务错误，为每个通知添加相同的错误响应
-		if errorResp.ErrorCode != domain.ErrorCodeUnspecified || errors.Is(err, strategy.ErrInvalidParameter) {
-			for i := 0; i < len(ns); i++ {
-				response.Results = append(response.Results, errorResp)
-			}
-			return response, nil
-		}
-
-		// 如不是已知业务错误，则为系统错误
-		return response, fmt.Errorf("批量发送通知系统错误: %w", err)
-	}
-
-	// 处理成功响应
-	response.Results = responses
-	for _, result := range responses {
-		if result.Status == notificationsvc.SendStatusSucceeded {
-			response.SuccessCount++
-		}
-	}
-
-	return response, nil
-}
-
-// BatchSendNotificationsAsync 批量异步发送
-func (e *executor) BatchSendNotificationsAsync(ctx context.Context, ns ...domain.Notification) (domain.BatchSendAsyncResponse, error) {
-	response := domain.BatchSendAsyncResponse{
-		NotificationIDs: make([]uint64, 0, len(ns)),
-	}
-
-	// 批量处理每一条通知
-	for i := range ns {
-		result, err := e.SendNotificationAsync(ctx, ns[i])
+		template, err := e.templateSvc.GetTemplateByID(ctx, notifications[i].Notification.Template.ID)
 		if err != nil {
-			// 如果有严重错误，直接返回
-			return response, err
+			e.logger.Warn("同步批量发送通知失败", elog.Any("获取模版失败", err))
+			response.Results = append(response.Results, resp)
 		}
 
-		if result.Status != notificationsvc.SendStatusFailed {
-			response.NotificationIDs = append(response.NotificationIDs, result.NotificationID)
-		} else if response.ErrorMessage == "" {
-			// 记录第一个错误信息
-			response.ErrorCode = result.ErrorCode
-			response.ErrorMessage = result.ErrorMessage
+		if !template.HasPublished() {
+			response.Results = append(response.Results, resp)
+			errMessages = append(errMessages, fmt.Errorf("%w: key = %s, 模板ID=%d未发布", ErrInvalidParameter, notifications[i].Notification.Key, template.ID).Error())
 		}
+
+		// 生成通知ID
+		id, err := e.idGenerator.NextID()
+		if err != nil {
+			e.logger.Warn("同步批量发送通知失败", elog.Any("通知ID生成失败", err))
+			response.Results = append(response.Results, resp)
+		}
+		notifications[i].Notification.ID = id
 	}
 
+	if len(response.Results) != 0 {
+		// 参数错误
+		if len(errMessages) != 0 {
+			return response, fmt.Errorf("%w: 通知列表中有非法通知: %s", ErrInvalidParameter, strings.Join(errMessages, "; "))
+		}
+		// 其他错误
+		return response, fmt.Errorf("%w", ErrSendNotificationFailed)
+	}
+
+	// 发送通知
+	results, err := e.sendStrategy.Send(ctx, notifications)
+	if err != nil {
+
+		e.logger.Warn("同步批量发送通知失败", elog.Any("Error", err))
+
+		// 部分失败
+		response.Results = results
+		for i := range results {
+			if results[i].Status == notificationsvc.SendStatusSucceeded {
+				response.SuccessCount++
+			}
+		}
+
+		// 对不同类型的错误进行通用包装
+		if errors.Is(err, strategy.ErrInvalidParameter) || errors.Is(err, notificationsvc.ErrInvalidParameter) {
+			return response, fmt.Errorf("%w: %s", ErrInvalidParameter, err.Error())
+		}
+
+		// 通用的发送失败错误
+		return response, fmt.Errorf("%w", ErrSendNotificationFailed)
+	}
+
+	// 从响应获取结果
+	response.Results = results
+	response.SuccessCount = len(response.Results)
 	return response, nil
 }
 
-// BatchQueryNotifications 批量查询通知
-func (e *executor) BatchQueryNotifications(ctx context.Context, bizID int64, keys ...string) ([]domain.SendResponse, error) {
-	if len(keys) == 0 {
-		return []domain.SendResponse{}, nil
+// BatchSendNotificationsAsync 异步批量发送
+func (e *executor) BatchSendNotificationsAsync(ctx context.Context, notifications ...domain.Notification) (domain.BatchSendAsyncResponse, error) {
+	response := domain.BatchSendAsyncResponse{
+		NotificationIDs: make([]uint64, 0, len(notifications)),
 	}
 
-	// 通过 Key 查询通知记录
+	// 参数校验
+	if len(notifications) == 0 {
+		return response, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)
+	}
+
+	systemErrCounter := 0
+	errMessages := make([]string, 0, len(notifications))
+	for i := range notifications {
+
+		if err := e.validateNotification(notifications[i]); err != nil {
+			errMessages = append(errMessages, err.Error())
+		}
+
+		template, err := e.templateSvc.GetTemplateByID(ctx, notifications[i].Notification.Template.ID)
+		if err != nil {
+			e.logger.Warn("异步批量发送通知失败", elog.Any("获取模版失败", err))
+			systemErrCounter++
+		}
+
+		if !template.HasPublished() {
+			errMessages = append(errMessages, fmt.Errorf("%w: key = %s, 模板ID=%d未发布",
+				ErrInvalidParameter, notifications[i].Notification.Key, template.ID).Error())
+		}
+
+		// 生成通知ID
+		id, err := e.idGenerator.NextID()
+		if err != nil {
+			e.logger.Warn("异步批量发送通知失败", elog.Any("通知ID生成失败", err))
+			systemErrCounter++
+		}
+
+		notifications[i].Notification.ID = id
+	}
+
+	// 参数错误
+	if len(errMessages) != 0 {
+		return response, fmt.Errorf("%w: 通知列表中有非法通知: %s", ErrInvalidParameter, strings.Join(errMessages, "; "))
+	}
+
+	if systemErrCounter != 0 {
+		return response, fmt.Errorf("%w", ErrSendNotificationFailed)
+	}
+
+	// 发送通知
+	results, err := e.sendStrategy.Send(ctx, notifications)
+	if err != nil {
+
+		e.logger.Warn("异步批量发送通知失败", elog.Any("Error", err))
+
+		// 对不同类型的错误进行通用包装
+		if errors.Is(err, strategy.ErrInvalidParameter) || errors.Is(err, notificationsvc.ErrInvalidParameter) {
+			return response, fmt.Errorf("%w: %s", ErrInvalidParameter, err.Error())
+		}
+
+		// 通用的发送失败错误
+		return response, fmt.Errorf("%w", ErrSendNotificationFailed)
+	}
+
+	// 从响应获取结果
+	for i := range results {
+		response.NotificationIDs[i] = results[i].NotificationID
+	}
+	return response, nil
+}
+
+// QueryNotification 同步单条查询
+func (e *executor) QueryNotification(ctx context.Context, bizID int64, key string) (domain.SendResponse, error) {
+	// 参数校验
+	resp := domain.SendResponse{
+		Status: notificationsvc.SendStatusFailed,
+	}
+
+	if err := e.validateBizID(bizID); err != nil {
+		return resp, err
+	}
+
+	if err := e.validateKey(key); err != nil {
+		return resp, err
+	}
+
+	// 查询通知
+	notifications, err := e.notificationSvc.GetByKeys(ctx, bizID, key)
+	if err != nil {
+		e.logger.Warn("同步单条查询通知失败", elog.Any("Error", err))
+		return resp, fmt.Errorf("%w", ErrQueryNotificationFailed)
+	}
+
+	// 未找到通知
+	if len(notifications) == 0 {
+		return resp, fmt.Errorf("%w: 未找到通知", ErrNotificationNotFound)
+	}
+
+	// 构建响应
+	response := domain.SendResponse{
+		NotificationID: notifications[0].ID,
+		Status:         notifications[0].Status,
+	}
+	return response, nil
+}
+
+// BatchQueryNotifications 同步批量查询
+func (e *executor) BatchQueryNotifications(ctx context.Context, bizID int64, keys ...string) ([]domain.SendResponse, error) {
+	// 参数校验
+	if err := e.validateBizID(bizID); err != nil {
+		return nil, err
+	}
+
+	if len(keys) == 0 {
+		return nil, fmt.Errorf("%w: 业务唯一标识列表不能为空", ErrInvalidParameter)
+	}
+	for i := range keys {
+		if err := e.validateKey(keys[i]); err != nil {
+			return nil, fmt.Errorf("%w: 业务唯一标识列表中不能有空key", ErrInvalidParameter)
+		}
+	}
+
+	// 查询通知
 	notifications, err := e.notificationSvc.GetByKeys(ctx, bizID, keys...)
 	if err != nil {
-		return nil, fmt.Errorf("查询通知记录失败: %w", err)
+		e.logger.Warn("同步批量查询通知失败", elog.Any("Error", err))
+		return nil, fmt.Errorf("%w", ErrQueryNotificationFailed)
 	}
 
-	// 创建一个map用于快速查找
-	notificationMap := make(map[string]notificationsvc.Notification, len(notifications))
+	// 构建响应
+	responses := make([]domain.SendResponse, 0, len(notifications))
 	for i := range notifications {
-		notificationMap[notifications[i].Key] = notifications[i]
-	}
-
-	// 将查询到的Notification转换为SendResponse
-	results := make([]domain.SendResponse, len(keys))
-	for i, key := range keys {
-		if notification, ok := notificationMap[key]; ok {
-			// 找到对应的通知记录
-			results[i] = domain.SendResponse{
-				NotificationID: notification.ID,
-				Status:         notification.Status,
-				ErrorCode:      domain.ErrorCodeUnspecified,
-			}
-		} else {
-			// 未找到对应的通知记录
-			results[i] = domain.SendResponse{
-				Status:       notificationsvc.SendStatusFailed,
-				ErrorCode:    domain.ErrorCodeUnspecified,
-				ErrorMessage: fmt.Sprintf("未找到Key为%s的通知", key),
-			}
+		resp := domain.SendResponse{
+			NotificationID: notifications[i].ID,
+			Status:         notifications[i].Status,
 		}
+		responses = append(responses, resp)
 	}
-
-	return results, nil
-}
-
-// QueryNotification 单条查询通知
-func (e *executor) QueryNotification(ctx context.Context, bizID int64, key string) (domain.SendResponse, error) {
-	// 如果找不到或者key为空，返回空响应
-	if key == "" {
-		return domain.SendResponse{
-			Status:       notificationsvc.SendStatusFailed,
-			ErrorCode:    domain.ErrorCodeInvalidParameter,
-			ErrorMessage: "业务唯一标识不能为空",
-		}, nil
-	}
-
-	// 复用BatchQueryNotifications实现
-	results, err := e.BatchQueryNotifications(ctx, bizID, key)
-	if err != nil {
-		return domain.SendResponse{}, err
-	}
-
-	if len(results) == 0 {
-		return domain.SendResponse{
-			Status:       notificationsvc.SendStatusFailed,
-			ErrorCode:    domain.ErrorCodeUnspecified,
-			ErrorMessage: "未找到通知",
-		}, nil
-	}
-
-	return results[0], nil
+	return responses, nil
 }

@@ -23,7 +23,7 @@ import (
 func InitModule(idGenerator *sonyflake.Sonyflake, notificationSvc notification.Service, configSvc config.Service, providerSvc provider.Service, templateSvc template.Service, smsClients map[string]sms.Client) *Module {
 	notificationSender := sender.NewSender(notificationSvc, configSvc, providerSvc, templateSvc, smsClients)
 	sendStrategy := strategy.NewDispatcher(notificationSvc, notificationSender)
-	executorService := service.NewExecutorService(notificationSvc, idGenerator, sendStrategy)
+	executorService := service.NewExecutorService(templateSvc, notificationSvc, idGenerator, sendStrategy)
 	module := &Module{
 		Svc: executorService,
 	}

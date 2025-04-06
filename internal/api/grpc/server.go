@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	executorsvc "gitee.com/flycash/notification-platform/internal/service/executor"
@@ -52,7 +53,7 @@ func (s *NotificationServer) SendNotification(ctx context.Context, req *notifica
 	}
 
 	// 4. 将结果转换为响应
-	return s.convertToSendResponse(result)
+	return s.convertToSendResponse(result, err)
 }
 
 // SendNotificationAsync 处理异步发送通知请求
@@ -76,11 +77,17 @@ func (s *NotificationServer) SendNotificationAsync(ctx context.Context, req *not
 	}
 
 	// 4. 将结果转换为响应
-	return &notificationv1.SendNotificationAsyncResponse{
+	response := &notificationv1.SendNotificationAsyncResponse{
 		NotificationId: result.NotificationID,
-		ErrorCode:      convertErrorCode(result.ErrorCode),
-		ErrorMessage:   result.ErrorMessage,
-	}, nil
+	}
+
+	// 如果有错误，提取错误代码和消息
+	if err != nil {
+		response.ErrorMessage = err.Error()
+		response.ErrorCode = s.mapErrorToErrorCode(err)
+	}
+
+	return response, nil
 }
 
 // BatchSendNotifications 处理批量同步发送通知请求
@@ -115,7 +122,7 @@ func (s *NotificationServer) BatchSendNotifications(ctx context.Context, req *no
 	}
 
 	for _, r := range result.Results {
-		resp, err := s.convertToSendResponse(r)
+		resp, err := s.convertToSendResponse(r, nil)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "转换响应失败: %v", err)
 		}
@@ -150,9 +157,11 @@ func (s *NotificationServer) BatchSendNotificationsAsync(ctx context.Context, re
 	}
 
 	// 4. 将结果转换为响应
-	return &notificationv1.BatchSendNotificationsAsyncResponse{
+	response := &notificationv1.BatchSendNotificationsAsyncResponse{
 		NotificationIds: result.NotificationIDs,
-	}, nil
+	}
+
+	return response, nil
 }
 
 // BatchQueryNotifications 处理批量查询通知请求
@@ -175,7 +184,7 @@ func (s *NotificationServer) BatchQueryNotifications(ctx context.Context, req *n
 	}
 
 	for _, r := range results {
-		sendResp, err := s.convertToSendResponse(r)
+		sendResp, err := s.convertToSendResponse(r, nil)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "转换响应失败: %v", err)
 		}
@@ -200,7 +209,7 @@ func (s *NotificationServer) QueryNotification(ctx context.Context, req *notific
 	}
 
 	// 3. 将结果转换为响应
-	sendResp, err := s.convertToSendResponse(result)
+	sendResp, err := s.convertToSendResponse(result, err)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "转换响应失败: %v", err)
 	}
@@ -273,6 +282,7 @@ func (s *NotificationServer) convertToNotification(n *notificationv1.Notificatio
 	var scheduledTime time.Time
 	var startTimeMilliseconds int64
 	var endTimeMilliseconds int64
+	var deadlineTime time.Time
 
 	// 处理发送策略
 	if n.Strategy != nil {
@@ -295,6 +305,11 @@ func (s *NotificationServer) convertToNotification(n *notificationv1.Notificatio
 				startTimeMilliseconds = s.TimeWindow.StartTimeMilliseconds
 				endTimeMilliseconds = s.TimeWindow.EndTimeMilliseconds
 			}
+		case *notificationv1.SendStrategy_Deadline:
+			if s.Deadline != nil && s.Deadline.Deadline != nil {
+				sendStrategyType = executorsvc.SendStrategyDeadline
+				deadlineTime = s.Deadline.Deadline.AsTime()
+			}
 		}
 	}
 
@@ -307,6 +322,7 @@ func (s *NotificationServer) convertToNotification(n *notificationv1.Notificatio
 			ScheduledTime:         scheduledTime,
 			StartTimeMilliseconds: startTimeMilliseconds,
 			EndTimeMilliseconds:   endTimeMilliseconds,
+			DeadlineTime:          deadlineTime,
 		},
 	}, nil
 }
@@ -326,14 +342,73 @@ func convertChannel(channel notificationv1.Channel) notificationsvc.Channel {
 }
 
 // convertToSendResponse 将领域响应转换为gRPC响应
-func (s *NotificationServer) convertToSendResponse(result executorsvc.SendResponse) (*notificationv1.SendNotificationResponse, error) {
+func (s *NotificationServer) convertToSendResponse(result executorsvc.SendResponse, err error) (*notificationv1.SendNotificationResponse, error) {
 	response := &notificationv1.SendNotificationResponse{
 		NotificationId: result.NotificationID,
 		Status:         convertSendStatus(result.Status),
-		ErrorCode:      convertErrorCode(result.ErrorCode),
-		ErrorMessage:   result.ErrorMessage,
 	}
+
+	// 如果有错误，提取错误代码和消息
+	if err != nil {
+		response.ErrorMessage = err.Error()
+		response.ErrorCode = s.mapErrorToErrorCode(err)
+
+		// 如果状态不是失败，但有错误，更新状态为失败
+		if response.Status != notificationv1.SendStatus_FAILED {
+			response.Status = notificationv1.SendStatus_FAILED
+		}
+	}
+
 	return response, nil
+}
+
+// mapErrorToErrorCode 将错误映射为gRPC错误代码
+func (s *NotificationServer) mapErrorToErrorCode(err error) notificationv1.ErrorCode {
+	if err == nil {
+		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
+	}
+
+	// 根据错误类型进行匹配
+	switch {
+	case errors.Is(err, executorsvc.ErrInvalidParameter):
+		return notificationv1.ErrorCode_INVALID_PARAMETER
+
+	case errors.Is(err, executorsvc.ErrNotificationNotFound):
+		// 目前我们没有专门的"NotFound"错误码，所以这里暂时使用通用错误码
+		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
+
+	case errors.Is(err, executorsvc.ErrSendNotificationFailed):
+		// 如果是发送失败错误，需要进一步判断具体原因
+		if strings.Contains(err.Error(), "创建通知失败") {
+			return notificationv1.ErrorCode_CREATE_NOTIFICATION_FAILED
+		}
+		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
+
+	case errors.Is(err, executorsvc.ErrQueryNotificationFailed):
+		// 查询失败暂时使用通用错误码
+		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
+
+	default:
+		// 如果无法通过类型匹配，回退到消息内容匹配
+		errorMsg := err.Error()
+
+		switch {
+		case strings.Contains(errorMsg, "频率限制") ||
+			strings.Contains(errorMsg, "rate limit"):
+			return notificationv1.ErrorCode_RATE_LIMITED
+
+		case strings.Contains(errorMsg, "模板未找到") ||
+			strings.Contains(errorMsg, "template not found"):
+			return notificationv1.ErrorCode_TEMPLATE_NOT_FOUND
+
+		case strings.Contains(errorMsg, "渠道被禁用") ||
+			strings.Contains(errorMsg, "channel disabled"):
+			return notificationv1.ErrorCode_CHANNEL_DISABLED
+
+		default:
+			return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
+		}
+	}
 }
 
 // convertSendStatus 将领域发送状态转换为gRPC发送状态
@@ -351,23 +426,5 @@ func convertSendStatus(status notificationsvc.SendStatus) notificationv1.SendSta
 		return notificationv1.SendStatus_FAILED
 	default:
 		return notificationv1.SendStatus_SEND_STATUS_UNSPECIFIED
-	}
-}
-
-// convertErrorCode 将领域错误码转换为gRPC错误码
-func convertErrorCode(code executorsvc.ErrorCode) notificationv1.ErrorCode {
-	switch code {
-	case executorsvc.ErrorCodeInvalidParameter:
-		return notificationv1.ErrorCode_INVALID_PARAMETER
-	case executorsvc.ErrorCodeRateLimited:
-		return notificationv1.ErrorCode_RATE_LIMITED
-	case executorsvc.ErrorCodeTemplateNotFound:
-		return notificationv1.ErrorCode_TEMPLATE_NOT_FOUND
-	case executorsvc.ErrorCodeChannelDisabled:
-		return notificationv1.ErrorCode_CHANNEL_DISABLED
-	case executorsvc.ErrorCodeCreateNotificationFailed:
-		return notificationv1.ErrorCode_CREATE_NOTIFICATION_FAILED
-	default:
-		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
 	}
 }
