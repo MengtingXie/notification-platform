@@ -20,10 +20,6 @@ import (
 	notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/notification/v1"
 )
 
-const (
-	BizIDName = "biz_id"
-)
-
 // NotificationServer 处理通知平台的gRPC请求
 type NotificationServer struct {
 	notificationv1.UnimplementedNotificationServiceServer

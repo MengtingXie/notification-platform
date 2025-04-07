@@ -1,18 +1,28 @@
 package jwt
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 )
 
-type JwtAuth struct {
+var ErrBizIDNotFound = errors.New("biz_id not found")
+
+const BizIDName = "biz_id"
+
+type InterceptorBuilder struct {
 	key string
 }
 
-func (a *JwtAuth) Decode(tokenString string) (jwt.MapClaims, error) {
+func (a *InterceptorBuilder) Decode(tokenString string) (jwt.MapClaims, error) {
 	// 去除可能的 Bearer 前缀（兼容不同客户端实现）
 	tokenString = strings.TrimPrefix(tokenString, "Bearer ")
 
@@ -36,7 +46,7 @@ func (a *JwtAuth) Decode(tokenString string) (jwt.MapClaims, error) {
 }
 
 // Encode 生成 JWT Token，支持自定义声明和自动添加标准声明
-func (a *JwtAuth) Encode(customClaims jwt.MapClaims) (string, error) {
+func (a *InterceptorBuilder) Encode(customClaims jwt.MapClaims) (string, error) {
 	// 合并自定义声明和默认声明
 	claims := jwt.MapClaims{
 		"iat": time.Now().Unix(),
@@ -58,8 +68,45 @@ func (a *JwtAuth) Encode(customClaims jwt.MapClaims) (string, error) {
 	return token.SignedString([]byte(a.key))
 }
 
-func NewJwtAuth(key string) *JwtAuth {
-	return &JwtAuth{
+func (b *InterceptorBuilder) JwtAuthInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		// 1. 提取metadata
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			return nil, status.Error(codes.Unauthenticated, "missing metadata")
+		}
+
+		// 2. 获取Authorization头
+		authHeaders := md.Get("Authorization")
+		if len(authHeaders) == 0 {
+			return nil, status.Error(codes.Unauthenticated, "authorization token is required")
+		}
+
+		// 3. 处理Bearer Token格式
+		tokenStr := authHeaders[0]
+		// 4. 使用现有JwtAuth解码验证
+		val, err := b.Decode(tokenStr)
+		if err != nil {
+			// 细化错误类型处理
+			if errors.Is(err, jwt.ErrTokenExpired) {
+				return nil, status.Error(codes.Unauthenticated, "token expired")
+			}
+			if errors.Is(err, jwt.ErrTokenSignatureInvalid) {
+				return nil, status.Error(codes.Unauthenticated, "invalid signature")
+			}
+			return nil, status.Error(codes.Unauthenticated, "invalid token: "+err.Error())
+		}
+		v, ok := val[BizIDName]
+		if ok {
+			bizId := v.(float64)
+			ctx = context.WithValue(ctx, BizIDName, int64(bizId))
+		}
+		return handler(ctx, req)
+	}
+}
+
+func NewJwtAuth(key string) *InterceptorBuilder {
+	return &InterceptorBuilder{
 		key: key,
 	}
 }
