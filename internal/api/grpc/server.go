@@ -74,7 +74,7 @@ func (s *NotificationServer) TxCancel(ctx context.Context, request *notification
 // SendNotification 处理同步发送通知请求
 func (s *NotificationServer) SendNotification(ctx context.Context, req *notificationv1.SendNotificationRequest) (*notificationv1.SendNotificationResponse, error) {
 	// 1. 从metadata中解析Authorization JWT Token
-	bizID, err := s.extractAndValidateBizID(ctx)
+	bizID, err := jwt.GetBizIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func (s *NotificationServer) SendNotification(ctx context.Context, req *notifica
 // SendNotificationAsync 处理异步发送通知请求
 func (s *NotificationServer) SendNotificationAsync(ctx context.Context, req *notificationv1.SendNotificationAsyncRequest) (*notificationv1.SendNotificationAsyncResponse, error) {
 	// 1. 从metadata中解析Authorization JWT Token
-	bizID, err := s.extractAndValidateBizID(ctx)
+	bizID, err := jwt.GetBizIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func (s *NotificationServer) SendNotificationAsync(ctx context.Context, req *not
 // BatchSendNotifications 处理批量同步发送通知请求
 func (s *NotificationServer) BatchSendNotifications(ctx context.Context, req *notificationv1.BatchSendNotificationsRequest) (*notificationv1.BatchSendNotificationsResponse, error) {
 	// 1. 从metadata中解析Authorization JWT Token
-	bizID, err := s.extractAndValidateBizID(ctx)
+	bizID, err := jwt.GetBizIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +174,7 @@ func (s *NotificationServer) BatchSendNotifications(ctx context.Context, req *no
 // BatchSendNotificationsAsync 处理批量异步发送通知请求
 func (s *NotificationServer) BatchSendNotificationsAsync(ctx context.Context, req *notificationv1.BatchSendNotificationsAsyncRequest) (*notificationv1.BatchSendNotificationsAsyncResponse, error) {
 	// 1. 从metadata中解析Authorization JWT Token
-	bizID, err := s.extractAndValidateBizID(ctx)
+	bizID, err := jwt.GetBizIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +206,7 @@ func (s *NotificationServer) BatchSendNotificationsAsync(ctx context.Context, re
 // BatchQueryNotifications 处理批量查询通知请求
 func (s *NotificationServer) BatchQueryNotifications(ctx context.Context, req *notificationv1.BatchQueryNotificationsRequest) (*notificationv1.BatchQueryNotificationsResponse, error) {
 	// 1. 从metadata中解析Authorization JWT Token
-	bizID, err := s.extractAndValidateBizID(ctx)
+	bizID, err := jwt.GetBizIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +236,7 @@ func (s *NotificationServer) BatchQueryNotifications(ctx context.Context, req *n
 // QueryNotification 处理单条查询通知请求
 func (s *NotificationServer) QueryNotification(ctx context.Context, req *notificationv1.QueryNotificationRequest) (*notificationv1.QueryNotificationResponse, error) {
 	// 1. 从metadata中解析Authorization JWT Token
-	bizID, err := s.extractAndValidateBizID(ctx)
+	bizID, err := jwt.GetBizIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
