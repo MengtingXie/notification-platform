@@ -12,14 +12,12 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func InitModule(db *egorm.Component, cache redis.Cmdable, notificationModule notification.Module, configModule config.Module) *Module {
+func InitModule(db *egorm.Component, cache redis.Cmdable, notificationModule notification.Service, configModule config.Service) *Module {
 	wire.Build(
 		initTables,
 		dao2.NewTxNotificationDAO,
 		repository.NewTxNotificationRepository,
 		InitRetryServiceBuilder,
-		wire.FieldsOf(new(notification.Module), "Svc"),
-		wire.FieldsOf(new(config.Module), "Svc"),
 		InitDlickClient,
 		InitService,
 		wire.Struct(new(Module), "*"),

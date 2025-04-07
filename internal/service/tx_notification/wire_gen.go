@@ -17,18 +17,16 @@ import (
 
 // Injectors from wire.go:
 
-func InitModule(db *egorm.Component, cache redis.Cmdable, notificationModule notification.Module, configModule config.Module) *Module {
+func InitModule(db *egorm.Component, cache redis.Cmdable, notificationModule notification.Service, configModule config.Service) *Module {
 	error2 := initTables(db)
 	txNotificationDAO := dao.NewTxNotificationDAO(db)
 	txNotificationRepository := repository.NewTxNotificationRepository(txNotificationDAO)
-	v := notificationModule.Svc
-	v2 := configModule.Svc
 	builder := InitRetryServiceBuilder()
 	client := InitDlickClient(cache)
-	v3 := InitService(txNotificationRepository, v, v2, builder, client)
+	v := InitService(txNotificationRepository, notificationModule, configModule, builder, client)
 	module := &Module{
 		ignoredInitTablesErr: error2,
-		Svc:                  v3,
+		Svc:                  v,
 	}
 	return module
 }

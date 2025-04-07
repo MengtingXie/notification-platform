@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
+	"gitee.com/flycash/notification-platform/internal/service/adapter/sms"
 	"gitee.com/flycash/notification-platform/internal/service/executor/internal/domain"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
-	"gitee.com/flycash/notification-platform/internal/service/pkg/client/sms"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
 	templatesvc "gitee.com/flycash/notification-platform/internal/service/template"
 )

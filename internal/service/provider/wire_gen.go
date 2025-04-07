@@ -12,12 +12,11 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/provider/internal/service"
 	"github.com/ego-component/egorm"
 	"github.com/google/wire"
-	"gorm.io/gorm"
 )
 
 // Injectors from wire.go:
 
-func InitModule(db *gorm.DB, encrytKey string) Module {
+func InitModule(db *egorm.Component, encrytKey string) Module {
 	error2 := initTables(db)
 	providerDAO := dao.NewProviderDAO(db, encrytKey)
 	providerRepository := repository.NewProviderRepository(providerDAO)

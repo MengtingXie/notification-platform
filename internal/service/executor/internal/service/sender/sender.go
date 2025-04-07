@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"sync"
 
+	"gitee.com/flycash/notification-platform/internal/service/adapter/sms"
 	configsvc "gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/executor/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/executor/internal/service/channel"
 	"gitee.com/flycash/notification-platform/internal/service/executor/internal/service/provider"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
-	"gitee.com/flycash/notification-platform/internal/service/pkg/client/sms"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
 	templatesvc "gitee.com/flycash/notification-platform/internal/service/template"
 	"github.com/gotomicro/ego/core/elog"

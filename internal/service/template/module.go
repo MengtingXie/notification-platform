@@ -11,7 +11,7 @@ type (
 		Svc                  Service
 	}
 
-	Service                 templatesvc.ChannelTemplateService
+	Service                  templatesvc.ChannelTemplateService
 	ChannelTemplateVersion  = domain.ChannelTemplateVersion
 	ChannelTemplateProvider = domain.ChannelTemplateProvider
 	ChannelTemplate         = domain.ChannelTemplate

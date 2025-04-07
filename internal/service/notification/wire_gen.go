@@ -13,12 +13,11 @@ import (
 	"github.com/ego-component/egorm"
 	"github.com/google/wire"
 	"github.com/sony/sonyflake"
-	"gorm.io/gorm"
 )
 
 // Injectors from wire.go:
 
-func InitModule(db *gorm.DB, idGenerator *sonyflake.Sonyflake) Module {
+func InitModule(db *egorm.Component, idGenerator *sonyflake.Sonyflake) Module {
 	error2 := initTables(db)
 	notificationDAO := dao.NewNotificationDAO(db)
 	notificationRepository := repository.NewNotificationRepository(notificationDAO)
