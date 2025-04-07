@@ -3,10 +3,11 @@ package ioc
 import (
 	"context"
 	"database/sql"
+	"time"
+
 	"github.com/ecodeclub/ekit/retry"
 	"github.com/ego-component/egorm"
 	"github.com/gotomicro/ego/core/econf"
-	"time"
 )
 
 func InitDB() *egorm.Component {
@@ -41,4 +42,3 @@ func WaitForDBSetup(dsn string) {
 		time.Sleep(next)
 	}
 }
-

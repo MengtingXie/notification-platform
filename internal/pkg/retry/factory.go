@@ -21,11 +21,9 @@ type Config struct {
 	ExponentialBackoff *ExponentialBackoffConfig `json:"exponentialBackoff"`
 }
 
-type ExponentialBackoffConfig struct {
-}
+type ExponentialBackoffConfig struct{}
 
-type FixedIntervalConfig struct {
-}
+type FixedIntervalConfig struct{}
 
 func NewRetry(cfg Config) retry.Strategy {
 	// 根据 config 中的字段来检测

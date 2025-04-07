@@ -7,8 +7,8 @@ import (
 	"sort"
 	"sync"
 
-	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 	"gitee.com/flycash/notification-platform/internal/service/adapter/sms"
+	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
 	templatesvc "gitee.com/flycash/notification-platform/internal/service/template"
 	"github.com/gotomicro/ego/core/elog"

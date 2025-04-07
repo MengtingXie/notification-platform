@@ -16,7 +16,6 @@ func InitMoudle() *Module {
 // wire.go:
 
 func InitAudit() *Module {
-
 	return &Module{
 		Svc: nil,
 	}

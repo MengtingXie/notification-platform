@@ -1,8 +1,9 @@
 package ioc
 
 import (
-	"github.com/sony/sonyflake"
 	"time"
+
+	"github.com/sony/sonyflake"
 )
 
 func InitIDGenerator() *sonyflake.Sonyflake {

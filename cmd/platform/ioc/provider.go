@@ -14,4 +14,3 @@ func InitProviderEncryptKey() string {
 	}
 	return cfg.Key
 }
-

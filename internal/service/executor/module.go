@@ -6,7 +6,7 @@ import (
 )
 
 type (
-	Service               = service.ExecutorService
+	Service                = service.ExecutorService
 	Notification           = domain.Notification
 	SendStrategyConfig     = domain.SendStrategyConfig
 	SendStrategyType       = domain.SendStrategyType
