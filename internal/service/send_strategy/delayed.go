@@ -3,6 +3,7 @@ package send_strategy
 import (
 	"context"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/errs"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -26,7 +27,7 @@ func (s *DelayedSendStrategy) Send(ctx context.Context, notification domain.Noti
 
 	// 检查延迟参数
 	if notification.SendStrategyConfig.DelaySeconds <= 0 {
-		return domain.SendResponse{}, fmt.Errorf("%w: 延迟发送策略必须指定正数的延迟秒数", ErrInvalidParameter)
+		return domain.SendResponse{}, fmt.Errorf("%w: 延迟发送策略必须指定正数的延迟秒数", errs.ErrInvalidParameter)
 	}
 
 	// 根据发送策略，计算调度窗口
@@ -51,13 +52,13 @@ func (s *DelayedSendStrategy) Send(ctx context.Context, notification domain.Noti
 // BatchSend 批量发送通知，其中每个通知的发送策略必须相同
 func (s *DelayedSendStrategy) BatchSend(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error) {
 	if len(notifications) == 0 {
-		return nil, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)
+		return nil, fmt.Errorf("%w: 通知列表不能为空", errs.ErrInvalidParameter)
 	}
 
 	for i := range notifications {
 		// 检查延迟参数
 		if notifications[i].SendStrategyConfig.DelaySeconds <= 0 {
-			return nil, fmt.Errorf("%w: 延迟发送策略必须指定正数的延迟秒数", ErrInvalidParameter)
+			return nil, fmt.Errorf("%w: 延迟发送策略必须指定正数的延迟秒数", errs.ErrInvalidParameter)
 		}
 
 		// 根据发送策略，计算调度窗口

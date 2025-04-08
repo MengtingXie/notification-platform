@@ -4,17 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/errs"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/notification/retry"
 	"github.com/ecodeclub/ekit/syncx"
 	"github.com/gotomicro/ego/client/egrpc"
-	"github.com/meoying/dlock-go"
-	"time"
-
-	"gitee.com/flycash/notification-platform/internal/service/config"
 	"github.com/gotomicro/ego/core/elog"
+	"github.com/meoying/dlock-go"
 )
 
 var ErrUpdateStatusFailed = errors.New("update status failed")
@@ -89,7 +88,7 @@ func (t *TxNotificationServiceV1) GetNotification(ctx context.Context, bizID int
 func (t *TxNotificationServiceV1) Prepare(ctx context.Context, txNotification domain.TxNotification) (uint64, error) {
 	noti, nerr := t.notificationSvc.Create(ctx, txNotification.Notification)
 	if nerr != nil {
-		if errors.Is(nerr, ErrNotificationDuplicate) {
+		if errors.Is(nerr, errs.ErrNotificationDuplicate) {
 			txn, err := t.repo.GetByBizIDKey(ctx, txNotification.BizID, txNotification.Key)
 			if err != nil {
 				return 0, err
@@ -99,13 +98,13 @@ func (t *TxNotificationServiceV1) Prepare(ctx context.Context, txNotification do
 		return 0, nerr
 	}
 	txNotification.Notification = noti
-	conf, err := t.configSvc.GetByID(ctx, txNotification.BizID)
-	if err == nil {
-		// 找到配置
-		// 这一块，
-		txNotification.NextCheckTime = int64(time.Minute * 30)
-	}
-	_, err = t.repo.Create(ctx, txNotification)
+	//conf, err := t.configSvc.GetByID(ctx, txNotification.BizID)
+	//if err == nil {
+	// 找到配置
+	// 这一块，
+	//txNotification.NextCheckTime = int64(time.Minute * 30)
+	//}
+	_, err := t.repo.Create(ctx, txNotification)
 	return noti.ID, err
 }
 

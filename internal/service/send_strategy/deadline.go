@@ -3,6 +3,7 @@ package send_strategy
 import (
 	"context"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/errs"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -28,7 +29,7 @@ func (s *DeadlineSendStrategy) Send(ctx context.Context, notification domain.Not
 	// 根据发送策略，计算调度窗口
 	deadlineTime := notification.SendStrategyConfig.DeadlineTime
 	if deadlineTime.Before(now) {
-		return domain.SendResponse{}, fmt.Errorf("%w: 截止日期已过期", ErrInvalidParameter)
+		return domain.SendResponse{}, fmt.Errorf("%w: 截止日期已过期", errs.ErrInvalidParameter)
 	}
 
 	// 设置时间窗口: 从现在到截止日期
@@ -51,7 +52,7 @@ func (s *DeadlineSendStrategy) Send(ctx context.Context, notification domain.Not
 // BatchSend 批量发送通知，其中每个通知的发送策略必须相同
 func (s *DeadlineSendStrategy) BatchSend(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error) {
 	if len(notifications) == 0 {
-		return nil, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)
+		return nil, fmt.Errorf("%w: 通知列表不能为空", errs.ErrInvalidParameter)
 	}
 
 	now := time.Now()
@@ -59,7 +60,7 @@ func (s *DeadlineSendStrategy) BatchSend(ctx context.Context, notifications []do
 		// 根据发送策略，计算调度窗口
 		deadlineTime := notifications[i].SendStrategyConfig.DeadlineTime
 		if deadlineTime.Before(now) {
-			return nil, fmt.Errorf("%w: 截止日期已过期", ErrInvalidParameter)
+			return nil, fmt.Errorf("%w: 截止日期已过期", errs.ErrInvalidParameter)
 		}
 
 		// 设置时间窗口: 从现在到截止日期

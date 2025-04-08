@@ -3,6 +3,7 @@ package send_strategy
 import (
 	"context"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/errs"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -26,7 +27,7 @@ func (s *ScheduledSendStrategy) Send(ctx context.Context, notification domain.No
 	// 根据发送策略，计算调度窗口
 	scheduledTime := notification.SendStrategyConfig.ScheduledTime
 	if scheduledTime.Before(time.Now()) {
-		return domain.SendResponse{}, fmt.Errorf("%w: 定时参数已过期", ErrInvalidParameter)
+		return domain.SendResponse{}, fmt.Errorf("%w: 定时参数已过期", errs.ErrInvalidParameter)
 	}
 	notification.ScheduledSTime = scheduledTime.UnixMilli()
 	notification.ScheduledETime = scheduledTime.UnixMilli()
@@ -46,14 +47,14 @@ func (s *ScheduledSendStrategy) Send(ctx context.Context, notification domain.No
 // BatchSend 批量发送通知，其中每个通知的发送策略必须相同
 func (s *ScheduledSendStrategy) BatchSend(ctx context.Context, ns []domain.Notification) ([]domain.SendResponse, error) {
 	if len(ns) == 0 {
-		return nil, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)
+		return nil, fmt.Errorf("%w: 通知列表不能为空", errs.ErrInvalidParameter)
 	}
 
 	for i := range ns {
 		// 根据发送策略，计算调度窗口
 		scheduledTime := ns[i].SendStrategyConfig.ScheduledTime
 		if scheduledTime.Before(time.Now()) {
-			return nil, fmt.Errorf("%w: 定时参数已过期", ErrInvalidParameter)
+			return nil, fmt.Errorf("%w: 定时参数已过期", errs.ErrInvalidParameter)
 		}
 		ns[i].ScheduledSTime = scheduledTime.UnixMilli()
 		ns[i].ScheduledETime = scheduledTime.UnixMilli()

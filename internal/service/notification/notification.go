@@ -4,19 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/errs"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
 
 	"github.com/sony/sonyflake"
-)
-
-var (
-	ErrInvalidParameter             = errors.New("参数非法")
-	ErrNotificationIDGenerateFailed = errors.New("通知ID生成失败")
-	ErrNotificationNotFound         = repository.ErrNotificationNotFound
-	ErrCreateNotificationFailed     = errors.New("创建通知失败")
-	ErrNotificationDuplicate        = repository.ErrNotificationDuplicate
 )
 
 // Service 通知服务接口
@@ -66,7 +59,7 @@ func NewNotificationService(repo repository.NotificationRepository, idGenerator 
 // Create 创建通知
 func (s *notificationService) Create(ctx context.Context, notification domain.Notification) (domain.Notification, error) {
 	if err := notification.Validate(); err != nil {
-		return domain.Notification{}, fmt.Errorf("%w: %w", ErrInvalidParameter, err)
+		return domain.Notification{}, fmt.Errorf("%w: %w", errs.ErrInvalidParameter, err)
 	}
 
 	// 生成ID
@@ -78,10 +71,10 @@ func (s *notificationService) Create(ctx context.Context, notification domain.No
 
 	createdNotification, err := s.repo.Create(ctx, notification)
 	if err != nil {
-		if errors.Is(err, ErrNotificationDuplicate) {
-			return domain.Notification{}, fmt.Errorf("%w", ErrNotificationDuplicate)
+		if errors.Is(err, errs.ErrNotificationDuplicate) {
+			return domain.Notification{}, fmt.Errorf("%w", errs.ErrNotificationDuplicate)
 		}
-		return domain.Notification{}, fmt.Errorf("%w: %w", ErrCreateNotificationFailed, err)
+		return domain.Notification{}, fmt.Errorf("%w: %w", errs.ErrCreateNotificationFailed, err)
 	}
 
 	return createdNotification, nil
@@ -90,7 +83,7 @@ func (s *notificationService) Create(ctx context.Context, notification domain.No
 func (s *notificationService) generateID() (uint64, error) {
 	id, err := s.idGenerator.NextID()
 	if err != nil {
-		return 0, fmt.Errorf("%w", ErrNotificationIDGenerateFailed)
+		return 0, fmt.Errorf("%w", errs.ErrNotificationIDGenerateFailed)
 	}
 	return id, nil
 }
@@ -98,12 +91,12 @@ func (s *notificationService) generateID() (uint64, error) {
 // BatchCreate 批量创建通知记录
 func (s *notificationService) BatchCreate(ctx context.Context, notifications []domain.Notification) ([]domain.Notification, error) {
 	if len(notifications) == 0 {
-		return nil, fmt.Errorf("%w: 通知列表为空", ErrInvalidParameter)
+		return nil, fmt.Errorf("%w: 通知列表为空", errs.ErrInvalidParameter)
 	}
 
 	for i := range notifications {
 		if err := notifications[i].Validate(); err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrInvalidParameter, err)
+			return nil, fmt.Errorf("%w: %w", errs.ErrInvalidParameter, err)
 		}
 	}
 
@@ -118,10 +111,10 @@ func (s *notificationService) BatchCreate(ctx context.Context, notifications []d
 
 	createdNotifications, err := s.repo.BatchCreate(ctx, notifications)
 	if err != nil {
-		if errors.Is(err, ErrNotificationDuplicate) {
-			return nil, fmt.Errorf("%w", ErrNotificationDuplicate)
+		if errors.Is(err, errs.ErrNotificationDuplicate) {
+			return nil, fmt.Errorf("%w", errs.ErrNotificationDuplicate)
 		}
-		return nil, fmt.Errorf("%w: %w", ErrCreateNotificationFailed, err)
+		return nil, fmt.Errorf("%w: %w", errs.ErrCreateNotificationFailed, err)
 	}
 
 	return createdNotifications, nil
@@ -132,7 +125,7 @@ func (s *notificationService) GetByID(ctx context.Context, id uint64) (domain.No
 	notification, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotificationNotFound) {
-			return domain.Notification{}, fmt.Errorf("%w: id=%d", ErrNotificationNotFound, id)
+			return domain.Notification{}, fmt.Errorf("%w: id=%d", errs.ErrNotificationNotFound, id)
 		}
 		return domain.Notification{}, fmt.Errorf("获取通知失败: %w", err)
 	}
@@ -155,7 +148,7 @@ func (s *notificationService) GetByBizID(ctx context.Context, bizID int64) ([]do
 // GetByKeys 根据业务ID和业务内唯一标识获取通知列表
 func (s *notificationService) GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]domain.Notification, error) {
 	if len(keys) == 0 {
-		return nil, fmt.Errorf("%w: 业务内唯一标识列表空", ErrInvalidParameter)
+		return nil, fmt.Errorf("%w: 业务内唯一标识列表空", errs.ErrInvalidParameter)
 	}
 
 	notifications, err := s.repo.GetByKeys(ctx, bizID, keys...)
@@ -181,7 +174,7 @@ func (s *notificationService) BatchUpdateStatus(ctx context.Context, ids []uint6
 // BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
 func (s *notificationService) BatchUpdateStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error {
 	if len(succeededNotifications) == 0 && len(failedNotifications) == 0 {
-		return fmt.Errorf("%w: 成功和失败的通知ID列表不能同时为空", ErrInvalidParameter)
+		return fmt.Errorf("%w: 成功和失败的通知ID列表不能同时为空", errs.ErrInvalidParameter)
 	}
 
 	// 批量更新状态

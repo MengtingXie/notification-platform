@@ -2,17 +2,11 @@ package send_strategy
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/errs"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
-)
-
-// 定义统一的错误类型
-var (
-	// ErrInvalidParameter 表示参数错误
-	ErrInvalidParameter = errors.New("参数错误")
 )
 
 // SendStrategy 发送策略接口
@@ -45,7 +39,7 @@ func (d *Dispatcher) Send(ctx context.Context, notification domain.Notification)
 	// 获取策略
 	strategy, ok := d.strategies[notification.SendStrategyConfig.Type]
 	if !ok {
-		return domain.SendResponse{}, fmt.Errorf("%w: 无效的发送策略 %s", ErrInvalidParameter, notification.SendStrategyConfig.Type)
+		return domain.SendResponse{}, fmt.Errorf("%w: 无效的发送策略 %s", errs.ErrInvalidParameter, notification.SendStrategyConfig.Type)
 	}
 	// 执行发送
 	return strategy.Send(ctx, notification)
@@ -54,7 +48,7 @@ func (d *Dispatcher) Send(ctx context.Context, notification domain.Notification)
 // BatchSend 批量发送通知
 func (d *Dispatcher) BatchSend(ctx context.Context, ns []domain.Notification) ([]domain.SendResponse, error) {
 	if len(ns) == 0 {
-		return nil, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)
+		return nil, fmt.Errorf("%w: 通知列表不能为空", errs.ErrInvalidParameter)
 	}
 
 	const first = 0
@@ -63,7 +57,7 @@ func (d *Dispatcher) BatchSend(ctx context.Context, ns []domain.Notification) ([
 	// 获取策略
 	strategy, ok := d.strategies[strategyType]
 	if !ok {
-		return nil, fmt.Errorf("%w: 无效的发送策略 %s", ErrInvalidParameter, strategyType)
+		return nil, fmt.Errorf("%w: 无效的发送策略 %s", errs.ErrInvalidParameter, strategyType)
 	}
 
 	// 执行发送

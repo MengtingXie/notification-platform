@@ -3,6 +3,7 @@ package send_strategy
 import (
 	"context"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/errs"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -29,11 +30,11 @@ func (s *TimeWindowSendStrategy) Send(ctx context.Context, notification domain.N
 	endTime := notification.SendStrategyConfig.EndTimeMilliseconds
 
 	if startTime <= 0 || startTime >= endTime {
-		return domain.SendResponse{}, fmt.Errorf("%w: 时间窗口开始时间应该大于0且小于结束时间", ErrInvalidParameter)
+		return domain.SendResponse{}, fmt.Errorf("%w: 时间窗口开始时间应该大于0且小于结束时间", errs.ErrInvalidParameter)
 	}
 
 	if endTime <= now {
-		return domain.SendResponse{}, fmt.Errorf("%w: 时间窗口结束时间应该大于当前时间", ErrInvalidParameter)
+		return domain.SendResponse{}, fmt.Errorf("%w: 时间窗口结束时间应该大于当前时间", errs.ErrInvalidParameter)
 	}
 
 	notification.ScheduledSTime = startTime
@@ -54,7 +55,7 @@ func (s *TimeWindowSendStrategy) Send(ctx context.Context, notification domain.N
 // BatchSend 批量发送通知，其中每个通知的发送策略必须相同
 func (s *TimeWindowSendStrategy) BatchSend(ctx context.Context, ns []domain.Notification) ([]domain.SendResponse, error) {
 	if len(ns) == 0 {
-		return nil, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)
+		return nil, fmt.Errorf("%w: 通知列表不能为空", errs.ErrInvalidParameter)
 	}
 
 	// 校验时间窗口
@@ -65,11 +66,11 @@ func (s *TimeWindowSendStrategy) BatchSend(ctx context.Context, ns []domain.Noti
 		endTime := ns[i].SendStrategyConfig.EndTimeMilliseconds
 
 		if startTime <= 0 || startTime >= endTime {
-			return nil, fmt.Errorf("%w: 时间窗口开始时间应该大于0且小于结束时间", ErrInvalidParameter)
+			return nil, fmt.Errorf("%w: 时间窗口开始时间应该大于0且小于结束时间", errs.ErrInvalidParameter)
 		}
 
 		if endTime <= now {
-			return nil, fmt.Errorf("%w: 时间窗口结束时间应该大于当前时间", ErrInvalidParameter)
+			return nil, fmt.Errorf("%w: 时间窗口结束时间应该大于当前时间", errs.ErrInvalidParameter)
 		}
 
 		ns[i].ScheduledSTime = startTime

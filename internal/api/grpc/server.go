@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/errs"
 	"strconv"
 	"strings"
 	"time"
@@ -23,14 +24,14 @@ import (
 type NotificationServer struct {
 	notificationv1.UnimplementedNotificationServiceServer
 	notificationv1.UnimplementedNotificationQueryServiceServer
-	executor        notificationsvc.ExecutorService
+	executor        notificationsvc.SendService
 	notificationSvc notificationsvc.Service
 	// TODO: 配置服务 configService config.ConfigService
 	txnSvc notificationsvc.TxNotificationService
 }
 
 // NewServer 创建通知平台gRPC服务器
-func NewServer(executor notificationsvc.ExecutorService, txnSvc notificationsvc.TxNotificationService) *NotificationServer {
+func NewServer(executor notificationsvc.SendService, txnSvc notificationsvc.TxNotificationService) *NotificationServer {
 	return &NotificationServer{
 		executor: executor,
 		txnSvc:   txnSvc,
@@ -404,21 +405,21 @@ func (s *NotificationServer) mapErrorToErrorCode(err error) notificationv1.Error
 	}
 	// 根据错误类型进行匹配
 	switch {
-	case errors.Is(err, notificationsvc.ErrInvalidParameter):
+	case errors.Is(err, errs.ErrInvalidParameter):
 		return notificationv1.ErrorCode_INVALID_PARAMETER
 
-	case errors.Is(err, notificationsvc.ErrNotificationNotFound):
+	case errors.Is(err, errs.ErrNotificationNotFound):
 		// 目前我们没有专门的"NotFound"错误码，所以这里暂时使用通用错误码
 		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
 
-	case errors.Is(err, notificationsvc.ErrSendNotificationFailed):
+	case errors.Is(err, errs.ErrSendNotificationFailed):
 		// 如果是发送失败错误，需要进一步判断具体原因
 		if strings.Contains(err.Error(), "创建通知失败") {
 			return notificationv1.ErrorCode_CREATE_NOTIFICATION_FAILED
 		}
 		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
 
-	case errors.Is(err, notificationsvc.ErrNotificationNotFound):
+	case errors.Is(err, errs.ErrNotificationNotFound):
 		// 查询失败暂时使用通用错误码
 		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
 	default:
