@@ -3,6 +3,7 @@ package notification
 import (
 	"context"
 	"errors"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/config"

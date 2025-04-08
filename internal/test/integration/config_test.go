@@ -2,13 +2,14 @@ package integration
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/test/ioc"
-	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 

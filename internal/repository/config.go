@@ -64,12 +64,12 @@ func (b *businessConfigRepository) SaveConfig(ctx context.Context, config domain
 
 func (b *businessConfigRepository) toDomain(daoConfig dao.BusinessConfig) domain.BusinessConfig {
 	domainCfg := domain.BusinessConfig{
-		ID:            daoConfig.ID,
-		OwnerID:       daoConfig.OwnerID,
-		OwnerType:     daoConfig.OwnerType,
-		RateLimit:     daoConfig.RateLimit,
-		Ctime:         daoConfig.Ctime,
-		Utime:         daoConfig.Utime,
+		ID:        daoConfig.ID,
+		OwnerID:   daoConfig.OwnerID,
+		OwnerType: daoConfig.OwnerType,
+		RateLimit: daoConfig.RateLimit,
+		Ctime:     daoConfig.Ctime,
+		Utime:     daoConfig.Utime,
 	}
 	if daoConfig.ChannelConfig.Valid {
 		domainCfg.ChannelConfig = unmarsal[domain.ChannelConfig](daoConfig.ChannelConfig.String)
@@ -86,7 +86,7 @@ func (b *businessConfigRepository) toDomain(daoConfig dao.BusinessConfig) domain
 	return domainCfg
 }
 
-func (b *businessConfigRepository)toEntity(config domain.BusinessConfig) dao.BusinessConfig{
+func (b *businessConfigRepository) toEntity(config domain.BusinessConfig) dao.BusinessConfig {
 	daoConfig := dao.BusinessConfig{
 		ID:        config.ID,
 		OwnerID:   config.OwnerID,
@@ -96,7 +96,7 @@ func (b *businessConfigRepository)toEntity(config domain.BusinessConfig) dao.Bus
 		Utime:     config.Utime,
 	}
 	if config.ChannelConfig != nil {
-		daoConfig .ChannelConfig= marshal(config.ChannelConfig)
+		daoConfig.ChannelConfig = marshal(config.ChannelConfig)
 	}
 	if config.RetryPolicy != nil {
 		daoConfig.RetryPolicy = marshal(config.RetryPolicy)
@@ -110,8 +110,8 @@ func (b *businessConfigRepository)toEntity(config domain.BusinessConfig) dao.Bus
 	return daoConfig
 }
 
-func marshal(v any)sql.NullString {
-	byteV,_ := json.Marshal(v)
+func marshal(v any) sql.NullString {
+	byteV, _ := json.Marshal(v)
 	return sql.NullString{
 		String: string(byteV),
 		Valid:  true,

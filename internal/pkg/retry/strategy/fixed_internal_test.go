@@ -26,7 +26,6 @@ import (
 )
 
 func TestFixedIntervalRetryStrategy_Next(t *testing.T) {
-
 	testCases := []struct {
 		name     string
 		ctx      context.Context

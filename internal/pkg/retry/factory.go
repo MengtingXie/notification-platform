@@ -16,12 +16,11 @@ package retry
 
 import (
 	"fmt"
+	"time"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"github.com/ecodeclub/ekit/retry"
-	"time"
 )
-
-
 
 func NewRetry(cfg domain.RetryConfig) (retry.Strategy, error) {
 	// 根据 config 中的字段来检测
@@ -33,7 +32,6 @@ func NewRetry(cfg domain.RetryConfig) (retry.Strategy, error) {
 	default:
 		return nil, fmt.Errorf("unknown retry type: %s", cfg.Type)
 	}
-
 }
 
 func msToDuration(ms int) time.Duration {
