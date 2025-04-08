@@ -1,4 +1,4 @@
-package strategy
+package send_strategy
 
 import (
 	"context"
@@ -24,8 +24,8 @@ func newImmediateStrategy(repo repository.NotificationRepository, sender sender.
 	}
 }
 
-// Send 立即发送通知
-func (s *ImmediateSendStrategy) Send(ctx context.Context, ns []domain.Notification) ([]domain.SendResponse, error) {
+// BatchSend 立即发送通知
+func (s *ImmediateSendStrategy) BatchSend(ctx context.Context, ns []domain.Notification) ([]domain.SendResponse, error) {
 	if len(ns) == 0 {
 		return nil, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)
 	}
@@ -41,7 +41,7 @@ func (s *ImmediateSendStrategy) Send(ctx context.Context, ns []domain.Notificati
 	createdNotifications, err := s.repo.BatchCreate(ctx, ns)
 	if err == nil {
 		// 立即发送
-		return s.sender.Send(ctx, createdNotifications)
+		return s.sender.BatchSend(ctx, createdNotifications)
 	}
 
 	// 批量操作直接返回错误
@@ -81,5 +81,5 @@ func (s *ImmediateSendStrategy) Send(ctx context.Context, ns []domain.Notificati
 	}
 
 	// 再次立即发送
-	return s.sender.Send(ctx, createdNotifications)
+	return s.sender.BatchSend(ctx, createdNotifications)
 }

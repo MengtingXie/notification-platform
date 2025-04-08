@@ -117,7 +117,7 @@ message Notification {
   // 业务方某个业务内部的唯一标识
   string key = 1;
   // 接收者标识(可以是用户ID、邮箱、手机号等)
-  string receiver = 2;
+  repeated string receivers = 2;
   // 发送渠道
   Channel channel = 3;
   // 模板ID

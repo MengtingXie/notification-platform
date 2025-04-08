@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/service/notification/strategy"
+	"gitee.com/flycash/notification-platform/internal/service/strategy"
 	"gitee.com/flycash/notification-platform/internal/service/template"
 	"strings"
 	"time"
@@ -43,12 +43,12 @@ type executor struct {
 	notificationSvc NotificationService
 	templateSvc     template.ChannelTemplateService
 	idGenerator     *sonyflake.Sonyflake
-	sendStrategy    strategy.SendStrategy
+	sendStrategy    send_strategy.SendStrategy
 	logger          *elog.Component
 }
 
 // NewExecutorService 创建执行器实例
-func NewExecutorService(templateSvc template.ChannelTemplateService, notificationSvc NotificationService, idGenerator *sonyflake.Sonyflake, sendStrategy strategy.SendStrategy) ExecutorService {
+func NewExecutorService(templateSvc template.ChannelTemplateService, notificationSvc NotificationService, idGenerator *sonyflake.Sonyflake, sendStrategy send_strategy.SendStrategy) ExecutorService {
 	return &executor{
 		notificationSvc: notificationSvc,
 		templateSvc:     templateSvc,
@@ -96,7 +96,7 @@ func (e *executor) SendNotification(ctx context.Context, n domain.Notification) 
 		e.logger.Warn("同步单条发送通知失败", elog.Any("Error", err))
 
 		// 对不同类型的错误进行通用包装
-		if errors.Is(err, strategy.ErrInvalidParameter) || errors.Is(err, ErrInvalidParameter) {
+		if errors.Is(err, send_strategy.ErrInvalidParameter) || errors.Is(err, ErrInvalidParameter) {
 			return resp, fmt.Errorf("%w: %s", ErrInvalidParameter, err.Error())
 		}
 		// 通用的发送失败错误
@@ -222,7 +222,7 @@ func (e *executor) SendNotificationAsync(ctx context.Context, n domain.Notificat
 		e.logger.Warn("异步单条发送通知失败", elog.Any("Error", err))
 
 		// 对不同类型的错误进行通用包装
-		if errors.Is(err, strategy.ErrInvalidParameter) || errors.Is(err, ErrInvalidParameter) {
+		if errors.Is(err, send_strategy.ErrInvalidParameter) || errors.Is(err, ErrInvalidParameter) {
 			return resp, fmt.Errorf("%w: %s", ErrInvalidParameter, err.Error())
 		}
 		// 通用的发送失败错误
@@ -299,7 +299,7 @@ func (e *executor) BatchSendNotifications(ctx context.Context, notifications ...
 		}
 
 		// 对不同类型的错误进行通用包装
-		if errors.Is(err, strategy.ErrInvalidParameter) || errors.Is(err, ErrInvalidParameter) {
+		if errors.Is(err, send_strategy.ErrInvalidParameter) || errors.Is(err, ErrInvalidParameter) {
 			return response, fmt.Errorf("%w: %s", ErrInvalidParameter, err.Error())
 		}
 
@@ -369,7 +369,7 @@ func (e *executor) BatchSendNotificationsAsync(ctx context.Context, notification
 		e.logger.Warn("异步批量发送通知失败", elog.Any("Error", err))
 
 		// 对不同类型的错误进行通用包装
-		if errors.Is(err, strategy.ErrInvalidParameter) || errors.Is(err, ErrInvalidParameter) {
+		if errors.Is(err, send_strategy.ErrInvalidParameter) || errors.Is(err, ErrInvalidParameter) {
 			return response, fmt.Errorf("%w: %s", ErrInvalidParameter, err.Error())
 		}
 

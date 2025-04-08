@@ -21,15 +21,16 @@ var (
 // NotificationSender 通知发送接口
 type NotificationSender interface {
 	// Send 发送一批通知，返回发送结果
-	Send(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error)
+	BatchSend(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error)
+	Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error)
 }
 
 // sender 通知发送器实现
 type sender struct {
-	repo              repository.NotificationRepository
-	configSvc         configsvc.BusinessConfigService
-	channelDispatcher channel.Channel
-	logger            *elog.Component
+	repo      repository.NotificationRepository
+	configSvc configsvc.BusinessConfigService
+	channel   channel.Channel
+	logger    *elog.Component
 }
 
 // NewSender 创建通知发送器
@@ -40,34 +41,22 @@ func NewSender(
 ) NotificationSender {
 
 	return &sender{
-		configSvc:         configSvc,
-		repo:              repo,
-		channelDispatcher: channelDispatcher,
-		logger:            elog.DefaultLogger,
+		configSvc: configSvc,
+		repo:      repo,
+		channel:   channelDispatcher,
+		logger:    elog.DefaultLogger,
 	}
 }
 
 // Send 批量发送通知
-func (d *sender) Send(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error) {
+func (d *sender) Send(ctx context.Context, notifications domain.Notification) (domain.SendResponse, error) {
+	panic("implement me")
+}
+
+// BatchSend 批量发送通知
+func (d *sender) BatchSend(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error) {
 	if len(notifications) == 0 {
 		return nil, nil
-	}
-
-	// 获取业务配置
-	bizID := notifications[0].BizID
-	bizConfig, err := d.configSvc.GetByID(ctx, bizID)
-	if err != nil {
-		return nil, fmt.Errorf("获取业务配置失败: %w", err)
-	}
-
-	// 检查速率限制
-	if d.isRateLimited(bizConfig, len(notifications)) {
-		return nil, fmt.Errorf("%w", ErrRateLimited)
-	}
-
-	// 检查配额
-	if d.isQuotaExceeded(bizConfig, notifications) {
-		return nil, fmt.Errorf("%w", ErrQuotaExceeded)
 	}
 
 	// 并发发送通知
@@ -75,15 +64,13 @@ func (d *sender) Send(ctx context.Context, notifications []domain.Notification) 
 	var succeed, failed []domain.SendResponse
 
 	var wg sync.WaitGroup
+	wg.Add(len(notifications))
 	for i := range notifications {
-		wg.Add(1)
-
 		n := notifications[i]
-
 		go func() {
 			defer wg.Done()
 
-			response, err1 := d.channelDispatcher.Send(ctx, n)
+			response, err1 := d.channel.Send(ctx, n)
 			if err1 != nil {
 				resp := domain.SendResponse{
 					NotificationID: n.ID,

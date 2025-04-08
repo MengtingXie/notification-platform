@@ -64,7 +64,7 @@ type Notification struct {
 	ID                uint64 `gorm:"primaryKey;comment:'雪花算法ID'"`
 	BizID             int64  `gorm:"type:BIGINT;NOT NULL;index:idx_biz_id_status,priority:1;uniqueIndex:idx_biz_id_key,priority:1;comment:'业务配表ID，业务方可能有多个业务每个业务配置不同'"`
 	Key               string `gorm:"type:VARCHAR(256);NOT NULL;uniqueIndex:idx_biz_id_key,priority:2;comment:'业务内唯一标识，区分同一个业务内的不同通知'"`
-	Receiver          string `gorm:"type:VARCHAR(256);NOT NULL;comment:'接收者(手机/邮箱/用户ID)'"`
+	Receivers         string `gorm:"type:TEXT;NOT NULL;comment:'接收者(手机/邮箱/用户ID)，JSON数组'"`
 	Channel           string `gorm:"type:ENUM('SMS','EMAIL','IN_APP');NOT NULL;comment:'发送渠道'"`
 	TemplateID        int64  `gorm:"type:BIGINT;NOT NULL;comment:'模板ID'"`
 	TemplateVersionID int64  `gorm:"type:BIGINT;NOT NULL;comment:'模板版本ID'"`

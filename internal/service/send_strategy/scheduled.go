@@ -1,4 +1,4 @@
-package strategy
+package send_strategy
 
 import (
 	"context"
@@ -21,7 +21,7 @@ func newScheduledStrategy(repo repository.NotificationRepository) *ScheduledSend
 }
 
 // Send 定时发送通知
-func (s *ScheduledSendStrategy) Send(ctx context.Context, ns []domain.Notification) ([]domain.SendResponse, error) {
+func (s *ScheduledSendStrategy) BatchSend(ctx context.Context, ns []domain.Notification) ([]domain.SendResponse, error) {
 	if len(ns) == 0 {
 		return nil, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)
 	}

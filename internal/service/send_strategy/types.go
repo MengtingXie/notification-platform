@@ -1,4 +1,4 @@
-package strategy
+package send_strategy
 
 import (
 	"context"
@@ -17,7 +17,7 @@ var (
 // SendStrategy 发送策略接口
 type SendStrategy interface {
 	// Send 发送通知
-	Send(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error)
+	BatchSend(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error)
 }
 
 // Dispatcher 通知发送分发器
@@ -37,9 +37,9 @@ func NewDispatcher(
 	}
 }
 
-// Send 发送通知
+// BatchSend 发送通知
 // 根据通知中指定的策略类型选择合适的发送策略
-func (d *Dispatcher) Send(ctx context.Context, ns []domain.Notification) ([]domain.SendResponse, error) {
+func (d *Dispatcher) BatchSend(ctx context.Context, ns []domain.Notification) ([]domain.SendResponse, error) {
 	if len(ns) == 0 {
 		return nil, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)
 	}
@@ -54,5 +54,5 @@ func (d *Dispatcher) Send(ctx context.Context, ns []domain.Notification) ([]doma
 	}
 
 	// 执行发送
-	return strategy.Send(ctx, ns)
+	return strategy.BatchSend(ctx, ns)
 }

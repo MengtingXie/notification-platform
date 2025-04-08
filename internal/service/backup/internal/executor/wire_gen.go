@@ -10,10 +10,10 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
-	"gitee.com/flycash/notification-platform/internal/service/notification/strategy"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
+	"gitee.com/flycash/notification-platform/internal/service/strategy"
 	"github.com/sony/sonyflake"
 )
 
@@ -21,7 +21,7 @@ import (
 
 func InitModule(idGenerator *sonyflake.Sonyflake, notificationSvc notification.Service, configSvc config.Service, providerSvc provider.Service, templateSvc template.Service, smsClients map[string]sms.Client) *Module {
 	notificationSender := sender.NewSender(notificationSvc, configSvc, providerSvc, templateSvc, smsClients)
-	sendStrategy := strategy.NewDispatcher(notificationSvc, notificationSender)
+	sendStrategy := send_strategy.NewDispatcher(notificationSvc, notificationSender)
 	executorService := notification.NewExecutorService(templateSvc, notificationSvc, idGenerator, sendStrategy)
 	module := &Module{
 		Svc: executorService,

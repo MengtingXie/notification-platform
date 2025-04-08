@@ -121,7 +121,7 @@ func (s *scheduler) processPendingNotifications() {
 
 	// 对每个业务分组单独处理
 	for _, group := range bizGroups {
-		_, err := s.sender.Send(ctx, group)
+		_, err := s.sender.BatchSend(ctx, group)
 		if err != nil {
 			fmt.Printf("发送通知组失败: %v\n", err)
 			// 继续处理其他组

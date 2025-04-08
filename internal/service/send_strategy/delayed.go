@@ -1,4 +1,4 @@
-package strategy
+package send_strategy
 
 import (
 	"context"
@@ -21,7 +21,7 @@ func newDelayedStrategy(repo repository.NotificationRepository) *DelayedSendStra
 }
 
 // Send 延迟发送通知
-func (s *DelayedSendStrategy) Send(ctx context.Context, ns []domain.Notification) ([]domain.SendResponse, error) {
+func (s *DelayedSendStrategy) BatchSend(ctx context.Context, ns []domain.Notification) ([]domain.SendResponse, error) {
 	if len(ns) == 0 {
 		return nil, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)
 	}

@@ -121,7 +121,7 @@ func (c *MockClientQueryTemplateStatusCall) DoAndReturn(f func(sms.QueryTemplate
 // Send mocks base method.
 func (m *MockClient) Send(req sms.SendReq) (sms.SendResp, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Send", req)
+	ret := m.ctrl.Call(m, "BatchSend", req)
 	ret0, _ := ret[0].(sms.SendResp)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
@@ -130,7 +130,7 @@ func (m *MockClient) Send(req sms.SendReq) (sms.SendResp, error) {
 // Send indicates an expected call of Send.
 func (mr *MockClientMockRecorder) Send(req any) *MockClientSendCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Send", reflect.TypeOf((*MockClient)(nil).Send), req)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchSend", reflect.TypeOf((*MockClient)(nil).Send), req)
 	return &MockClientSendCall{Call: call}
 }
 

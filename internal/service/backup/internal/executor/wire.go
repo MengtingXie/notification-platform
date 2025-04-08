@@ -6,10 +6,10 @@ import (
 	templatesvc "gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
 	configsvc "gitee.com/flycash/notification-platform/internal/service/config"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
-	"gitee.com/flycash/notification-platform/internal/service/notification/strategy"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
+	"gitee.com/flycash/notification-platform/internal/service/strategy"
 	"github.com/google/wire"
 	"github.com/sony/sonyflake"
 )
@@ -24,7 +24,7 @@ func InitModule(
 ) *Module {
 	wire.Build(
 		sender.NewSender,
-		strategy.NewDispatcher,
+		send_strategy.NewDispatcher,
 		notificationsvc.NewExecutorService,
 		wire.Struct(new(Module), "*"),
 	)
