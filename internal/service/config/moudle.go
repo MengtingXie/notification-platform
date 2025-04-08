@@ -1,7 +1,7 @@
 package config
 
 import (
-	"gitee.com/flycash/notification-platform/internal/service/config/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/service"
 )
 

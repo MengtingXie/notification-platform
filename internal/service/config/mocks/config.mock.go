@@ -11,9 +11,9 @@ package configmocks
 
 import (
 	context "context"
+	"gitee.com/flycash/notification-platform/internal/domain"
 	reflect "reflect"
 
-	domain "gitee.com/flycash/notification-platform/internal/service/config/internal/domain"
 	gomock "go.uber.org/mock/gomock"
 )
 

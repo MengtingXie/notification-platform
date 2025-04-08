@@ -10,9 +10,9 @@
 package smsmocks
 
 import (
+	"gitee.com/flycash/notification-platform/internal/service/adapter/sms"
 	reflect "reflect"
 
-	sms "gitee.com/flycash/notification-platform/internal/service/adapter/sms"
 	gomock "go.uber.org/mock/gomock"
 )
 

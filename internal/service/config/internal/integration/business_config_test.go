@@ -4,10 +4,10 @@ package integration
 
 import (
 	"context"
+	"gitee.com/flycash/notification-platform/internal/domain"
 	"testing"
 	"time"
 
-	"gitee.com/flycash/notification-platform/internal/service/config/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/integration/startup"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/service"
 	"github.com/stretchr/testify/require"

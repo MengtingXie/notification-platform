@@ -9,12 +9,12 @@ package ioc
 import (
 	"gitee.com/flycash/notification-platform/internal/api/grpc"
 	"gitee.com/flycash/notification-platform/internal/service/audit"
+	"gitee.com/flycash/notification-platform/internal/service/backup/executor"
+	"gitee.com/flycash/notification-platform/internal/service/backup/tx_notification"
 	"gitee.com/flycash/notification-platform/internal/service/config"
-	"gitee.com/flycash/notification-platform/internal/service/executor"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
 	"gitee.com/flycash/notification-platform/internal/service/template"
-	"gitee.com/flycash/notification-platform/internal/service/tx_notification"
 	"github.com/google/wire"
 )
 
@@ -38,7 +38,7 @@ func InitGrpcServer() *App {
 	executorModule := executor.InitModule(sonyflake, service, configService, providerService, templateService, v2)
 	v3 := executorModule.Svc
 	cmdable := InitRedis()
-	txnotificationModule := txnotification.InitModule(v, cmdable, service, configService)
+	txnotificationModule := txnotification.txnotification.InitModule(v, cmdable, service, configService)
 	v4 := txnotificationModule.Svc
 	notificationServer := grpc.NewServer(v3, v4)
 	component := InitEtcdClient()

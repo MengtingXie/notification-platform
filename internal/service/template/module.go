@@ -1,8 +1,7 @@
 package template
 
 import (
-	"gitee.com/flycash/notification-platform/internal/service/template/internal/domain"
-	templatesvc "gitee.com/flycash/notification-platform/internal/service/template/internal/service"
+	"gitee.com/flycash/notification-platform/internal/domain"
 )
 
 type (
@@ -11,7 +10,7 @@ type (
 		Svc                  Service
 	}
 
-	Service                 templatesvc.ChannelTemplateService
+	Service                 ChannelTemplateService
 	ChannelTemplateVersion  = domain.ChannelTemplateVersion
 	ChannelTemplateProvider = domain.ChannelTemplateProvider
 	ChannelTemplate         = domain.ChannelTemplate

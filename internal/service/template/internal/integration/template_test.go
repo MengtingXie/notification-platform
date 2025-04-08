@@ -5,6 +5,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/domain"
 	"testing"
 	"time"
 
@@ -12,9 +13,7 @@ import (
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
 	providermocks "gitee.com/flycash/notification-platform/internal/service/provider/mocks"
 	templatesvc "gitee.com/flycash/notification-platform/internal/service/template"
-	"gitee.com/flycash/notification-platform/internal/service/template/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/template/internal/integration/startup"
-	"gitee.com/flycash/notification-platform/internal/service/template/internal/service"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/ego-component/egorm"
 	"github.com/stretchr/testify/assert"
@@ -423,7 +422,7 @@ func (s *TemplateServiceTestSuite) TestCreateTemplateFailed() {
 				return t
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, templatesvc.ErrInvalidParameter)
 			},
 		},
 		{
@@ -434,7 +433,7 @@ func (s *TemplateServiceTestSuite) TestCreateTemplateFailed() {
 				return t
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, templatesvc.ErrInvalidParameter)
 			},
 		},
 		{
@@ -445,7 +444,7 @@ func (s *TemplateServiceTestSuite) TestCreateTemplateFailed() {
 				return t
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, templatesvc.ErrInvalidParameter)
 			},
 		},
 		{
@@ -456,7 +455,7 @@ func (s *TemplateServiceTestSuite) TestCreateTemplateFailed() {
 				return t
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, templatesvc.ErrInvalidParameter)
 			},
 		},
 		{
@@ -467,7 +466,7 @@ func (s *TemplateServiceTestSuite) TestCreateTemplateFailed() {
 				return t
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, templatesvc.ErrInvalidParameter)
 			},
 		},
 		{
@@ -478,7 +477,7 @@ func (s *TemplateServiceTestSuite) TestCreateTemplateFailed() {
 				return t
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, templatesvc.ErrInvalidParameter)
 			},
 		},
 		{
@@ -486,7 +485,7 @@ func (s *TemplateServiceTestSuite) TestCreateTemplateFailed() {
 			mockProviders: []providersvc.Provider{},
 			template:      s.createTestTemplate(1, domain.OwnerTypePerson, domain.ChannelSMS),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrCreateTemplateFailed)
+				return assert.ErrorIs(t, err, templatesvc.ErrCreateTemplateFailed)
 			},
 		},
 	}

@@ -7,8 +7,8 @@
 package config
 
 import (
-	"gitee.com/flycash/notification-platform/internal/service/config/internal/repository"
-	"gitee.com/flycash/notification-platform/internal/service/config/internal/repository/dao"
+	"gitee.com/flycash/notification-platform/internal/repository"
+	dao2 "gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/service"
 	"github.com/ego-component/egorm"
 )
@@ -17,7 +17,7 @@ import (
 
 func InitService(db *egorm.Component) *Module {
 	error2 := initTables(db)
-	businessConfigDAO := dao.NewBusinessConfigDAO(db)
+	businessConfigDAO := dao2.NewBusinessConfigDAO(db)
 	businessConfigRepository := repository.NewBusinessConfigRepository(businessConfigDAO)
 	businessConfigService := service.NewBusinessConfigService(businessConfigRepository)
 	module := &Module{
@@ -30,5 +30,5 @@ func InitService(db *egorm.Component) *Module {
 // wire.go:
 
 func initTables(db *egorm.Component) error {
-	return dao.InitTables(db)
+	return dao2.InitTables(db)
 }

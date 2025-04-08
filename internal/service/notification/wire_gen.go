@@ -7,7 +7,8 @@
 package notification
 
 import (
-	"gitee.com/flycash/notification-platform/internal/service/notification/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/repository"
+	dao2 "gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/notification/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/notification/internal/service"
 	"github.com/ego-component/egorm"
@@ -19,7 +20,7 @@ import (
 
 func InitModule(db *egorm.Component, idGenerator *sonyflake.Sonyflake) Module {
 	error2 := initTables(db)
-	notificationDAO := dao.NewNotificationDAO(db)
+	notificationDAO := dao2.NewNotificationDAO(db)
 	notificationRepository := repository.NewNotificationRepository(notificationDAO)
 	notificationService := service.NewNotificationService(notificationRepository, idGenerator)
 	service2 := convert(notificationService)
@@ -32,7 +33,7 @@ func InitModule(db *egorm.Component, idGenerator *sonyflake.Sonyflake) Module {
 
 // wire.go:
 
-var notificationServiceProviderSet = wire.NewSet(dao.NewNotificationDAO, repository.NewNotificationRepository, service.NewNotificationService)
+var notificationServiceProviderSet = wire.NewSet(dao2.NewNotificationDAO, repository.NewNotificationRepository, service.NewNotificationService)
 
 func convert(svc service.NotificationService) Service {
 	return svc.(Service)

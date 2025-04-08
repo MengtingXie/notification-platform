@@ -3,7 +3,8 @@
 package notification
 
 import (
-	"gitee.com/flycash/notification-platform/internal/service/notification/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	dao2 "gitee.com/flycash/notification-platform/internal/service/notification/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/notification/internal/service"
 	"github.com/ego-component/egorm"
@@ -12,7 +13,7 @@ import (
 )
 
 var notificationServiceProviderSet = wire.NewSet(
-	dao2.NewNotificationDAO,
+	dao.NewNotificationDAO,
 	repository.NewNotificationRepository,
 	service.NewNotificationService,
 )

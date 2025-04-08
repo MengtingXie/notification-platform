@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/repository"
 
 	"gitee.com/flycash/notification-platform/internal/service/notification/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/service/notification/internal/repository"
 	"github.com/sony/sonyflake"
 )
 
