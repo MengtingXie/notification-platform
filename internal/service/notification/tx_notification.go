@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/notification/retry"
@@ -32,16 +33,16 @@ type TxNotificationService interface {
 
 type TxNotificationServiceV1 struct {
 	repo            repository.TxNotificationRepository
-	notificationSvc NotificationService
+	notificationSvc Service
 	configSvc       config.BusinessConfigService
-	//retryStrategyBuilder retry.Builder
+	// retryStrategyBuilder retry.Builder
 	logger *elog.Component
 	lock   dlock.Client
 }
 
 func NewTxNotificationService(
 	repo repository.TxNotificationRepository,
-	notificationSvc NotificationService,
+	notificationSvc Service,
 	configSvc config.BusinessConfigService,
 	retryStrategyBuilder retry.Builder,
 	lock dlock.Client,
@@ -50,7 +51,7 @@ func NewTxNotificationService(
 		repo:            repo,
 		notificationSvc: notificationSvc,
 		configSvc:       configSvc,
-		//retryStrategyBuilder: retryStrategyBuilder,
+		// retryStrategyBuilder: retryStrategyBuilder,
 		logger: elog.DefaultLogger,
 		lock:   lock,
 	}
@@ -63,7 +64,7 @@ func (t *TxNotificationServiceV1) StartTask(ctx context.Context) {
 		repo:            t.repo,
 		notificationSvc: t.notificationSvc,
 		configSvc:       t.configSvc,
-		//retryStrategyBuilder: t.retryStrategyBuilder,
+		// retryStrategyBuilder: t.retryStrategyBuilder,
 		logger:    t.logger,
 		lock:      t.lock,
 		batchSize: defaultBatchSize,
@@ -102,7 +103,7 @@ func (t *TxNotificationServiceV1) Prepare(ctx context.Context, txNotification do
 	if err == nil {
 		// 找到配置
 		// 这一块，
-		txNotification.NextCheckTime = time.Minute * 30
+		txNotification.NextCheckTime = int64(time.Minute * 30)
 	}
 	_, err = t.repo.Create(ctx, txNotification)
 	return noti.ID, err

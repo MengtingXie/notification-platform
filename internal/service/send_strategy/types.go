@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
 )
@@ -16,7 +17,9 @@ var (
 
 // SendStrategy 发送策略接口
 type SendStrategy interface {
-	// Send 发送通知
+	// Send 单条发送通知
+	Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error)
+	// BatchSend 批量发送通知，其中每个通知的发送策略必须相同
 	BatchSend(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error)
 }
 
@@ -37,8 +40,18 @@ func NewDispatcher(
 	}
 }
 
-// BatchSend 发送通知
-// 根据通知中指定的策略类型选择合适的发送策略
+// Send 发送通知
+func (d *Dispatcher) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
+	// 获取策略
+	strategy, ok := d.strategies[notification.SendStrategyConfig.Type]
+	if !ok {
+		return domain.SendResponse{}, fmt.Errorf("%w: 无效的发送策略 %s", ErrInvalidParameter, notification.SendStrategyConfig.Type)
+	}
+	// 执行发送
+	return strategy.Send(ctx, notification)
+}
+
+// BatchSend 批量发送通知
 func (d *Dispatcher) BatchSend(ctx context.Context, ns []domain.Notification) ([]domain.SendResponse, error) {
 	if len(ns) == 0 {
 		return nil, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)

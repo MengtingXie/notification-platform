@@ -7,13 +7,12 @@
 package notificationv1
 
 import (
-	reflect "reflect"
-	sync "sync"
-	unsafe "unsafe"
-
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
 )
 
 const (
@@ -352,7 +351,7 @@ type Notification struct {
 	// 业务方某个业务内部的唯一标识
 	Key string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	// 接收者标识(可以是用户ID、邮箱、手机号等)
-	Receiver string `protobuf:"bytes,2,opt,name=receiver,proto3" json:"receiver,omitempty"`
+	Receivers []string `protobuf:"bytes,2,rep,name=receivers,proto3" json:"receivers,omitempty"`
 	// 发送渠道
 	Channel Channel `protobuf:"varint,3,opt,name=channel,proto3,enum=notification.v1.Channel" json:"channel,omitempty"`
 	// 模板ID
@@ -402,11 +401,11 @@ func (x *Notification) GetKey() string {
 	return ""
 }
 
-func (x *Notification) GetReceiver() string {
+func (x *Notification) GetReceivers() []string {
 	if x != nil {
-		return x.Receiver
+		return x.Receivers
 	}
-	return ""
+	return nil
 }
 
 func (x *Notification) GetChannel() Channel {
@@ -1358,10 +1357,10 @@ const file_notification_v1_notification_proto_rawDesc = "" +
 	"\x15end_time_milliseconds\x18\x02 \x01(\x03R\x13endTimeMilliseconds\x1aJ\n" +
 	"\x10DeadlineStrategy\x126\n" +
 	"\bdeadline\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\bdeadlineB\x0f\n" +
-	"\rstrategy_type\"\xeb\x02\n" +
+	"\rstrategy_type\"\xed\x02\n" +
 	"\fNotification\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x1a\n" +
-	"\breceiver\x18\x02 \x01(\tR\breceiver\x122\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x1c\n" +
+	"\treceivers\x18\x02 \x03(\tR\treceivers\x122\n" +
 	"\achannel\x18\x03 \x01(\x0e2\x18.notification.v1.ChannelR\achannel\x12\x1f\n" +
 	"\vtemplate_id\x18\x04 \x01(\tR\n" +
 	"templateId\x12Z\n" +
@@ -1449,39 +1448,36 @@ func file_notification_v1_notification_proto_rawDescGZIP() []byte {
 	return file_notification_v1_notification_proto_rawDescData
 }
 
-var (
-	file_notification_v1_notification_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-	file_notification_v1_notification_proto_msgTypes  = make([]protoimpl.MessageInfo, 22)
-	file_notification_v1_notification_proto_goTypes   = []any{
-		(Channel)(0),                                // 0: notification.v1.Channel
-		(SendStatus)(0),                             // 1: notification.v1.SendStatus
-		(ErrorCode)(0),                              // 2: notification.v1.ErrorCode
-		(*SendStrategy)(nil),                        // 3: notification.v1.SendStrategy
-		(*Notification)(nil),                        // 4: notification.v1.Notification
-		(*SendNotificationRequest)(nil),             // 5: notification.v1.SendNotificationRequest
-		(*SendNotificationResponse)(nil),            // 6: notification.v1.SendNotificationResponse
-		(*SendNotificationAsyncRequest)(nil),        // 7: notification.v1.SendNotificationAsyncRequest
-		(*SendNotificationAsyncResponse)(nil),       // 8: notification.v1.SendNotificationAsyncResponse
-		(*BatchSendNotificationsRequest)(nil),       // 9: notification.v1.BatchSendNotificationsRequest
-		(*BatchSendNotificationsResponse)(nil),      // 10: notification.v1.BatchSendNotificationsResponse
-		(*BatchSendNotificationsAsyncRequest)(nil),  // 11: notification.v1.BatchSendNotificationsAsyncRequest
-		(*BatchSendNotificationsAsyncResponse)(nil), // 12: notification.v1.BatchSendNotificationsAsyncResponse
-		(*TxPrepareRequest)(nil),                    // 13: notification.v1.TxPrepareRequest
-		(*TxPrepareResponse)(nil),                   // 14: notification.v1.TxPrepareResponse
-		(*TxCommitRequest)(nil),                     // 15: notification.v1.TxCommitRequest
-		(*TxCommitResponse)(nil),                    // 16: notification.v1.TxCommitResponse
-		(*TxCancelRequest)(nil),                     // 17: notification.v1.TxCancelRequest
-		(*TxCancelResponse)(nil),                    // 18: notification.v1.TxCancelResponse
-		(*SendStrategy_ImmediateStrategy)(nil),      // 19: notification.v1.SendStrategy.ImmediateStrategy
-		(*SendStrategy_DelayedStrategy)(nil),        // 20: notification.v1.SendStrategy.DelayedStrategy
-		(*SendStrategy_ScheduledStrategy)(nil),      // 21: notification.v1.SendStrategy.ScheduledStrategy
-		(*SendStrategy_TimeWindowStrategy)(nil),     // 22: notification.v1.SendStrategy.TimeWindowStrategy
-		(*SendStrategy_DeadlineStrategy)(nil),       // 23: notification.v1.SendStrategy.DeadlineStrategy
-		nil,                                         // 24: notification.v1.Notification.TemplateParamsEntry
-		(*timestamppb.Timestamp)(nil),               // 25: google.protobuf.Timestamp
-	}
-)
-
+var file_notification_v1_notification_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_notification_v1_notification_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_notification_v1_notification_proto_goTypes = []any{
+	(Channel)(0),                                // 0: notification.v1.Channel
+	(SendStatus)(0),                             // 1: notification.v1.SendStatus
+	(ErrorCode)(0),                              // 2: notification.v1.ErrorCode
+	(*SendStrategy)(nil),                        // 3: notification.v1.SendStrategy
+	(*Notification)(nil),                        // 4: notification.v1.Notification
+	(*SendNotificationRequest)(nil),             // 5: notification.v1.SendNotificationRequest
+	(*SendNotificationResponse)(nil),            // 6: notification.v1.SendNotificationResponse
+	(*SendNotificationAsyncRequest)(nil),        // 7: notification.v1.SendNotificationAsyncRequest
+	(*SendNotificationAsyncResponse)(nil),       // 8: notification.v1.SendNotificationAsyncResponse
+	(*BatchSendNotificationsRequest)(nil),       // 9: notification.v1.BatchSendNotificationsRequest
+	(*BatchSendNotificationsResponse)(nil),      // 10: notification.v1.BatchSendNotificationsResponse
+	(*BatchSendNotificationsAsyncRequest)(nil),  // 11: notification.v1.BatchSendNotificationsAsyncRequest
+	(*BatchSendNotificationsAsyncResponse)(nil), // 12: notification.v1.BatchSendNotificationsAsyncResponse
+	(*TxPrepareRequest)(nil),                    // 13: notification.v1.TxPrepareRequest
+	(*TxPrepareResponse)(nil),                   // 14: notification.v1.TxPrepareResponse
+	(*TxCommitRequest)(nil),                     // 15: notification.v1.TxCommitRequest
+	(*TxCommitResponse)(nil),                    // 16: notification.v1.TxCommitResponse
+	(*TxCancelRequest)(nil),                     // 17: notification.v1.TxCancelRequest
+	(*TxCancelResponse)(nil),                    // 18: notification.v1.TxCancelResponse
+	(*SendStrategy_ImmediateStrategy)(nil),      // 19: notification.v1.SendStrategy.ImmediateStrategy
+	(*SendStrategy_DelayedStrategy)(nil),        // 20: notification.v1.SendStrategy.DelayedStrategy
+	(*SendStrategy_ScheduledStrategy)(nil),      // 21: notification.v1.SendStrategy.ScheduledStrategy
+	(*SendStrategy_TimeWindowStrategy)(nil),     // 22: notification.v1.SendStrategy.TimeWindowStrategy
+	(*SendStrategy_DeadlineStrategy)(nil),       // 23: notification.v1.SendStrategy.DeadlineStrategy
+	nil,                                         // 24: notification.v1.Notification.TemplateParamsEntry
+	(*timestamppb.Timestamp)(nil),               // 25: google.protobuf.Timestamp
+}
 var file_notification_v1_notification_proto_depIdxs = []int32{
 	19, // 0: notification.v1.SendStrategy.immediate:type_name -> notification.v1.SendStrategy.ImmediateStrategy
 	20, // 1: notification.v1.SendStrategy.delayed:type_name -> notification.v1.SendStrategy.DelayedStrategy

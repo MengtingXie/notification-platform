@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/repository"
-	"gitee.com/flycash/notification-platform/internal/service/notification/retry"
 	"strings"
 	"sync"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/service/notification/retry"
 
 	"github.com/ecodeclub/ekit/syncx"
 
@@ -25,7 +26,7 @@ import (
 
 type TxCheckTask struct {
 	repo                 repository.TxNotificationRepository
-	notificationSvc      NotificationService
+	notificationSvc      Service
 	configSvc            config.BusinessConfigService
 	retryStrategyBuilder retry.Builder
 	logger               *elog.Component

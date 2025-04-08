@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
 
@@ -18,10 +19,10 @@ var (
 	ErrNotificationDuplicate        = repository.ErrNotificationDuplicate
 )
 
-// NotificationService 通知服务接口
+// Service 通知服务接口
 //
-//go:generate mockgen -source=./notification.go -destination=../../mocks/notification.mock.go -package=notificationmocks -typed NotificationService
-type NotificationService interface {
+//go:generate mockgen -source=./notification.go -destination=../../mocks/notification.mock.go -package=notificationmocks -typed Service
+type Service interface {
 	// Create 创建通知记录
 	Create(ctx context.Context, notification domain.Notification) (domain.Notification, error)
 
@@ -55,7 +56,7 @@ type notificationService struct {
 }
 
 // NewNotificationService 创建通知服务实例
-func NewNotificationService(repo repository.NotificationRepository, idGenerator *sonyflake.Sonyflake) NotificationService {
+func NewNotificationService(repo repository.NotificationRepository, idGenerator *sonyflake.Sonyflake) Service {
 	return &notificationService{
 		repo:        repo,
 		idGenerator: idGenerator,
@@ -64,14 +65,14 @@ func NewNotificationService(repo repository.NotificationRepository, idGenerator 
 
 // Create 创建通知
 func (s *notificationService) Create(ctx context.Context, notification domain.Notification) (domain.Notification, error) {
-	if err := s.validateNotification(notification); err != nil {
+	if err := notification.Validate(); err != nil {
 		return domain.Notification{}, fmt.Errorf("%w: %w", ErrInvalidParameter, err)
 	}
 
 	// 生成ID
-	id, err := s.idGenerator.NextID()
+	id, err := s.generateID()
 	if err != nil {
-		return domain.Notification{}, fmt.Errorf("%w", ErrNotificationIDGenerateFailed)
+		return domain.Notification{}, err
 	}
 	notification.ID = id
 
@@ -80,39 +81,18 @@ func (s *notificationService) Create(ctx context.Context, notification domain.No
 		if errors.Is(err, ErrNotificationDuplicate) {
 			return domain.Notification{}, fmt.Errorf("%w", ErrNotificationDuplicate)
 		}
-		return domain.Notification{}, fmt.Errorf("创建通知失败: %w", err)
+		return domain.Notification{}, fmt.Errorf("%w: %w", ErrCreateNotificationFailed, err)
 	}
 
 	return createdNotification, nil
 }
 
-// validateNotification 验证通知参数
-func (s *notificationService) validateNotification(n domain.Notification) error {
-	if n.Key == "" {
-		return fmt.Errorf("%w: Key = %q", ErrInvalidParameter, n.Key)
+func (s *notificationService) generateID() (uint64, error) {
+	id, err := s.idGenerator.NextID()
+	if err != nil {
+		return 0, fmt.Errorf("%w", ErrNotificationIDGenerateFailed)
 	}
-	if n.Receiver == "" {
-		return fmt.Errorf("%w: Receiver = %q", ErrInvalidParameter, n.Receiver)
-	}
-	if n.Channel == "" {
-		return fmt.Errorf("%w: Channel = %q", ErrInvalidParameter, n.Channel)
-	}
-	if n.Template.ID <= 0 {
-		return fmt.Errorf("%w: Template.ID = %d", ErrInvalidParameter, n.Template.ID)
-	}
-	if n.Template.VersionID <= 0 {
-		return fmt.Errorf("%w: Template.VersionID = %d", ErrInvalidParameter, n.Template.VersionID)
-	}
-	if len(n.Template.Params) == 0 {
-		return fmt.Errorf("%w: Template.Params = %q", ErrInvalidParameter, n.Template.Params)
-	}
-	if n.ScheduledSTime == 0 {
-		return fmt.Errorf("%w: ScheduledSTime = %d", ErrInvalidParameter, n.ScheduledSTime)
-	}
-	if n.ScheduledETime == 0 || n.ScheduledETime < n.ScheduledSTime {
-		return fmt.Errorf("%w: ScheduledETime = %d", ErrInvalidParameter, n.ScheduledETime)
-	}
-	return nil
+	return id, nil
 }
 
 // BatchCreate 批量创建通知记录
@@ -122,16 +102,16 @@ func (s *notificationService) BatchCreate(ctx context.Context, notifications []d
 	}
 
 	for i := range notifications {
-		if err := s.validateNotification(notifications[i]); err != nil {
+		if err := notifications[i].Validate(); err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrInvalidParameter, err)
 		}
 	}
 
 	// 生成ID
 	for i := range notifications {
-		id, err := s.idGenerator.NextID()
+		id, err := s.generateID()
 		if err != nil {
-			return nil, fmt.Errorf("%w", ErrNotificationIDGenerateFailed)
+			return nil, err
 		}
 		notifications[i].ID = id
 	}
@@ -141,7 +121,7 @@ func (s *notificationService) BatchCreate(ctx context.Context, notifications []d
 		if errors.Is(err, ErrNotificationDuplicate) {
 			return nil, fmt.Errorf("%w", ErrNotificationDuplicate)
 		}
-		return nil, fmt.Errorf("批量创建通知失败: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrCreateNotificationFailed, err)
 	}
 
 	return createdNotifications, nil

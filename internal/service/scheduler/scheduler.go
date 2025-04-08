@@ -22,7 +22,7 @@ type NotificationScheduler interface {
 
 // scheduler 通知调度服务实现
 type scheduler struct {
-	notificationSvc notificationsvc.NotificationService
+	notificationSvc notificationsvc.Service
 	sender          sender.NotificationSender
 
 	batchSize       int
@@ -34,7 +34,7 @@ type scheduler struct {
 
 // NewScheduler 创建通知调度服务
 func NewScheduler(
-	notificationSvc notificationsvc.NotificationService,
+	notificationSvc notificationsvc.Service,
 	dispatcher sender.NotificationSender,
 	batchSize int,
 	intervalSeconds int,
@@ -81,17 +81,17 @@ func (s *scheduler) Stop() error {
 // scheduleLoop 调度循环
 func (s *scheduler) scheduleLoop() {
 	// 不是 ticker，无限循环，然后没找到数据的时候就 sleep 1s
-	//ticker := time.NewTicker(time.Duration(s.intervalSeconds) * time.Second)
-	//defer ticker.Stop()
+	// ticker := time.NewTicker(time.Duration(s.intervalSeconds) * time.Second)
+	// defer ticker.Stop()
 	//
-	//for {
+	// for {
 	//	select {
 	//	case <-ticker.C:
 	//		s.processPendingNotifications()
 	//	case <-s.stopCh:
 	//		return
 	//	}
-	//}
+	// }
 }
 
 // processPendingNotifications 处理待发送的通知
@@ -119,17 +119,17 @@ func (s *scheduler) processPendingNotifications() {
 	}
 
 	// 按业务ID分组，避免单个业务超出限制影响其他业务
-	//bizGroups := groupByBizID(notifications)
+	// bizGroups := groupByBizID(notifications)
 
 	// 对每个业务分组单独处理
 	s.sender.BatchSend(ctx, notifications)
-	//for _, group := range notifications {
+	// for _, group := range notifications {
 	//	_, err :=
 	//	if err != nil {
 	//		fmt.Printf("发送通知组失败: %v\n", err)
 	//		// 继续处理其他组
 	//	}
-	//}
+	// }
 }
 
 func (s *scheduler) getNotifications(ctx context.Context, stime int64, limit int) ([]domain.Notification, error) {

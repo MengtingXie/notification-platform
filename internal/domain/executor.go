@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -23,6 +24,31 @@ type SendStrategyConfig struct {
 	StartTimeMilliseconds int64            // 窗口发送策略使用，开始时间（毫秒）
 	EndTimeMilliseconds   int64            // 窗口发送策略使用，结束时间（毫秒）
 	DeadlineTime          time.Time        // 截止日期策略使用，截止日期
+}
+
+func (e *SendStrategyConfig) Validate() error {
+	// 校验策略相关字段
+	switch e.Type {
+	case SendStrategyImmediate:
+		return nil
+	case SendStrategyDelayed:
+		if e.DelaySeconds <= 0 {
+			return fmt.Errorf("%w: 延迟发送策略需要指定正数的延迟秒数", ErrInvalidParameter)
+		}
+	case SendStrategyScheduled:
+		if e.ScheduledTime.IsZero() || e.ScheduledTime.Before(time.Now()) {
+			return fmt.Errorf("%w: 定时发送策略需要指定未来的发送时间", ErrInvalidParameter)
+		}
+	case SendStrategyTimeWindow:
+		if e.StartTimeMilliseconds <= 0 || e.EndTimeMilliseconds <= e.StartTimeMilliseconds {
+			return fmt.Errorf("%w: 时间窗口发送策略需要指定有效的开始和结束时间", ErrInvalidParameter)
+		}
+	case SendStrategyDeadline:
+		if e.DeadlineTime.IsZero() || e.DeadlineTime.Before(time.Now()) {
+			return fmt.Errorf("%w: 截止日期发送策略需要指定未来的发送时间", ErrInvalidParameter)
+		}
+	}
+	return nil
 }
 
 // SendResponse 发送响应

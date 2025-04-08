@@ -1,5 +1,10 @@
 package domain
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 // Channel 通知渠道
 
 // SendStatus 通知状态
@@ -24,7 +29,7 @@ type Notification struct {
 	ID             uint64     // 通知唯一标识
 	BizID          int64      // 业务唯一标识
 	Key            string     // 业务内唯一标识
-	Receiver       string     // 接收者(手机/邮箱/用户ID)
+	Receivers      []string   // 接收者(手机/邮箱/用户ID)
 	Channel        Channel    // 发送渠道
 	Template       Template   // 关联的模版
 	Status         SendStatus // 发送状态
@@ -34,4 +39,64 @@ type Notification struct {
 	Version        int        // 版本号
 
 	SendStrategyConfig SendStrategyConfig
+}
+
+func (n *Notification) Validate() error {
+
+	if n.BizID <= 0 {
+		return fmt.Errorf("%w: BizID = %d", ErrInvalidParameter, n.BizID)
+	}
+
+	if n.Key == "" {
+		return fmt.Errorf("%w: Key = %q", ErrInvalidParameter, n.Key)
+	}
+
+	if len(n.Receivers) == 0 {
+		return fmt.Errorf("%w: Receivers= %v", ErrInvalidParameter, n.Receivers)
+	}
+
+	if n.Channel != ChannelSMS && n.Channel != ChannelEmail && n.Channel != ChannelInApp {
+		return fmt.Errorf("%w: Channel = %q", ErrInvalidParameter, n.Channel)
+	}
+
+	if n.Template.ID <= 0 {
+		return fmt.Errorf("%w: Template.ID = %d", ErrInvalidParameter, n.Template.ID)
+	}
+
+	if n.Template.VersionID <= 0 {
+		return fmt.Errorf("%w: Template.VersionID = %d", ErrInvalidParameter, n.Template.VersionID)
+	}
+
+	if len(n.Template.Params) == 0 {
+		return fmt.Errorf("%w: Template.Params = %q", ErrInvalidParameter, n.Template.Params)
+	}
+
+	if err := n.SendStrategyConfig.Validate(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (n *Notification) IsValidBizID() error {
+	if n.BizID <= 0 {
+		return fmt.Errorf("%w: BizID = %d", ErrInvalidParameter, n.BizID)
+	}
+	return nil
+}
+
+func (n *Notification) MarshalReceivers() (string, error) {
+	return n.marshal(n.Receivers)
+}
+
+func (n *Notification) MarshalTemplateParams() (string, error) {
+	return n.marshal(n.Template.Params)
+}
+
+func (n *Notification) marshal(v any) (string, error) {
+	jsonBytes, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+	return string(jsonBytes), nil
 }

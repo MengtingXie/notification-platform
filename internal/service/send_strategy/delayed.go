@@ -3,9 +3,10 @@ package send_strategy
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
-	"time"
 )
 
 // DelayedSendStrategy 延迟发送策略
@@ -20,29 +21,56 @@ func newDelayedStrategy(repo repository.NotificationRepository) *DelayedSendStra
 	}
 }
 
-// Send 延迟发送通知
-func (s *DelayedSendStrategy) BatchSend(ctx context.Context, ns []domain.Notification) ([]domain.SendResponse, error) {
-	if len(ns) == 0 {
+// Send 单条发送通知
+func (s *DelayedSendStrategy) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
+
+	// 检查延迟参数
+	if notification.SendStrategyConfig.DelaySeconds <= 0 {
+		return domain.SendResponse{}, fmt.Errorf("%w: 延迟发送策略必须指定正数的延迟秒数", ErrInvalidParameter)
+	}
+
+	// 根据发送策略，计算调度窗口
+	delayDuration := time.Duration(notification.SendStrategyConfig.DelaySeconds) * time.Second
+	now := time.Now()
+	scheduledTime := now.Add(delayDuration)
+	notification.ScheduledSTime = now.UnixMilli()
+	notification.ScheduledETime = scheduledTime.UnixMilli()
+
+	// 创建通知记录
+	created, err := s.repo.Create(ctx, notification)
+	if err != nil {
+		return domain.SendResponse{}, fmt.Errorf("创建延迟通知失败: %w", err)
+	}
+
+	return domain.SendResponse{
+		NotificationID: created.ID,
+		Status:         created.Status,
+	}, nil
+}
+
+// BatchSend 批量发送通知，其中每个通知的发送策略必须相同
+func (s *DelayedSendStrategy) BatchSend(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error) {
+	if len(notifications) == 0 {
 		return nil, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)
 	}
 
-	for i := range ns {
+	for i := range notifications {
 		// 检查延迟参数
-		if ns[i].SendStrategyConfig.DelaySeconds <= 0 {
+		if notifications[i].SendStrategyConfig.DelaySeconds <= 0 {
 			return nil, fmt.Errorf("%w: 延迟发送策略必须指定正数的延迟秒数", ErrInvalidParameter)
 		}
 
 		// 根据发送策略，计算调度窗口
-		delayDuration := time.Duration(ns[i].SendStrategyConfig.DelaySeconds) * time.Second
+		delayDuration := time.Duration(notifications[i].SendStrategyConfig.DelaySeconds) * time.Second
 		now := time.Now()
 		scheduledTime := now.Add(delayDuration)
-		ns[i].ScheduledSTime = now.UnixMilli()
-		ns[i].ScheduledETime = scheduledTime.UnixMilli()
+		notifications[i].ScheduledSTime = now.UnixMilli()
+		notifications[i].ScheduledETime = scheduledTime.UnixMilli()
 
 	}
 
 	// 创建通知记录
-	createdNotifications, err := s.repo.BatchCreate(ctx, ns)
+	createdNotifications, err := s.repo.BatchCreate(ctx, notifications)
 	if err != nil {
 		return nil, fmt.Errorf("创建延迟通知失败: %w", err)
 	}
