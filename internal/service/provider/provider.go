@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/provider/manage"
@@ -31,7 +32,7 @@ func NewDispatcher(
 	smsClients map[string]sms.Client,
 ) Provider {
 	d := &Dispatcher{
-		//selector: newSelector(providerSvc, templateSvc, smsClients),
+		// selector: newSelector(providerSvc, templateSvc, smsClients),
 	}
 	return d
 }

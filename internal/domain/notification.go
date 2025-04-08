@@ -3,6 +3,7 @@ package domain
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 // Channel 通知渠道
@@ -26,23 +27,27 @@ type Template struct {
 
 // Notification 通知领域模型
 type Notification struct {
-	ID             uint64     // 通知唯一标识
-	BizID          int64      // 业务唯一标识
-	Key            string     // 业务内唯一标识
-	Receivers      []string   // 接收者(手机/邮箱/用户ID)
-	Channel        Channel    // 发送渠道
-	Template       Template   // 关联的模版
-	Status         SendStatus // 发送状态
-	RetryCount     int8       // 当前重试次数
-	ScheduledSTime int64      // 计划发送开始时间
-	ScheduledETime int64      // 计划发送结束时间
-	Version        int        // 版本号
-
+	ID                 uint64     // 通知唯一标识
+	BizID              int64      // 业务唯一标识
+	Key                string     // 业务内唯一标识
+	Receivers          []string   // 接收者(手机/邮箱/用户ID)
+	Channel            Channel    // 发送渠道
+	Template           Template   // 关联的模版
+	Status             SendStatus // 发送状态
+	RetryCount         int8       // 当前重试次数
+	ScheduledSTime     time.Time  // 计划发送开始时间
+	ScheduledETime     time.Time  // 计划发送结束时间
+	Version            int        // 版本号
 	SendStrategyConfig SendStrategyConfig
 }
 
-func (n *Notification) Validate() error {
+func (n *Notification) SetSendTime() {
+	stime, etime := n.SendStrategyConfig.SendTimeWindow()
+	n.ScheduledSTime = stime
+	n.ScheduledETime = etime
+}
 
+func (n *Notification) Validate() error {
 	if n.BizID <= 0 {
 		return fmt.Errorf("%w: BizID = %d", ErrInvalidParameter, n.BizID)
 	}

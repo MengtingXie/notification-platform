@@ -21,9 +21,10 @@ var (
 
 // NotificationSender 通知发送接口
 type NotificationSender interface {
-	// Send 发送一批通知，返回发送结果
-	BatchSend(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error)
+	// Send 单条发送通知
 	Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error)
+	// BatchSend 发送批量通知
+	BatchSend(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error)
 }
 
 // sender 通知发送器实现
@@ -38,19 +39,53 @@ type sender struct {
 func NewSender(
 	repo repository.NotificationRepository,
 	configSvc configsvc.BusinessConfigService,
-	channelDispatcher channel.Channel,
+	channel channel.Channel,
 ) NotificationSender {
 	return &sender{
 		configSvc: configSvc,
 		repo:      repo,
-		channel:   channelDispatcher,
+		channel:   channel,
 		logger:    elog.DefaultLogger,
 	}
 }
 
-// Send 批量发送通知
-func (d *sender) Send(ctx context.Context, notifications domain.Notification) (domain.SendResponse, error) {
-	panic("implement me")
+// Send 单条发送通知
+func (d *sender) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
+	var resp domain.SendResponse
+
+	response, err1 := d.channel.Send(ctx, notification)
+	if err1 != nil {
+		resp = domain.SendResponse{
+			NotificationID: notification.ID,
+			Status:         domain.SendStatusFailed,
+			RetryCount:     response.RetryCount,
+		}
+	} else {
+		resp = domain.SendResponse{
+			NotificationID: notification.ID,
+			Status:         domain.SendStatusSucceeded,
+			RetryCount:     response.RetryCount,
+		}
+	}
+
+	// 获取所有通知的详细信息，包括版本号
+	n, err := d.repo.GetByID(ctx, notification.ID)
+	if err != nil {
+		d.logger.Warn("获取通知失败",
+			elog.Any("Error", err),
+			elog.Any("notification", notification),
+		)
+		return domain.SendResponse{}, fmt.Errorf("获取通知失败: %w", err)
+	}
+
+	// 更新发送状态
+	err = d.repo.UpdateStatus(ctx, n.ID, resp.Status, n.Version)
+	if err != nil {
+		return domain.SendResponse{}, err
+	}
+
+	// 合并结果并返回
+	return resp, nil
 }
 
 // BatchSend 批量发送通知

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/errs"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 
 	"gitee.com/flycash/notification-platform/internal/api/grpc/interceptor/jwt"
@@ -23,14 +25,14 @@ import (
 type NotificationServer struct {
 	notificationv1.UnimplementedNotificationServiceServer
 	notificationv1.UnimplementedNotificationQueryServiceServer
-	executor        notificationsvc.ExecutorService
+	executor        notificationsvc.SendService
 	notificationSvc notificationsvc.Service
 	// TODO: 配置服务 configService config.ConfigService
 	txnSvc notificationsvc.TxNotificationService
 }
 
 // NewServer 创建通知平台gRPC服务器
-func NewServer(executor notificationsvc.ExecutorService, txnSvc notificationsvc.TxNotificationService) *NotificationServer {
+func NewServer(executor notificationsvc.SendService, txnSvc notificationsvc.TxNotificationService) *NotificationServer {
 	return &NotificationServer{
 		executor: executor,
 		txnSvc:   txnSvc,
@@ -352,12 +354,12 @@ func (s *NotificationServer) convertToNotification(n *notificationv1.Notificatio
 	}
 
 	notification.SendStrategyConfig = domain.SendStrategyConfig{
-		Type:                  sendStrategyType,
-		DelaySeconds:          delaySeconds,
-		ScheduledTime:         scheduledTime,
-		StartTimeMilliseconds: startTimeMilliseconds,
-		EndTimeMilliseconds:   endTimeMilliseconds,
-		DeadlineTime:          deadlineTime,
+		Type:          sendStrategyType,
+		Delay:         time.Duration(delaySeconds) * time.Second,
+		ScheduledTime: scheduledTime,
+		StartTime:     time.Unix(startTimeMilliseconds, 0),
+		EndTime:       time.Unix(endTimeMilliseconds, 0),
+		DeadlineTime:  deadlineTime,
 	}
 	return notification, nil
 }
@@ -404,43 +406,25 @@ func (s *NotificationServer) mapErrorToErrorCode(err error) notificationv1.Error
 	}
 	// 根据错误类型进行匹配
 	switch {
-	case errors.Is(err, notificationsvc.ErrInvalidParameter):
+	case errors.Is(err, errs.ErrInvalidParameter):
 		return notificationv1.ErrorCode_INVALID_PARAMETER
 
-	case errors.Is(err, notificationsvc.ErrNotificationNotFound):
+	case errors.Is(err, errs.ErrNotificationNotFound):
 		// 目前我们没有专门的"NotFound"错误码，所以这里暂时使用通用错误码
 		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
 
-	case errors.Is(err, notificationsvc.ErrSendNotificationFailed):
+	case errors.Is(err, errs.ErrSendNotificationFailed):
 		// 如果是发送失败错误，需要进一步判断具体原因
 		if strings.Contains(err.Error(), "创建通知失败") {
 			return notificationv1.ErrorCode_CREATE_NOTIFICATION_FAILED
 		}
 		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
 
-	case errors.Is(err, notificationsvc.ErrNotificationNotFound):
+	case errors.Is(err, errs.ErrNotificationNotFound):
 		// 查询失败暂时使用通用错误码
 		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
 	default:
-		// 如果无法通过类型匹配，回退到消息内容匹配
-		errorMsg := err.Error()
-
-		switch {
-		case strings.Contains(errorMsg, "频率限制") ||
-			strings.Contains(errorMsg, "rate limit"):
-			return notificationv1.ErrorCode_RATE_LIMITED
-
-		case strings.Contains(errorMsg, "模板未找到") ||
-			strings.Contains(errorMsg, "template not found"):
-			return notificationv1.ErrorCode_TEMPLATE_NOT_FOUND
-
-		case strings.Contains(errorMsg, "渠道被禁用") ||
-			strings.Contains(errorMsg, "channel disabled"):
-			return notificationv1.ErrorCode_CHANNEL_DISABLED
-
-		default:
-			return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
-		}
+		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
 	}
 }
 
@@ -467,50 +451,11 @@ func (s *NotificationServer) convertToTxNotification(n *notificationv1.Notificat
 		return domain.TxNotification{}, errors.New("通知不能为空")
 	}
 
-	// 转换TemplateID
-	tid, err := strconv.ParseInt(n.TemplateId, 10, 64)
-	if err != nil {
-		return domain.TxNotification{}, fmt.Errorf("无效的模板ID: %s", n.TemplateId)
-	}
 	// 构建基本Notification
-	noti := domain.Notification{
-		BizID:     bizID,
-		Key:       n.Key,
-		Receivers: n.Receivers,
-		Channel:   domain.Channel(n.Channel.String()),
-		Template: domain.Template{
-			ID:     tid,
-			Params: n.TemplateParams,
-		},
-		Status: domain.SendStatusPrepare,
-	}
-	const (
-		d      = 24
-		second = 1000
-	)
-	now := time.Now()
-	if n.Strategy != nil {
-		switch s := n.Strategy.StrategyType.(type) {
-		case *notificationv1.SendStrategy_Immediate:
-			noti.ScheduledSTime = now.UnixMilli()
-			noti.ScheduledETime = now.Add(d * time.Hour).UnixMilli()
-		case *notificationv1.SendStrategy_Delayed:
-			if s.Delayed != nil && s.Delayed.DelaySeconds > 0 {
-				noti.ScheduledSTime = now.UnixMilli() + s.Delayed.DelaySeconds*second
-				noti.ScheduledETime = now.UnixMilli() + (s.Delayed.DelaySeconds+10)*second
-			}
-
-		case *notificationv1.SendStrategy_Scheduled:
-			if s.Scheduled != nil && s.Scheduled.SendTime != nil {
-				noti.ScheduledSTime = s.Scheduled.SendTime.AsTime().UnixMilli()
-				noti.ScheduledETime = s.Scheduled.SendTime.AsTime().UnixMilli() + 10*second
-			}
-		case *notificationv1.SendStrategy_TimeWindow:
-			if s.TimeWindow != nil {
-				noti.ScheduledSTime = s.TimeWindow.StartTimeMilliseconds
-				noti.ScheduledETime = s.TimeWindow.EndTimeMilliseconds
-			}
-		}
+	noti, err := s.convertToNotification(n, bizID)
+	noti.Status = domain.SendStatusPrepare
+	if err != nil {
+		return domain.TxNotification{}, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
 	}
 	return domain.TxNotification{
 		BizID:        bizID,

@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
 	"github.com/gotomicro/ego/core/elog"
@@ -19,8 +19,8 @@ type ImmediateSendStrategy struct {
 	logger *elog.Component
 }
 
-// newImmediateStrategy 创建立即发送策略
-func newImmediateStrategy(repo repository.NotificationRepository, sender sender.NotificationSender) *ImmediateSendStrategy {
+// NewImmediateStrategy 创建立即发送策略
+func NewImmediateStrategy(repo repository.NotificationRepository, sender sender.NotificationSender) *ImmediateSendStrategy {
 	return &ImmediateSendStrategy{
 		repo:   repo,
 		sender: sender,
@@ -29,13 +29,7 @@ func newImmediateStrategy(repo repository.NotificationRepository, sender sender.
 
 // Send 单条发送通知
 func (s *ImmediateSendStrategy) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
-
-	now := time.Now()
-
-	// 根据发送策略，计算调度窗口
-	notification.ScheduledSTime = now.UnixMilli()
-	notification.ScheduledETime = now.Add(time.Hour).UnixMilli() // 兜底、
-
+	notification.SetSendTime()
 	created, err := s.repo.Create(ctx, notification)
 	if err == nil {
 		// 立即发送
@@ -63,11 +57,6 @@ func (s *ImmediateSendStrategy) Send(ctx context.Context, notification domain.No
 		}, nil
 	}
 
-	// 事务消息直接返回错误
-	if found.Status == domain.SendStatusPrepare || found.Status == domain.SendStatusCanceled {
-		return domain.SendResponse{}, fmt.Errorf("事务消息")
-	}
-
 	// 更新通知状态为PENDING同时获取乐观锁（版本号）
 	oldStatus := found.Status
 	found.Status = domain.SendStatusPending
@@ -87,21 +76,17 @@ func (s *ImmediateSendStrategy) Send(ctx context.Context, notification domain.No
 }
 
 // BatchSend 批量发送通知，其中每个通知的发送策略必须相同
-func (s *ImmediateSendStrategy) BatchSend(ctx context.Context, ns []domain.Notification) ([]domain.SendResponse, error) {
-
-	if len(ns) == 0 {
-		return nil, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)
+func (s *ImmediateSendStrategy) BatchSend(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error) {
+	if len(notifications) == 0 {
+		return nil, fmt.Errorf("%w: 通知列表不能为空", errs.ErrInvalidParameter)
 	}
 
-	now := time.Now()
-	for i := range ns {
-		// 根据发送策略，计算调度窗口
-		ns[i].ScheduledSTime = now.UnixMilli()
-		ns[i].ScheduledETime = now.Add(time.Hour).UnixMilli() // 兜底
+	for i := range notifications {
+		notifications[i].SetSendTime()
 	}
 
 	// 创建通知记录
-	createdNotifications, err := s.repo.BatchCreate(ctx, ns)
+	createdNotifications, err := s.repo.BatchCreate(ctx, notifications)
 	if err != nil {
 		// 只要有一个唯一索引冲突整批失败
 		return nil, fmt.Errorf("创建通知失败: %w", err)

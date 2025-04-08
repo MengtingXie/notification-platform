@@ -17,6 +17,11 @@ type TxNotification struct {
 	Ctime         int64
 	Utime         int64
 }
+
+func (t *TxNotification) SetSendTime() {
+	t.Notification.SetSendTime()
+}
+
 type TxNotificationStatus string
 
 func (status TxNotificationStatus) String() string {
