@@ -14,7 +14,7 @@ import (
 
 	"github.com/ecodeclub/ekit/syncx"
 
-	tx_notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
+	clientv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"github.com/ecodeclub/ekit/slice"
 	"github.com/gotomicro/ego/client/egrpc"
@@ -241,9 +241,9 @@ func (task *TxCheckTask) getCheckBackRes(ctx context.Context, conf CheckBackConf
 		task.clientMap.Store(conf.ServiceName, grpcConn)
 	}
 	// 创建BackCheckService的客户端
-	client := tx_notificationv1.NewTransactionCheckServiceClient(grpcConn)
+	client := clientv1.NewTransactionCheckServiceClient(grpcConn)
 	// 准备请求参数
-	req := &tx_notificationv1.TransactionCheckServiceCheckRequest{
+	req := &clientv1.TransactionCheckServiceCheckRequest{
 		Key: txn.Key,
 	}
 

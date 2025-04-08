@@ -10,6 +10,7 @@ import (
 	"github.com/ecodeclub/ekit/syncx"
 	"github.com/gotomicro/ego/client/egrpc"
 	"github.com/meoying/dlock-go"
+	"time"
 
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"github.com/gotomicro/ego/core/elog"
@@ -30,12 +31,12 @@ type TxNotificationService interface {
 }
 
 type TxNotificationServiceV1 struct {
-	repo                 repository.TxNotificationRepository
-	notificationSvc      NotificationService
-	configSvc            config.BusinessConfigService
-	retryStrategyBuilder retry.Builder
-	logger               *elog.Component
-	lock                 dlock.Client
+	repo            repository.TxNotificationRepository
+	notificationSvc NotificationService
+	configSvc       config.BusinessConfigService
+	//retryStrategyBuilder retry.Builder
+	logger *elog.Component
+	lock   dlock.Client
 }
 
 func NewTxNotificationService(
@@ -46,12 +47,12 @@ func NewTxNotificationService(
 	lock dlock.Client,
 ) *TxNotificationServiceV1 {
 	return &TxNotificationServiceV1{
-		repo:                 repo,
-		notificationSvc:      notificationSvc,
-		configSvc:            configSvc,
-		retryStrategyBuilder: retryStrategyBuilder,
-		logger:               elog.DefaultLogger,
-		lock:                 lock,
+		repo:            repo,
+		notificationSvc: notificationSvc,
+		configSvc:       configSvc,
+		//retryStrategyBuilder: retryStrategyBuilder,
+		logger: elog.DefaultLogger,
+		lock:   lock,
 	}
 }
 
@@ -59,14 +60,14 @@ const defaultBatchSize = 10
 
 func (t *TxNotificationServiceV1) StartTask(ctx context.Context) {
 	task := &TxCheckTask{
-		repo:                 t.repo,
-		notificationSvc:      t.notificationSvc,
-		configSvc:            t.configSvc,
-		retryStrategyBuilder: t.retryStrategyBuilder,
-		logger:               t.logger,
-		lock:                 t.lock,
-		batchSize:            defaultBatchSize,
-		clientMap:            syncx.Map[string, *egrpc.Component]{},
+		repo:            t.repo,
+		notificationSvc: t.notificationSvc,
+		configSvc:       t.configSvc,
+		//retryStrategyBuilder: t.retryStrategyBuilder,
+		logger:    t.logger,
+		lock:      t.lock,
+		batchSize: defaultBatchSize,
+		clientMap: syncx.Map[string, *egrpc.Component]{},
 	}
 	go task.Start(ctx)
 }
@@ -100,16 +101,8 @@ func (t *TxNotificationServiceV1) Prepare(ctx context.Context, txNotification do
 	conf, err := t.configSvc.GetByID(ctx, txNotification.BizID)
 	if err == nil {
 		// 找到配置
-		retryStrategy, rerr := t.retryStrategyBuilder.Build(conf.TxnConfig)
-		if rerr != nil {
-			return 0, rerr
-		}
-		nextCheckTime, ok := retryStrategy.NextTime(retry.Req{
-			CheckTimes: 0,
-		})
-		if ok {
-			txNotification.NextCheckTime = nextCheckTime
-		}
+		// 这一块，
+		txNotification.NextCheckTime = time.Minute * 30
 	}
 	_, err = t.repo.Create(ctx, txNotification)
 	return noti.ID, err
@@ -126,6 +119,8 @@ func (t *TxNotificationServiceV1) Commit(ctx context.Context, bizID int64, key s
 		return fmt.Errorf("更新事务失败 err:%w", err)
 	}
 	err = t.repo.UpdateStatus(ctx, noti.TxID, domain.TxNotificationStatusCommit.String())
+	// 你是要发送的，等我后续通知
+	// t.sender.Send()
 	if errors.Is(err, repository.ErrUpdateStatusFailed) {
 		return ErrUpdateStatusFailed
 	}
