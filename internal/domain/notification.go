@@ -43,12 +43,11 @@ type Notification struct {
 
 func (n *Notification) SetSendTime() {
 	stime, etime := n.SendStrategyConfig.SendTimeWindow()
-	n.ScheduledETime = etime
 	n.ScheduledSTime = stime
+	n.ScheduledETime = etime
 }
 
 func (n *Notification) Validate() error {
-
 	if n.BizID <= 0 {
 		return fmt.Errorf("%w: BizID = %d", ErrInvalidParameter, n.BizID)
 	}

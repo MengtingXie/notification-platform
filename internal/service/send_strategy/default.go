@@ -3,6 +3,7 @@ package send_strategy
 import (
 	"context"
 	"fmt"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/repository"
@@ -41,8 +42,8 @@ func (s *DefaultSendStrategy) BatchSend(ctx context.Context, notifications []dom
 		return nil, fmt.Errorf("%w: 通知列表不能为空", errs.ErrInvalidParameter)
 	}
 
-	for _, not := range notifications {
-		not.SetSendTime()
+	for i := range notifications {
+		notifications[i].SetSendTime()
 	}
 
 	// 创建通知记录

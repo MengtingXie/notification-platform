@@ -21,7 +21,6 @@ const (
 type Provider struct {
 	ID      int64  `gorm:"primaryKey;autoIncrement;comment:'供应商ID'"`
 	Name    string `gorm:"type:VARCHAR(64);NOT NULL;uniqueIndex:idx_name_channel;comment:'供应商名称'"`
-	Code    string `gorm:"type:VARCHAR(64);NOT NULL;comment:'供应商编码, tencentCloud, aliyun'"`
 	Channel string `gorm:"type:ENUM('SMS','EMAIL','IN_APP');NOT NULL;uniqueIndex:idx_name_channel;comment:'支持的渠道'"`
 
 	Endpoint  string `gorm:"type:VARCHAR(255);NOT NULL;comment:'API入口地址'"`
@@ -152,7 +151,6 @@ func (p *providerDAO) Update(ctx context.Context, provider Provider) error {
 	// 构建更新字段映射
 	updates := map[string]interface{}{
 		"name":               provider.Name,
-		"code":               provider.Code,
 		"channel":            provider.Channel,
 		"endpoint":           provider.Endpoint,
 		"api_key":            provider.APIKey,

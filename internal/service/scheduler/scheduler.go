@@ -3,10 +3,11 @@ package scheduler
 import (
 	"context"
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/service/sender"
 	"sync"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/service/sender"
 
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 )

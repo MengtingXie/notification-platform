@@ -7,12 +7,13 @@
 package clientv1
 
 import (
-	v1 "gitee.com/flycash/notification-platform/api/proto/gen/notification/v1"
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	v1 "gitee.com/flycash/notification-platform/api/proto/gen/notification/v1"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -160,13 +161,16 @@ func file_client_v1_notification_proto_rawDescGZIP() []byte {
 	return file_client_v1_notification_proto_rawDescData
 }
 
-var file_client_v1_notification_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_client_v1_notification_proto_goTypes = []any{
-	(*HandleNotificationResultRequest)(nil),  // 0: client.v1.HandleNotificationResultRequest
-	(*HandleNotificationResultResponse)(nil), // 1: client.v1.HandleNotificationResultResponse
-	(*v1.SendNotificationRequest)(nil),       // 2: notification.v1.SendNotificationRequest
-	(*v1.SendNotificationResponse)(nil),      // 3: notification.v1.SendNotificationResponse
-}
+var (
+	file_client_v1_notification_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+	file_client_v1_notification_proto_goTypes  = []any{
+		(*HandleNotificationResultRequest)(nil),  // 0: client.v1.HandleNotificationResultRequest
+		(*HandleNotificationResultResponse)(nil), // 1: client.v1.HandleNotificationResultResponse
+		(*v1.SendNotificationRequest)(nil),       // 2: notification.v1.SendNotificationRequest
+		(*v1.SendNotificationResponse)(nil),      // 3: notification.v1.SendNotificationResponse
+	}
+)
+
 var file_client_v1_notification_proto_depIdxs = []int32{
 	2, // 0: client.v1.HandleNotificationResultRequest.original_request:type_name -> notification.v1.SendNotificationRequest
 	3, // 1: client.v1.HandleNotificationResultRequest.result:type_name -> notification.v1.SendNotificationResponse

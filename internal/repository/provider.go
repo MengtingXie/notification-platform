@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 
@@ -44,7 +45,6 @@ func (p *providerRepository) toDomain(d dao.Provider) domain.Provider {
 	return domain.Provider{
 		ID:               d.ID,
 		Name:             d.Name,
-		Code:             d.Code,
 		Channel:          domain.Channel(d.Channel),
 		Endpoint:         d.Endpoint,
 		APIKey:           d.APIKey,
@@ -61,7 +61,6 @@ func (p *providerRepository) toEntity(provider domain.Provider) dao.Provider {
 	daoProvider := dao.Provider{
 		ID:               provider.ID,
 		Name:             provider.Name,
-		Code:             provider.Code,
 		Channel:          string(provider.Channel),
 		Endpoint:         provider.Endpoint,
 		APIKey:           provider.APIKey,

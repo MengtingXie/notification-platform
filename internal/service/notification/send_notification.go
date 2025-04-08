@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/errs"
 	"strings"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/errs"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/send_strategy"
@@ -113,14 +114,10 @@ func (e *sendService) SendNotificationAsync(ctx context.Context, n domain.Notifi
 	response, err := e.sendStrategy.Send(ctx, n)
 	// 处理策略错误
 	if err != nil {
-
 		e.logger.Warn("异步单条发送通知失败", elog.Any("Error", err))
-
-		// 对不同类型的错误进行通用包装
-		if errors.Is(err, errs.ErrInvalidParameter) || errors.Is(err, errs.ErrInvalidParameter) {
-			return resp, fmt.Errorf("%w: %s", errs.ErrInvalidParameter, err.Error())
+		if errors.Is(err, errs.ErrInvalidParameter) {
+			return resp, err
 		}
-		// 通用的发送失败错误
 		return resp, fmt.Errorf("%w", errs.ErrSendNotificationFailed)
 	}
 
@@ -193,12 +190,9 @@ func (e *sendService) BatchSendNotifications(ctx context.Context, notifications 
 			}
 		}
 
-		// 对不同类型的错误进行通用包装
-		if errors.Is(err, errs.ErrInvalidParameter) || errors.Is(err, errs.ErrInvalidParameter) {
-			return response, fmt.Errorf("%w: %s", errs.ErrInvalidParameter, err.Error())
+		if errors.Is(err, errs.ErrInvalidParameter) {
+			return response, err
 		}
-
-		// 通用的发送失败错误
 		return response, fmt.Errorf("%w", errs.ErrSendNotificationFailed)
 	}
 
@@ -262,15 +256,10 @@ func (e *sendService) BatchSendNotificationsAsync(ctx context.Context, notificat
 	// 发送通知
 	results, err := e.sendStrategy.BatchSend(ctx, notifications)
 	if err != nil {
-
 		e.logger.Warn("异步批量发送通知失败", elog.Any("Error", err))
-
-		// 对不同类型的错误进行通用包装
-		if errors.Is(err, errs.ErrInvalidParameter) || errors.Is(err, errs.ErrInvalidParameter) {
-			return response, fmt.Errorf("%w: %s", errs.ErrInvalidParameter, err.Error())
+		if errors.Is(err, errs.ErrInvalidParameter) {
+			return response, err
 		}
-
-		// 通用的发送失败错误
 		return response, fmt.Errorf("%w", errs.ErrSendNotificationFailed)
 	}
 

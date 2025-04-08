@@ -101,8 +101,8 @@ func (r *notificationRepository) toEntity(n domain.Notification) dao.Notificatio
 		TemplateParams:    templateParams,
 		Status:            string(n.Status),
 		RetryCount:        n.RetryCount,
-		ScheduledSTime:    n.ScheduledSTime,
-		ScheduledETime:    n.ScheduledETime,
+		ScheduledSTime:    n.ScheduledSTime.UnixMilli(),
+		ScheduledETime:    n.ScheduledETime.UnixMilli(),
 		Version:           n.Version,
 	}
 }
@@ -181,8 +181,8 @@ func (r *notificationRepository) toDomain(n dao.Notification) domain.Notificatio
 		},
 		Status:         domain.SendStatus(n.Status),
 		RetryCount:     n.RetryCount,
-		ScheduledSTime: n.ScheduledSTime,
-		ScheduledETime: n.ScheduledETime,
+		ScheduledSTime: time.UnixMilli(n.ScheduledSTime),
+		ScheduledETime: time.UnixMilli(n.ScheduledETime),
 		Version:        n.Version,
 	}
 }

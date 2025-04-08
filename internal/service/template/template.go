@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/audit"
@@ -147,7 +148,7 @@ func (t *templateService) CreateTemplate(ctx context.Context, template domain.Ch
 			TemplateVersionID: createdVersion.ID,
 			ProviderID:        providers[i].ID,
 			ProviderName:      providers[i].Name,
-			ProviderChannel:   domain.Channel(providers[i].Channel),
+			ProviderChannel:   providers[i].Channel,
 		}
 		templateProviders = append(templateProviders, templateProvider)
 	}

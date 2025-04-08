@@ -3,6 +3,7 @@ package send_strategy
 import (
 	"context"
 	"fmt"
+
 	"gitee.com/flycash/notification-platform/internal/errs"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -26,7 +27,8 @@ type Dispatcher struct {
 // NewDispatcher 创建通知发送分发器
 func NewDispatcher(
 	immediate *ImmediateSendStrategy,
-	defaultStrategy *DefaultSendStrategy) SendStrategy {
+	defaultStrategy *DefaultSendStrategy,
+) SendStrategy {
 	return &Dispatcher{
 		immediate:       immediate,
 		defaultStrategy: defaultStrategy,

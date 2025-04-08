@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/repository"
@@ -28,7 +29,6 @@ func NewImmediateStrategy(repo repository.NotificationRepository, sender sender.
 
 // Send 单条发送通知
 func (s *ImmediateSendStrategy) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
-
 	notification.SetSendTime()
 	created, err := s.repo.Create(ctx, notification)
 	if err == nil {
@@ -76,18 +76,17 @@ func (s *ImmediateSendStrategy) Send(ctx context.Context, notification domain.No
 }
 
 // BatchSend 批量发送通知，其中每个通知的发送策略必须相同
-func (s *ImmediateSendStrategy) BatchSend(ctx context.Context, ns []domain.Notification) ([]domain.SendResponse, error) {
-
-	if len(ns) == 0 {
+func (s *ImmediateSendStrategy) BatchSend(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error) {
+	if len(notifications) == 0 {
 		return nil, fmt.Errorf("%w: 通知列表不能为空", errs.ErrInvalidParameter)
 	}
 
-	for _, not := range ns {
-		not.SetSendTime()
+	for i := range notifications {
+		notifications[i].SetSendTime()
 	}
 
 	// 创建通知记录
-	createdNotifications, err := s.repo.BatchCreate(ctx, ns)
+	createdNotifications, err := s.repo.BatchCreate(ctx, notifications)
 	if err != nil {
 		// 只要有一个唯一索引冲突整批失败
 		return nil, fmt.Errorf("创建通知失败: %w", err)

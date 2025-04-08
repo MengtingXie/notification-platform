@@ -16,6 +16,7 @@ package errs
 
 import (
 	"errors"
+
 	"gitee.com/flycash/notification-platform/internal/repository"
 )
 
