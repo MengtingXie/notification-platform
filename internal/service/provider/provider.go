@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
-	"gitee.com/flycash/notification-platform/internal/service/adapter/sms"
 	"gitee.com/flycash/notification-platform/internal/service/provider/manage"
+	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
 	"gitee.com/flycash/notification-platform/internal/service/template"
 )
 
@@ -78,7 +78,8 @@ func NewSMSProvider(name string, templateSvc template.ChannelTemplateService, cl
 
 // Send 发送短信
 func (p *smsProvider) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
-	template, err := p.templateSvc.GetTemplate(ctx, notification.Template.ID, notification.Template.VersionID, p.name, template.ChannelSMS)
+	// SMS 有多个供应商 aliyun，腾讯云
+	template, err := p.templateSvc.GetTemplate(ctx, notification.Template.ID, notification.Template.VersionID, p.name, domain.ChannelSMS)
 	if err != nil {
 		return domain.SendResponse{}, fmt.Errorf("%w: %w", ErrSendFailed, err)
 	}

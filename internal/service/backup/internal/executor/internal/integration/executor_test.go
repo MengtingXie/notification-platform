@@ -3,9 +3,9 @@
 package integration
 
 import (
-	"gitee.com/flycash/notification-platform/internal/service/adapter/sms"
 	"gitee.com/flycash/notification-platform/internal/service/backup/internal/executor/internal/integration/startup"
 	templatesvc "gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
+	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
 	"testing"
 
 	configsvc "gitee.com/flycash/notification-platform/internal/service/config"

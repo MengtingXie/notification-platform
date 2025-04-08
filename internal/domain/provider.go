@@ -19,9 +19,9 @@ const (
 
 // Provider 供应商领域模型
 type Provider struct {
-	ID      int64   // 供应商ID
+	ID int64 // 供应商ID
+	// ali
 	Name    string  // 供应商名称
-	Code    string  // 供应商编码
 	Channel Channel // 支持的渠道
 
 	// 基本信息

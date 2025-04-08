@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	repository2 "gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/service/notification/retry"
 	"strings"
 	"sync"
 	"time"
@@ -15,7 +16,6 @@ import (
 
 	tx_notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	"gitee.com/flycash/notification-platform/internal/service/config"
-	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/service/retry"
 	"github.com/ecodeclub/ekit/slice"
 	"github.com/gotomicro/ego/client/egrpc"
 	"github.com/gotomicro/ego/core/elog"
@@ -25,8 +25,8 @@ import (
 
 type TxCheckTask struct {
 	repo                 repository.TxNotificationRepository
-	notificationSvc      Service
-	configSvc            config.Service
+	notificationSvc      NotificationService
+	configSvc            config.BusinessConfigService
 	retryStrategyBuilder retry.Builder
 	logger               *elog.Component
 	lock                 dlock.Client
@@ -101,7 +101,7 @@ func (task *TxCheckTask) loop(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	bizIDs := slice.Map(txNotifications, func(_ int, src repository2.TxNotification) int64 {
+	bizIDs := slice.Map(txNotifications, func(_ int, src domain.TxNotification) int64 {
 		return src.BizID
 	})
 	configMap, err := task.configSvc.GetByIDs(loopCtx, bizIDs)
@@ -111,30 +111,30 @@ func (task *TxCheckTask) loop(ctx context.Context) error {
 	var eg errgroup.Group
 	mu := &sync.Mutex{}
 	// 需要继续重试的事务通知,
-	retryTxns := make([]repository2.TxNotification, 0, len(txNotifications))
+	retryTxns := make([]domain.TxNotification, 0, len(txNotifications))
 	// 需要提交的事务通知
-	commitTxns := make([]repository2.TxNotification, 0, len(txNotifications))
+	commitTxns := make([]domain.TxNotification, 0, len(txNotifications))
 	// 失败和取消的事务通知
-	failedTxns := make([]repository2.TxNotification, 0, len(txNotifications))
+	failedTxns := make([]domain.TxNotification, 0, len(txNotifications))
 
 	for idx := range txNotifications {
 		eg.Go(func() error {
 			txNotification := txNotifications[idx]
 			txn := task.oneBackCheck(ctx, configMap, txNotification)
 			switch txn.Status {
-			case repository2.TxNotificationStatusCommit:
+			case domain.TxNotificationStatusCommit:
 				mu.Lock()
 				commitTxns = append(commitTxns, txn)
 				mu.Unlock()
-			case repository2.TxNotificationStatusFail:
+			case domain.TxNotificationStatusFail:
 				mu.Lock()
 				failedTxns = append(failedTxns, txn)
 				mu.Unlock()
-			case repository2.TxNotificationStatusPrepare:
+			case domain.TxNotificationStatusPrepare:
 				mu.Lock()
 				retryTxns = append(retryTxns, txn)
 				mu.Unlock()
-			case repository2.TxNotificationStatusCancel:
+			case domain.TxNotificationStatusCancel:
 				mu.Lock()
 				failedTxns = append(failedTxns, txn)
 				mu.Unlock()
@@ -161,7 +161,7 @@ func (task *TxCheckTask) loop(ctx context.Context) error {
 }
 
 // 校验完了
-func (task *TxCheckTask) oneBackCheck(ctx context.Context, configMap map[int64]config.BusinessConfig, txNotification repository2.TxNotification) repository2.TxNotification {
+func (task *TxCheckTask) oneBackCheck(ctx context.Context, configMap map[int64]domain.BusinessConfig, txNotification domain.TxNotification) domain.TxNotification {
 	conf, ok := configMap[txNotification.BizID]
 	if !ok || conf.TxnConfig == "" {
 		// 没设置，所以不需要回查
@@ -194,18 +194,18 @@ func (task *TxCheckTask) oneBackCheck(ctx context.Context, configMap map[int64]c
 		}
 		// 不能重试将状态变成fail
 		txNotification.NextCheckTime = 0
-		txNotification.Status = repository2.TxNotificationStatusFail
+		txNotification.Status = domain.TxNotificationStatusFail
 		return txNotification
 
 	}
 
 	if res == cancelStatus {
-		txNotification.Status = repository2.TxNotificationStatusCancel
+		txNotification.Status = domain.TxNotificationStatusCancel
 		txNotification.NextCheckTime = 0
 	}
 	if res == committedStatus {
 		txNotification.NextCheckTime = 0
-		txNotification.Status = repository2.TxNotificationStatusCommit
+		txNotification.Status = domain.TxNotificationStatusCommit
 	}
 	return txNotification
 }
@@ -223,7 +223,7 @@ func (task *TxCheckTask) getConfigFromStr(conf string) (CheckBackConfig, error) 
 	return cfg, nil
 }
 
-func (task *TxCheckTask) getCheckBackRes(ctx context.Context, conf CheckBackConfig, txn repository2.TxNotification) (status int, err error) {
+func (task *TxCheckTask) getCheckBackRes(ctx context.Context, conf CheckBackConfig, txn domain.TxNotification) (status int, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if str, ok := r.(string); ok {
@@ -256,12 +256,12 @@ func (task *TxCheckTask) getCheckBackRes(ctx context.Context, conf CheckBackConf
 	return int(resp.Status), nil
 }
 
-func (task *TxCheckTask) commit(ctx context.Context, txns []repository2.TxNotification) {
+func (task *TxCheckTask) commit(ctx context.Context, txns []domain.TxNotification) {
 	// 更新远程
-	ids := slice.Map(txns, func(_ int, src repository2.TxNotification) uint64 {
+	ids := slice.Map(txns, func(_ int, src domain.TxNotification) uint64 {
 		return src.Notification.ID
 	})
-	err := task.notificationSvc.BatchUpdateStatus(ctx, ids, SendStatusPending)
+	err := task.notificationSvc.BatchUpdateStatus(ctx, ids, domain.StatusPending)
 	if err != nil {
 		task.logger.Error("更新通知服务中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))
 		return
@@ -272,11 +272,11 @@ func (task *TxCheckTask) commit(ctx context.Context, txns []repository2.TxNotifi
 	}
 }
 
-func (task *TxCheckTask) fail(ctx context.Context, txns []repository2.TxNotification) {
-	ids := slice.Map(txns, func(_ int, src repository2.TxNotification) uint64 {
+func (task *TxCheckTask) fail(ctx context.Context, txns []domain.TxNotification) {
+	ids := slice.Map(txns, func(_ int, src domain.TxNotification) uint64 {
 		return src.Notification.ID
 	})
-	err := task.notificationSvc.BatchUpdateStatus(ctx, ids, SendStatusCanceled)
+	err := task.notificationSvc.BatchUpdateStatus(ctx, ids, domain.StatusCanceled)
 	if err != nil {
 		task.logger.Error("更新通知服务中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))
 		return
@@ -287,15 +287,15 @@ func (task *TxCheckTask) fail(ctx context.Context, txns []repository2.TxNotifica
 	}
 }
 
-func (task *TxCheckTask) retry(ctx context.Context, txns []repository2.TxNotification) {
+func (task *TxCheckTask) retry(ctx context.Context, txns []domain.TxNotification) {
 	err := task.repo.UpdateCheckStatus(ctx, txns)
 	if err != nil {
 		task.logger.Error("更新事务表中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))
 	}
 }
 
-func (task *TxCheckTask) taskIDs(txns []repository2.TxNotification) string {
-	txids := slice.Map(txns, func(_ int, src repository2.TxNotification) string {
+func (task *TxCheckTask) taskIDs(txns []domain.TxNotification) string {
+	txids := slice.Map(txns, func(_ int, src domain.TxNotification) string {
 		return fmt.Sprintf("%d", src.TxID)
 	})
 	return strings.Join(txids, ",")

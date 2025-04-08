@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	configsvc "gitee.com/flycash/notification-platform/internal/service/config"
-	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 	"github.com/gotomicro/ego/core/elog"
 )
 
@@ -27,7 +26,6 @@ type NotificationSender interface {
 
 // sender 通知发送器实现
 type sender struct {
-	notificationSvc   notificationsvc.NotificationService
 	repo              repository.NotificationRepository
 	configSvc         configsvc.BusinessConfigService
 	channelDispatcher channel.Channel
