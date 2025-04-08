@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"errors"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"github.com/gotomicro/ego/core/elog"
 )
@@ -52,7 +53,7 @@ func (s *SelectorBuilder) Build() Selector {
 }
 
 func (r *RoundRobinSelector) Reset() {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 

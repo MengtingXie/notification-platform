@@ -4,11 +4,12 @@ package integration
 
 import (
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/service/backup/internal/notification/internal/integration/startup"
 	"math/rand"
 	"testing"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/service/backup/internal/notification/internal/integration/startup"
 
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"

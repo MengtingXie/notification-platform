@@ -4,12 +4,13 @@ package integration
 
 import (
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/service/backup/internal/provider/internal/integration/startup"
-	"gitee.com/flycash/notification-platform/internal/service/provider/manage"
 	"math/rand"
 	"testing"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/service/backup/internal/provider/internal/integration/startup"
+	"gitee.com/flycash/notification-platform/internal/service/provider/manage"
 
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/ego-component/egorm"

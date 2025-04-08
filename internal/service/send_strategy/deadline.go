@@ -3,9 +3,10 @@ package send_strategy
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
-	"time"
 )
 
 // DeadlineSendStrategy 截止日期发送策略
@@ -39,7 +40,7 @@ func (s *DeadlineSendStrategy) BatchSend(ctx context.Context, ns []domain.Notifi
 		ns[i].ScheduledETime = deadlineTime.UnixMilli()
 
 		// 获取notification模块的领域模型
-		//notificationSvcDomains[i] = ns[i].Notification
+		// notificationSvcDomains[i] = ns[i].Notification
 	}
 
 	// 创建通知记录

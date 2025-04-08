@@ -5,12 +5,13 @@ package integration
 import (
 	"context"
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/service/audit/mocks"
-	"gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
-	"gitee.com/flycash/notification-platform/internal/service/backup/internal/template/internal/integration/startup"
 	"testing"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/domain"
+	auditmocks "gitee.com/flycash/notification-platform/internal/service/audit/mocks"
+	"gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
+	"gitee.com/flycash/notification-platform/internal/service/backup/internal/template/internal/integration/startup"
 
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
 	providermocks "gitee.com/flycash/notification-platform/internal/service/provider/mocks"

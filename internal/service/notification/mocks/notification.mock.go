@@ -11,8 +11,9 @@ package notificationmocks
 
 import (
 	context "context"
-	"gitee.com/flycash/notification-platform/internal/domain"
 	reflect "reflect"
+
+	"gitee.com/flycash/notification-platform/internal/domain"
 
 	gomock "go.uber.org/mock/gomock"
 )

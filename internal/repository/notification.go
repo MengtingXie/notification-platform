@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
-	"time"
 )
 
 var (
@@ -77,7 +78,7 @@ func (r *notificationRepository) BatchGetByIDs(ctx context.Context, ids []uint64
 
 // Create 创建一条通知
 func (r *notificationRepository) Create(ctx context.Context, notification domain.Notification) (domain.Notification, error) {
-	ds, err := r.dao.Create(ctx, r.toEntity(notification))
+	ds, err := r.dao.Create(ctx, notificationToEntity(notification))
 	if err != nil {
 		return domain.Notification{}, err
 	}
@@ -85,14 +86,14 @@ func (r *notificationRepository) Create(ctx context.Context, notification domain
 }
 
 // toEntity 将领域对象转换为DAO实体
-func (r *notificationRepository) toEntity(n domain.Notification) dao.Notification {
+func notificationToEntity(n domain.Notification) dao.Notification {
 	templateParams, _ := json.Marshal(n.Template.Params)
 
 	return dao.Notification{
 		ID:                n.ID,
 		BizID:             n.BizID,
 		Key:               n.Key,
-		Receiver:          n.Receiver,
+		Receivers:         n.Receiver,
 		Channel:           string(n.Channel),
 		TemplateID:        n.Template.ID,
 		TemplateVersionID: n.Template.VersionID,
@@ -113,7 +114,7 @@ func (r *notificationRepository) BatchCreate(ctx context.Context, notifications 
 
 	daoNotifications := make([]dao.Notification, len(notifications))
 	for i := range notifications {
-		daoNotifications[i] = r.toEntity(notifications[i])
+		daoNotifications[i] = notificationToEntity(notifications[i])
 	}
 
 	createdNotifications, err := r.dao.BatchCreate(ctx, daoNotifications)
@@ -137,13 +138,13 @@ func (r *notificationRepository) BatchUpdateStatusSucceededOrFailed(ctx context.
 	// 转换成功的通知为DAO层的实体
 	successItems := make([]dao.Notification, len(succeededNotifications))
 	for i := range succeededNotifications {
-		successItems[i] = r.toEntity(succeededNotifications[i])
+		successItems[i] = notificationToEntity(succeededNotifications[i])
 	}
 
 	// 转换失败的通知为DAO层的实体
 	failedItems := make([]dao.Notification, len(failedNotifications))
 	for i := range failedNotifications {
-		failedItems[i] = r.toEntity(failedNotifications[i])
+		failedItems[i] = notificationToEntity(failedNotifications[i])
 	}
 
 	return r.dao.BatchUpdateStatusSucceededOrFailed(ctx, successItems, failedItems)
@@ -167,7 +168,7 @@ func (r *notificationRepository) toDomain(n dao.Notification) domain.Notificatio
 		ID:       n.ID,
 		BizID:    n.BizID,
 		Key:      n.Key,
-		Receiver: n.Receiver,
+		Receiver: n.Receivers,
 		Channel:  domain.Channel(n.Channel),
 		Template: domain.Template{
 			ID:        n.TemplateID,

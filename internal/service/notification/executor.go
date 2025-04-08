@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/service/strategy"
-	"gitee.com/flycash/notification-platform/internal/service/template"
 	"strings"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/service/send_strategy"
+	"gitee.com/flycash/notification-platform/internal/service/template"
 
 	"github.com/gotomicro/ego/core/elog"
 	"github.com/sony/sonyflake"

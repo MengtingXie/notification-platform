@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/channel"
-	"sync"
 
 	configsvc "gitee.com/flycash/notification-platform/internal/service/config"
 	"github.com/gotomicro/ego/core/elog"
@@ -39,7 +40,6 @@ func NewSender(
 	configSvc configsvc.BusinessConfigService,
 	channelDispatcher channel.Channel,
 ) NotificationSender {
-
 	return &sender{
 		configSvc: configSvc,
 		repo:      repo,

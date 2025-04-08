@@ -8,8 +8,8 @@ import (
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
+	"gitee.com/flycash/notification-platform/internal/service/send_strategy"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
-	"gitee.com/flycash/notification-platform/internal/service/strategy"
 	"github.com/google/wire"
 	"github.com/sony/sonyflake"
 )

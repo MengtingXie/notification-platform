@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 )
@@ -10,15 +11,10 @@ import (
 var ErrUpdateStatusFailed = errors.New("没有更新")
 
 type TxNotificationRepository interface {
-	Create(ctx context.Context, notification domain.TxNotification) (int64, error)
+	Create(ctx context.Context, notification domain.TxNotification) (uint64, error)
 	Find(ctx context.Context, offset, limit int) ([]domain.TxNotification, error)
-	UpdateStatus(ctx context.Context, txIDs int64, status string) error
-	UpdateCheckStatus(ctx context.Context, txNotifications []domain.TxNotification) error
-	// First 通过事务id查找对应的事务
-	First(ctx context.Context, txID int64) (domain.TxNotification, error)
-	BatchGetTxNotification(ctx context.Context, txIDs []int64) (map[int64]domain.TxNotification, error)
-	GetByBizIDKey(ctx context.Context, bizID int64, key string) (domain.TxNotification, error)
-	UpdateNotificationID(ctx context.Context, bizID int64, key string, notificationID uint64) error
+	UpdateStatus(ctx context.Context, bizID int64, key, status, notificationStatus string) error
+	UpdateCheckStatus(ctx context.Context, txNotifications []domain.TxNotification, notificationStatus string) error
 }
 
 type txNotificationRepo struct {
@@ -32,30 +28,6 @@ func NewTxNotificationRepository(txdao dao.TxNotificationDAO) TxNotificationRepo
 	}
 }
 
-func (t *txNotificationRepo) UpdateNotificationID(ctx context.Context, bizID int64, key string, notificationID uint64) error {
-	return t.txdao.UpdateNotificationID(ctx, bizID, key, notificationID)
-}
-
-func (t *txNotificationRepo) GetByBizIDKey(ctx context.Context, bizID int64, key string) (domain.TxNotification, error) {
-	notifyEntity, err := t.txdao.GetByBizIDKey(ctx, bizID, key)
-	if err != nil {
-		return domain.TxNotification{}, err
-	}
-	return t.toDomain(notifyEntity), nil
-}
-
-func (t *txNotificationRepo) BatchGetTxNotification(ctx context.Context, txIDs []int64) (map[int64]domain.TxNotification, error) {
-	taMap, err := t.txdao.BatchGetTxNotification(ctx, txIDs)
-	if err != nil {
-		return nil, err
-	}
-	domainTxnMap := make(map[int64]domain.TxNotification, len(taMap))
-	for txid, tx := range taMap {
-		domainTxnMap[txid] = t.toDomain(tx)
-	}
-	return domainTxnMap, nil
-}
-
 func (t *txNotificationRepo) First(ctx context.Context, txID int64) (domain.TxNotification, error) {
 	noti, err := t.txdao.First(ctx, txID)
 	if err != nil {
@@ -64,11 +36,12 @@ func (t *txNotificationRepo) First(ctx context.Context, txID int64) (domain.TxNo
 	return t.toDomain(noti), nil
 }
 
-func (t *txNotificationRepo) Create(ctx context.Context, notification domain.TxNotification) (int64, error) {
+func (t *txNotificationRepo) Create(ctx context.Context, txn domain.TxNotification) (uint64, error) {
 	// 转换领域模型到DAO对象
-	daoNotification := t.toDao(notification)
+	txnEntity := t.toDao(txn)
+	notificationEntity := notificationToEntity(txn.Notification)
 	// 调用DAO层创建记录
-	return t.txdao.Create(ctx, daoNotification)
+	return t.txdao.Prepare(ctx, txnEntity, notificationEntity)
 }
 
 func (t *txNotificationRepo) Find(ctx context.Context, offset, limit int) ([]domain.TxNotification, error) {
@@ -86,12 +59,12 @@ func (t *txNotificationRepo) Find(ctx context.Context, offset, limit int) ([]dom
 	return result, nil
 }
 
-func (t *txNotificationRepo) UpdateStatus(ctx context.Context, txID int64, status string) error {
+func (t *txNotificationRepo) UpdateStatus(ctx context.Context, bizID int64, key, status, notificationStatus string) error {
 	// 直接调用DAO层更新状态
-	return t.txdao.UpdateStatus(ctx, txID, status)
+	return t.txdao.UpdateStatus(ctx, bizID, key, status, notificationStatus)
 }
 
-func (t *txNotificationRepo) UpdateCheckStatus(ctx context.Context, txNotifications []domain.TxNotification) error {
+func (t *txNotificationRepo) UpdateCheckStatus(ctx context.Context, txNotifications []domain.TxNotification, notificationStatus string) error {
 	// 将领域模型列表转换为DAO对象列表
 	daoNotifications := make([]dao.TxNotification, 0, len(txNotifications))
 	for idx := range txNotifications {
@@ -100,7 +73,7 @@ func (t *txNotificationRepo) UpdateCheckStatus(ctx context.Context, txNotificati
 	}
 
 	// 调用DAO层更新检查状态
-	return t.txdao.UpdateCheckStatus(ctx, daoNotifications)
+	return t.txdao.UpdateCheckStatus(ctx, daoNotifications, notificationStatus)
 }
 
 // toDomain 将DAO对象转换为领域模型

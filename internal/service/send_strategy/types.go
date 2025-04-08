@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
 )
@@ -30,7 +31,8 @@ type Dispatcher struct {
 // NewDispatcher 创建通知发送分发器
 func NewDispatcher(
 	strategies map[domain.SendStrategyType]SendStrategy,
-	sender sender.NotificationSender) SendStrategy {
+	sender sender.NotificationSender,
+) SendStrategy {
 	return &Dispatcher{
 		sender:     sender,
 		strategies: strategies,

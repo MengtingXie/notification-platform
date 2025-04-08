@@ -16,6 +16,7 @@ package channel
 
 import (
 	"context"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
 )

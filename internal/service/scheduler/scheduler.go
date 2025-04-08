@@ -3,10 +3,11 @@ package scheduler
 import (
 	"context"
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/service/sender"
 	"sync"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/service/sender"
 
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 )
@@ -119,7 +120,7 @@ func (s *scheduler) processPendingNotifications() {
 	}
 
 	// 按业务ID分组，避免单个业务超出限制影响其他业务
-	//bizGroups := groupByBizID(notifications)
+	// bizGroups := groupByBizID(notifications)
 
 	// 对每个业务分组单独处理
 	s.sender.BatchSend(ctx, notifications)

@@ -3,20 +3,18 @@ package notification
 import (
 	"context"
 	"errors"
-	"fmt"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/notification/retry"
 	"github.com/ecodeclub/ekit/syncx"
 	"github.com/gotomicro/ego/client/egrpc"
-	"github.com/meoying/dlock-go"
-	"time"
-
-	"gitee.com/flycash/notification-platform/internal/service/config"
 	"github.com/gotomicro/ego/core/elog"
+	"github.com/meoying/dlock-go"
 )
 
-var ErrUpdateStatusFailed = errors.New("update status failed")
+var ErrUpdateStatusFailed = errors.New("该消息不是准备状态，更新失败")
 
 //go:generate mockgen -source=./tx_notification.go -destination=../../mocks/tx_notification.mock.go -package=txnotificationmocks -typed TxNotificationService
 type TxNotificationService interface {
@@ -26,15 +24,13 @@ type TxNotificationService interface {
 	Commit(ctx context.Context, bizID int64, key string) error
 	// Cancel 取消
 	Cancel(ctx context.Context, bizID int64, key string) error
-	// GetNotification 获取事务
-	GetNotification(ctx context.Context, bizID int64, key string) (domain.TxNotification, error)
 }
 
 type TxNotificationServiceV1 struct {
 	repo            repository.TxNotificationRepository
 	notificationSvc NotificationService
 	configSvc       config.BusinessConfigService
-	//retryStrategyBuilder retry.Builder
+	// retryStrategyBuilder retry.Builder
 	logger *elog.Component
 	lock   dlock.Client
 }
@@ -50,7 +46,7 @@ func NewTxNotificationService(
 		repo:            repo,
 		notificationSvc: notificationSvc,
 		configSvc:       configSvc,
-		//retryStrategyBuilder: retryStrategyBuilder,
+		// retryStrategyBuilder: retryStrategyBuilder,
 		logger: elog.DefaultLogger,
 		lock:   lock,
 	}
@@ -63,7 +59,7 @@ func (t *TxNotificationServiceV1) StartTask(ctx context.Context) {
 		repo:            t.repo,
 		notificationSvc: t.notificationSvc,
 		configSvc:       t.configSvc,
-		//retryStrategyBuilder: t.retryStrategyBuilder,
+		// retryStrategyBuilder: t.retryStrategyBuilder,
 		logger:    t.logger,
 		lock:      t.lock,
 		batchSize: defaultBatchSize,
@@ -72,53 +68,13 @@ func (t *TxNotificationServiceV1) StartTask(ctx context.Context) {
 	go task.Start(ctx)
 }
 
-func (t *TxNotificationServiceV1) GetNotification(ctx context.Context, bizID int64, key string) (domain.TxNotification, error) {
-	txn, err := t.repo.GetByBizIDKey(ctx, bizID, key)
-	if err != nil {
-		return domain.TxNotification{}, err
-	}
-	n, err := t.notificationSvc.GetByID(ctx, txn.Notification.ID)
-	if err != nil {
-		return domain.TxNotification{}, err
-	}
-	txn.Notification = n
-	return txn, nil
-}
-
 func (t *TxNotificationServiceV1) Prepare(ctx context.Context, txNotification domain.TxNotification) (uint64, error) {
-	noti, nerr := t.notificationSvc.Create(ctx, txNotification.Notification)
-	if nerr != nil {
-		if errors.Is(nerr, ErrNotificationDuplicate) {
-			txn, err := t.repo.GetByBizIDKey(ctx, txNotification.BizID, txNotification.Key)
-			if err != nil {
-				return 0, err
-			}
-			return txn.Notification.ID, nil
-		}
-		return 0, nerr
-	}
-	txNotification.Notification = noti
-	conf, err := t.configSvc.GetByID(ctx, txNotification.BizID)
-	if err == nil {
-		// 找到配置
-		// 这一块，
-		txNotification.NextCheckTime = time.Minute * 30
-	}
-	_, err = t.repo.Create(ctx, txNotification)
-	return noti.ID, err
+	return t.repo.Create(ctx, txNotification)
 }
 
 func (t *TxNotificationServiceV1) Commit(ctx context.Context, bizID int64, key string) error {
-	noti, err := t.repo.GetByBizIDKey(ctx, bizID, key)
-	if err != nil {
-		return fmt.Errorf("查找事务失败 err:%w", err)
-	}
+	err := t.repo.UpdateStatus(ctx, bizID, key, domain.TxNotificationStatusCommit.String(), string(domain.SendStatusPending))
 
-	err = t.notificationSvc.BatchUpdateStatus(ctx, []uint64{noti.Notification.ID}, domain.SendStatusPending)
-	if err != nil {
-		return fmt.Errorf("更新事务失败 err:%w", err)
-	}
-	err = t.repo.UpdateStatus(ctx, noti.TxID, domain.TxNotificationStatusCommit.String())
 	// 你是要发送的，等我后续通知
 	// t.sender.Send()
 	if errors.Is(err, repository.ErrUpdateStatusFailed) {
@@ -128,16 +84,10 @@ func (t *TxNotificationServiceV1) Commit(ctx context.Context, bizID int64, key s
 }
 
 func (t *TxNotificationServiceV1) Cancel(ctx context.Context, bizID int64, key string) error {
-	noti, err := t.repo.GetByBizIDKey(ctx, bizID, key)
-	if err != nil {
-		return fmt.Errorf("查找事务失败 err:%w", err)
-	}
+	err := t.repo.UpdateStatus(ctx, bizID, key, domain.TxNotificationStatusCommit.String(), string(domain.SendStatusCanceled))
 
-	err = t.notificationSvc.BatchUpdateStatus(ctx, []uint64{noti.Notification.ID}, domain.SendStatusCanceled)
-	if err != nil {
-		return fmt.Errorf("更新事务失败 err:%w", err)
-	}
-	err = t.repo.UpdateStatus(ctx, noti.TxID, domain.TxNotificationStatusCancel.String())
+	// 你是要发送的，等我后续通知
+	// t.sender.Send()
 	if errors.Is(err, repository.ErrUpdateStatusFailed) {
 		return ErrUpdateStatusFailed
 	}

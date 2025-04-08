@@ -6,14 +6,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/domain"
-	dao2 "gitee.com/flycash/notification-platform/internal/repository/dao"
-	"gitee.com/flycash/notification-platform/internal/service/backup/internal/tx_notification/internal/integration/startup"
-	"gitee.com/flycash/notification-platform/internal/service/backup/internal/tx_notification/internal/integration/testgrpc"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/domain"
+	dao2 "gitee.com/flycash/notification-platform/internal/repository/dao"
+	"gitee.com/flycash/notification-platform/internal/service/backup/internal/tx_notification/internal/integration/startup"
+	"gitee.com/flycash/notification-platform/internal/service/backup/internal/tx_notification/internal/integration/testgrpc"
 
 	"gorm.io/gorm"
 

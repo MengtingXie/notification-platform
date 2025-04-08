@@ -3,9 +3,10 @@ package send_strategy
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
-	"time"
 )
 
 // TimeWindowSendStrategy 时间窗口发送策略

@@ -12,8 +12,8 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/notification"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
+	"gitee.com/flycash/notification-platform/internal/service/send_strategy"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
-	"gitee.com/flycash/notification-platform/internal/service/strategy"
 	"github.com/sony/sonyflake"
 )
 
