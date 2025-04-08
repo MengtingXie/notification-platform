@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/errs"
 	"time"
 )
 
@@ -59,19 +60,19 @@ func (e SendStrategyConfig) Validate() error {
 		return nil
 	case SendStrategyDelayed:
 		if e.Delay <= 0 {
-			return fmt.Errorf("%w: 延迟发送策略需要指定正数的延迟秒数", ErrInvalidParameter)
+			return fmt.Errorf("%w: 延迟发送策略需要指定正数的延迟秒数", errs.ErrInvalidParameter)
 		}
 	case SendStrategyScheduled:
 		if e.ScheduledTime.IsZero() || e.ScheduledTime.Before(time.Now()) {
-			return fmt.Errorf("%w: 定时发送策略需要指定未来的发送时间", ErrInvalidParameter)
+			return fmt.Errorf("%w: 定时发送策略需要指定未来的发送时间", errs.ErrInvalidParameter)
 		}
 	case SendStrategyTimeWindow:
 		if e.StartTime.IsZero() || e.StartTime.After(e.EndTime) {
-			return fmt.Errorf("%w: 时间窗口发送策略需要指定有效的开始和结束时间", ErrInvalidParameter)
+			return fmt.Errorf("%w: 时间窗口发送策略需要指定有效的开始和结束时间", errs.ErrInvalidParameter)
 		}
 	case SendStrategyDeadline:
 		if e.DeadlineTime.IsZero() || e.DeadlineTime.Before(time.Now()) {
-			return fmt.Errorf("%w: 截止日期发送策略需要指定未来的发送时间", ErrInvalidParameter)
+			return fmt.Errorf("%w: 截止日期发送策略需要指定未来的发送时间", errs.ErrInvalidParameter)
 		}
 	}
 	return nil

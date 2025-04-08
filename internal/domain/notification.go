@@ -3,6 +3,7 @@ package domain
 import (
 	"encoding/json"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/errs"
 	"time"
 )
 
@@ -49,31 +50,31 @@ func (n *Notification) SetSendTime() {
 
 func (n *Notification) Validate() error {
 	if n.BizID <= 0 {
-		return fmt.Errorf("%w: BizID = %d", ErrInvalidParameter, n.BizID)
+		return fmt.Errorf("%w: BizID = %d", errs.ErrInvalidParameter, n.BizID)
 	}
 
 	if n.Key == "" {
-		return fmt.Errorf("%w: Key = %q", ErrInvalidParameter, n.Key)
+		return fmt.Errorf("%w: Key = %q", errs.ErrInvalidParameter, n.Key)
 	}
 
 	if len(n.Receivers) == 0 {
-		return fmt.Errorf("%w: Receivers= %v", ErrInvalidParameter, n.Receivers)
+		return fmt.Errorf("%w: Receivers= %v", errs.ErrInvalidParameter, n.Receivers)
 	}
 
 	if n.Channel != ChannelSMS && n.Channel != ChannelEmail && n.Channel != ChannelInApp {
-		return fmt.Errorf("%w: Channel = %q", ErrInvalidParameter, n.Channel)
+		return fmt.Errorf("%w: Channel = %q", errs.ErrInvalidParameter, n.Channel)
 	}
 
 	if n.Template.ID <= 0 {
-		return fmt.Errorf("%w: Template.ID = %d", ErrInvalidParameter, n.Template.ID)
+		return fmt.Errorf("%w: Template.ID = %d", errs.ErrInvalidParameter, n.Template.ID)
 	}
 
 	if n.Template.VersionID <= 0 {
-		return fmt.Errorf("%w: Template.VersionID = %d", ErrInvalidParameter, n.Template.VersionID)
+		return fmt.Errorf("%w: Template.VersionID = %d", errs.ErrInvalidParameter, n.Template.VersionID)
 	}
 
 	if len(n.Template.Params) == 0 {
-		return fmt.Errorf("%w: Template.Params = %q", ErrInvalidParameter, n.Template.Params)
+		return fmt.Errorf("%w: Template.Params = %q", errs.ErrInvalidParameter, n.Template.Params)
 	}
 
 	if err := n.SendStrategyConfig.Validate(); err != nil {
@@ -85,7 +86,7 @@ func (n *Notification) Validate() error {
 
 func (n *Notification) IsValidBizID() error {
 	if n.BizID <= 0 {
-		return fmt.Errorf("%w: BizID = %d", ErrInvalidParameter, n.BizID)
+		return fmt.Errorf("%w: BizID = %d", errs.ErrInvalidParameter, n.BizID)
 	}
 	return nil
 }
