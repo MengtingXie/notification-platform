@@ -13,10 +13,10 @@ var (
 	ErrInvalidParameter = errors.New("参数非法")
 )
 
-// ManageService 供应商服务接口
+// Service 供应商服务接口
 //
-//go:generate mockgen -source=./provider.go -destination=../../mocks/provider.mock.go -package=providermocks -typed ProviderService
-type ManageService interface {
+//go:generate mockgen -source=./manage.go -destination=../mocks/manage.mock.go -package=providermocks -typed Service
+type Service interface {
 	// CreateProvider 创建供应商
 	CreateProvider(ctx context.Context, provider domain.Provider) (domain.Provider, error)
 	// UpdateProvider 更新供应商
@@ -35,7 +35,7 @@ type providerService struct {
 }
 
 // NewProviderService 创建供应商服务
-func NewProviderService(repo repository.ProviderRepository) ManageService {
+func NewProviderService(repo repository.ProviderRepository) Service {
 	return &providerService{
 		repo: repo,
 	}
@@ -53,10 +53,6 @@ func (s *providerService) CreateProvider(ctx context.Context, provider domain.Pr
 func (s *providerService) isValidateProvider(provider domain.Provider) error {
 	if provider.Name == "" {
 		return fmt.Errorf("%w: 供应商名称不能为空", ErrInvalidParameter)
-	}
-
-	if provider.Code == "" {
-		return fmt.Errorf("%w: 供应商编码不能为空", ErrInvalidParameter)
 	}
 
 	if s.isUnknownChannel(provider.Channel) {

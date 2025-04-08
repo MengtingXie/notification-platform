@@ -9,7 +9,7 @@ package template
 import (
 	"gitee.com/flycash/notification-platform/internal/repository"
 	dao2 "gitee.com/flycash/notification-platform/internal/repository/dao"
-	"gitee.com/flycash/notification-platform/internal/service/audit"
+	"gitee.com/flycash/notification-platform/internal/service/backup/internal/audit"
 	"gitee.com/flycash/notification-platform/internal/service/backup/internal/template/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
 	template2 "gitee.com/flycash/notification-platform/internal/service/template"

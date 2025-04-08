@@ -5,7 +5,7 @@ package template
 import (
 	"gitee.com/flycash/notification-platform/internal/repository"
 	dao2 "gitee.com/flycash/notification-platform/internal/repository/dao"
-	auditsvc "gitee.com/flycash/notification-platform/internal/service/audit"
+	auditsvc "gitee.com/flycash/notification-platform/internal/service/backup/internal/audit"
 	"gitee.com/flycash/notification-platform/internal/service/backup/internal/template/internal/repository/dao"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
 	template2 "gitee.com/flycash/notification-platform/internal/service/template"

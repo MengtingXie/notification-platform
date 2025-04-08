@@ -3,7 +3,7 @@
 package startup
 
 import (
-	auditsvc "gitee.com/flycash/notification-platform/internal/service/audit"
+	auditsvc "gitee.com/flycash/notification-platform/internal/service/backup/internal/audit"
 	"gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"

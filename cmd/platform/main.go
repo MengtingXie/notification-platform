@@ -22,7 +22,7 @@ func newSelectorBuilder() *provider.SelectorBuilder {
 	return provider.NewSelectorBuilder(initSMSProviders(nil))
 }
 
-func initSMSProviders(psvc manage.ManageService) []provider.Provider {
+func initSMSProviders(psvc manage.Service) []provider.Provider {
 	// 发起数据库查询
 	ali, _ := sms.NewAliyunSMS("", "", "")
 	tencent, _ := sms.NewTencentCloudSMS("", "", "", "")

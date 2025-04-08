@@ -6,12 +6,12 @@ import (
 	"context"
 	"fmt"
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/service/audit/mocks"
 	"gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
 	"gitee.com/flycash/notification-platform/internal/service/backup/internal/template/internal/integration/startup"
 	"testing"
 	"time"
 
-	auditmocks "gitee.com/flycash/notification-platform/internal/service/audit/mocks"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
 	providermocks "gitee.com/flycash/notification-platform/internal/service/provider/mocks"
 	templatesvc "gitee.com/flycash/notification-platform/internal/service/template"
@@ -43,7 +43,7 @@ func (s *TemplateServiceTestSuite) TearDownTest() {
 	s.db.Exec("TRUNCATE TABLE `channel_template_providers`")
 }
 
-func (s *TemplateServiceTestSuite) newChannelTemplateService(ctrl *gomock.Controller) (template.Service, *providermocks.MockProviderService, *auditmocks.MockAuditService) {
+func (s *TemplateServiceTestSuite) newChannelTemplateService(ctrl *gomock.Controller) (template.Service, *providermocks.MockProviderService, *auditmocks.auditmocks) {
 	mockProviderSvc := providermocks.NewMockProviderService(ctrl)
 	mockAuditSvc := auditmocks.NewMockAuditService(ctrl)
 	return startup.InitChannelTemplateService(mockProviderSvc, mockAuditSvc), mockProviderSvc, mockAuditSvc

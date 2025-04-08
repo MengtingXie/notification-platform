@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/service/audit"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider/manage"
-
-	auditsvc "gitee.com/flycash/notification-platform/internal/service/audit"
 )
 
 var (
@@ -59,12 +58,12 @@ type ChannelTemplateService interface {
 // templateService 模板服务实现
 type templateService struct {
 	repo        repository.ChannelTemplateRepository
-	providerSvc providersvc.ManageService
-	auditSvc    auditsvc.Service
+	providerSvc providersvc.Service
+	auditSvc    audit.Service
 }
 
 // NewChannelTemplateService 创建模板服务实例
-func NewChannelTemplateService(repo repository.ChannelTemplateRepository, providerSvc providersvc.ManageService, auditSvc auditsvc.Service) ChannelTemplateService {
+func NewChannelTemplateService(repo repository.ChannelTemplateRepository, providerSvc providersvc.Service, auditSvc audit.Service) ChannelTemplateService {
 	return &templateService{
 		repo:        repo,
 		providerSvc: providerSvc,

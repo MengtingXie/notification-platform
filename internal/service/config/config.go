@@ -16,7 +16,7 @@ var (
 	ErrIDNotSet         = errors.New("业务id没有设置")
 )
 
-//go:generate mockgen -source=./config.go -destination=../../mocks/config.mock.go -package=configmocks -typed BusinessConfigService
+//go:generate mockgen -source=./config.go -destination=./mocks/config.mock.go -package=configmocks -typed BusinessConfigService
 type BusinessConfigService interface {
 	GetByIDs(ctx context.Context, ids []int64) (map[int64]domain.BusinessConfig, error)
 	GetByID(ctx context.Context, id int64) (domain.BusinessConfig, error)

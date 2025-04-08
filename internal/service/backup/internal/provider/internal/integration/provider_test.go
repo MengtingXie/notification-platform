@@ -25,7 +25,7 @@ func TestProviderServiceSuite(t *testing.T) {
 type ProviderServiceTestSuite struct {
 	suite.Suite
 	db  *egorm.Component
-	svc manage.ManageService
+	svc manage.Service
 }
 
 func (s *ProviderServiceTestSuite) SetupSuite() {

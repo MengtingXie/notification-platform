@@ -4,7 +4,7 @@ package ioc
 
 import (
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
-	"gitee.com/flycash/notification-platform/internal/service/audit"
+	audit2 "gitee.com/flycash/notification-platform/internal/service/backup/internal/audit"
 	"gitee.com/flycash/notification-platform/internal/service/backup/internal/executor"
 	template2 "gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
 	"gitee.com/flycash/notification-platform/internal/service/backup/internal/tx_notification"
@@ -43,8 +43,8 @@ func InitGrpcServer() *App {
 		wire.FieldsOf(new(template2.Module), "Svc"),
 
 		// 审计服务
-		audit.InitMoudle,
-		wire.FieldsOf(new(*audit.Module), "Svc"),
+		audit2.InitMoudle,
+		wire.FieldsOf(new(*audit2.Module), "Svc"),
 
 		// SMS客户端初始化
 		InitSmsClients,

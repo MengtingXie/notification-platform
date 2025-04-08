@@ -26,7 +26,7 @@ type Dispatcher struct {
 
 // NewDispatcher 创建供应商分发器
 func NewDispatcher(
-	providerSvc manage.ManageService,
+	providerSvc manage.Service,
 	templateRepo repository.ChannelTemplateRepository,
 	smsClients map[string]sms.Client,
 ) Provider {
