@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/adapter/sms"
+	"gitee.com/flycash/notification-platform/internal/service/provider/manage"
 	"sort"
 	"sync"
 
@@ -29,7 +30,7 @@ type Selector interface {
 type selector struct {
 	mu sync.Mutex // 添加互斥锁保护并发访问
 
-	providerSvc ManageService
+	providerSvc manage.ManageService
 
 	providers  map[domain.Channel]map[string]Provider
 	smsClients map[string]sms.Client
@@ -42,7 +43,7 @@ type selector struct {
 }
 
 // newSelector 创建供应商选择器
-func newSelector(providerSvc ManageService, smsClients map[string]sms.Client) Selector {
+func newSelector(providerSvc manage.ManageService, smsClients map[string]sms.Client) Selector {
 	return &selector{
 		providerSvc:  providerSvc,
 		smsClients:   smsClients,

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	configsvc "gitee.com/flycash/notification-platform/internal/service/config"
-	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 )
 
 var (
@@ -44,7 +43,7 @@ type Selector interface {
 	// Reset 重置选择器状态
 	Reset()
 	// Next 获取下一个可用的渠道实现
-	Next(ctx context.Context, notification domain) (Channel, error)
+	Next(ctx context.Context, notification domain.Notification) (Channel, error)
 }
 
 // selector 渠道选择器实现
@@ -52,13 +51,13 @@ type selector struct {
 	mu sync.Mutex
 
 	// 配置服务
-	configSvc configsvc.Service
+	configSvc configsvc.BusinessConfigService
 
 	// 供应商
 	providerDispatcher provider.Provider
 
 	// 缓存的业务配置，按业务ID索引
-	bizConfigCache map[int64]configsvc.BusinessConfig
+	bizConfigCache map[int64]domain.BusinessConfig
 
 	// 缓存的重试策略，按业务ID索引
 	retryPolicyCache map[int64]RetryPolicy
@@ -68,7 +67,7 @@ type selector struct {
 
 	// 当前处理的通知状态
 	currentState struct {
-		notification       domain
+		notification       domain.Notification
 		attemptedChannels  map[domain.Channel]bool
 		currentChannelType domain.Channel
 		currentChannelIdx  int
@@ -76,11 +75,11 @@ type selector struct {
 }
 
 // newSelector 创建渠道选择器
-func newSelector(providerDispatcher provider.Provider, configSvc configsvc.Service) Selector {
+func newSelector(providerDispatcher provider.Provider, configSvc configsvc.BusinessConfigService) Selector {
 	return &selector{
 		configSvc:          configSvc,
 		providerDispatcher: providerDispatcher,
-		bizConfigCache:     make(map[int64]configsvc.BusinessConfig),
+		bizConfigCache:     make(map[int64]domain.BusinessConfig),
 		retryPolicyCache:   make(map[int64]RetryPolicy),
 		channelListCache:   make(map[string][]domain.Channel),
 	}
@@ -92,14 +91,14 @@ func (s *selector) Reset() {
 	defer s.mu.Unlock()
 
 	// 重置当前处理的通知状态
-	s.currentState.notification = domain{}
+	s.currentState.notification = domain.Notification{}
 	s.currentState.attemptedChannels = make(map[domain.Channel]bool)
 	s.currentState.currentChannelType = ""
 	s.currentState.currentChannelIdx = 0
 }
 
 // Next 获取下一个可用渠道
-func (s *selector) Next(ctx context.Context, notification domain) (Channel, error) {
+func (s *selector) Next(ctx context.Context, notification domain.Notification) (Channel, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -138,7 +137,7 @@ func (s *selector) Next(ctx context.Context, notification domain) (Channel, erro
 }
 
 // getAvailableChannels 获取可用渠道列表
-func (s *selector) getAvailableChannels(ctx context.Context, notification domain) ([]domain.Channel, error) {
+func (s *selector) getAvailableChannels(ctx context.Context, notification domain.Notification) ([]domain.Channel, error) {
 	bizID := notification.BizID
 	cacheKey := getCacheKey(bizID, notification.Channel)
 
@@ -167,7 +166,7 @@ func getCacheKey(bizID int64, channel domain.Channel) string {
 }
 
 // getBizConfig 获取业务配置
-func (s *selector) getBizConfig(ctx context.Context, bizID int64) (configsvc.BusinessConfig, error) {
+func (s *selector) getBizConfig(ctx context.Context, bizID int64) (domain.BusinessConfig, error) {
 	// 检查缓存
 	if config, ok := s.bizConfigCache[bizID]; ok {
 		return config, nil
@@ -176,7 +175,7 @@ func (s *selector) getBizConfig(ctx context.Context, bizID int64) (configsvc.Bus
 	// 从服务获取
 	config, err := s.configSvc.GetByID(ctx, bizID)
 	if err != nil {
-		return configsvc.BusinessConfig{}, fmt.Errorf("%w: %w", ErrBizConfigNotFound, err)
+		return domain.BusinessConfig{}, fmt.Errorf("%w: %w", ErrBizConfigNotFound, err)
 	}
 
 	// 缓存结果
@@ -261,7 +260,7 @@ type channelHandler struct {
 }
 
 // Send 使用特定渠道发送通知
-func (ch *channelHandler) Send(ctx context.Context, notification domain) (domain.SendResponse, error) {
+func (ch *channelHandler) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
 	// 创建该渠道的通知副本
 	channelNotification := notification
 	channelNotification.Channel = domain.Channel(ch.ChannelName)

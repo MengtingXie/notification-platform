@@ -7,6 +7,7 @@ import (
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/adapter/sms"
+	"gitee.com/flycash/notification-platform/internal/service/provider/manage"
 	"gitee.com/flycash/notification-platform/internal/service/template"
 )
 
@@ -25,7 +26,7 @@ type Dispatcher struct {
 
 // NewDispatcher 创建供应商分发器
 func NewDispatcher(
-	providerSvc ManageService,
+	providerSvc manage.ManageService,
 	templateRepo repository.ChannelTemplateRepository,
 	smsClients map[string]sms.Client,
 ) Provider {

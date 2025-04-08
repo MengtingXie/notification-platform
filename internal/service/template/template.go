@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
+	providersvc "gitee.com/flycash/notification-platform/internal/service/provider/manage"
 
 	auditsvc "gitee.com/flycash/notification-platform/internal/service/audit"
-	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
 )
 
 var (

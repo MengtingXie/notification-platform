@@ -6,15 +6,11 @@ import (
 	"fmt"
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
-	"gitee.com/flycash/notification-platform/internal/service/adapter/sms"
-	templatesvc "gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
 	"gitee.com/flycash/notification-platform/internal/service/channel"
-	"gitee.com/flycash/notification-platform/internal/service/template"
 	"sync"
 
 	configsvc "gitee.com/flycash/notification-platform/internal/service/config"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
-	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
 	"github.com/gotomicro/ego/core/elog"
 )
 
@@ -31,7 +27,7 @@ type NotificationSender interface {
 
 // sender 通知发送器实现
 type sender struct {
-	notificationSvc   notificationsvc.Service
+	notificationSvc   notificationsvc.NotificationService
 	repo              repository.NotificationRepository
 	configSvc         configsvc.BusinessConfigService
 	channelDispatcher channel.Channel
@@ -42,10 +38,9 @@ type sender struct {
 func NewSender(
 	repo repository.NotificationRepository,
 	configSvc configsvc.BusinessConfigService,
-	channelDispatcher channel.Dispatcher,
-	providerDispatcher providersvc.Dispatcher,
+	channelDispatcher channel.Channel,
 ) NotificationSender {
-	
+
 	return &sender{
 		configSvc:         configSvc,
 		repo:              repo,
@@ -160,7 +155,7 @@ func (d *sender) getUpdatedNotifications(responses []domain.SendResponse, notifi
 }
 
 // batchUpdateStatus 更新发送状态
-func (d *sender) batchUpdateStatus(ctx context.Context, succeedNotifications, failedNotifications []domain) error {
+func (d *sender) batchUpdateStatus(ctx context.Context, succeedNotifications, failedNotifications []domain.Notification) error {
 	if len(succeedNotifications) > 0 || len(failedNotifications) > 0 {
 		err := d.repo.BatchUpdateStatusSucceededOrFailed(ctx, succeedNotifications, failedNotifications)
 		if err != nil {
