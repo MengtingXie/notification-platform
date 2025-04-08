@@ -49,6 +49,10 @@ func (s *ExponentialBackoffRetryStrategy) Report(err error) Strategy {
 }
 
 func (s *ExponentialBackoffRetryStrategy) NextWithRetries(retries int32) (time.Duration, bool) {
+	return s.nextWithRetries(retries)
+}
+
+func (s *ExponentialBackoffRetryStrategy) nextWithRetries(retries int32) (time.Duration, bool) {
 	if s.maxRetries <= 0 || retries <= s.maxRetries {
 		if reached, ok := s.maxIntervalReached.Load().(bool); ok && reached {
 			return s.maxInterval, true
@@ -66,17 +70,5 @@ func (s *ExponentialBackoffRetryStrategy) NextWithRetries(retries int32) (time.D
 
 func (s *ExponentialBackoffRetryStrategy) Next() (time.Duration, bool) {
 	retries := atomic.AddInt32(&s.retries, 1)
-	if s.maxRetries <= 0 || retries <= s.maxRetries {
-		if reached, ok := s.maxIntervalReached.Load().(bool); ok && reached {
-			return s.maxInterval, true
-		}
-		interval := s.initialInterval * time.Duration(math.Pow(2, float64(retries-1)))
-		// 溢出或当前重试间隔大于最大重试间隔
-		if interval <= 0 || interval > s.maxInterval {
-			s.maxIntervalReached.Store(true)
-			return s.maxInterval, true
-		}
-		return interval, true
-	}
-	return 0, false
+	return s.nextWithRetries(retries)
 }

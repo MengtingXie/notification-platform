@@ -106,6 +106,10 @@ func ExampleAdaptiveTimeoutRetryStrategy_Next() {
 
 type MockStrategy struct{}
 
+func (m MockStrategy) NextWithRetries(retries int32) (time.Duration, bool) {
+	return time.Second * time.Duration(retries), true
+}
+
 func (m MockStrategy) Next() (time.Duration, bool) {
 	return 1 * time.Second, true
 }

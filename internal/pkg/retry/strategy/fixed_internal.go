@@ -41,6 +41,10 @@ func NewFixedIntervalRetryStrategy(interval time.Duration, maxRetries int32) (*F
 }
 
 func (s *FixedIntervalRetryStrategy) NextWithRetries(retries int32) (time.Duration, bool) {
+	return s.nextWithRetries(retries)
+}
+
+func (s *FixedIntervalRetryStrategy) nextWithRetries(retries int32) (time.Duration, bool) {
 	if s.maxRetries <= 0 || retries <= s.maxRetries {
 		return s.interval, true
 	}
@@ -49,10 +53,7 @@ func (s *FixedIntervalRetryStrategy) NextWithRetries(retries int32) (time.Durati
 
 func (s *FixedIntervalRetryStrategy) Next() (time.Duration, bool) {
 	retries := atomic.AddInt32(&s.retries, 1)
-	if s.maxRetries <= 0 || retries <= s.maxRetries {
-		return s.interval, true
-	}
-	return 0, false
+	return s.nextWithRetries(retries)
 }
 
 func (s *FixedIntervalRetryStrategy) Report(err error) Strategy {
