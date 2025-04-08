@@ -2,7 +2,6 @@ package sender
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -12,11 +11,6 @@ import (
 
 	configsvc "gitee.com/flycash/notification-platform/internal/service/config"
 	"github.com/gotomicro/ego/core/elog"
-)
-
-var (
-	ErrRateLimited   = errors.New("已达到速率限制")
-	ErrQuotaExceeded = errors.New("已超过配额限制")
 )
 
 // NotificationSender 通知发送接口
@@ -79,7 +73,7 @@ func (d *sender) Send(ctx context.Context, notification domain.Notification) (do
 	}
 
 	// 更新发送状态
-	err = d.repo.UpdateStatus(ctx, n.ID, resp.Status, n.Version)
+	err = d.repo.UpdateStatus(ctx, n)
 	if err != nil {
 		return domain.SendResponse{}, err
 	}

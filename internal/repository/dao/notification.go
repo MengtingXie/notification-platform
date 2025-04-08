@@ -28,7 +28,7 @@ type NotificationDAO interface {
 	Create(ctx context.Context, data Notification) (Notification, error)
 
 	// UpdateStatus 更新通知状态
-	UpdateStatus(ctx context.Context, id uint64, status string, version int) error
+	UpdateStatus(ctx context.Context, notification Notification) error
 
 	// BatchCreate 批量创建通知记录
 	BatchCreate(ctx context.Context, dataList []Notification) ([]Notification, error)
@@ -144,14 +144,21 @@ func (d *notificationDAO) BatchCreate(ctx context.Context, datas []Notification)
 }
 
 // UpdateStatus 更新通知状态
-func (d *notificationDAO) UpdateStatus(ctx context.Context, id uint64, status string, version int) error {
+func (d *notificationDAO) UpdateStatus(ctx context.Context, notification Notification) error {
+	updates := map[string]any{
+		"status":  notification.Status,
+		"version": gorm.Expr("version + 1"),
+		"utime":   time.Now().Unix(),
+	}
+
+	// 如果设置了重试次数，也需要更新
+	if notification.RetryCount > 0 {
+		updates["retry_count"] = notification.RetryCount
+	}
+
 	result := d.db.WithContext(ctx).Model(&Notification{}).
-		Where("id = ? AND version = ?", id, version).
-		Updates(map[string]interface{}{
-			"status":  status,
-			"version": gorm.Expr("version + 1"),
-			"utime":   time.Now().Unix(),
-		})
+		Where("id = ? AND version = ?", notification.ID, notification.Version).
+		Updates(updates)
 
 	if result.Error != nil {
 		return result.Error
@@ -162,7 +169,7 @@ func (d *notificationDAO) UpdateStatus(ctx context.Context, id uint64, status st
 		// 先查询记录是否存在
 		var count int64
 		if err := d.db.WithContext(ctx).Model(&Notification{}).
-			Where("id = ?", id).
+			Where("id = ?", notification.ID).
 			Count(&count).Error; err != nil {
 			return err
 		}
@@ -173,7 +180,6 @@ func (d *notificationDAO) UpdateStatus(ctx context.Context, id uint64, status st
 
 		return fmt.Errorf("%w", ErrNotificationVersionMismatch)
 	}
-
 	return nil
 }
 
@@ -290,7 +296,7 @@ func (d *notificationDAO) BatchUpdateStatusSucceededOrFailed(ctx context.Context
 // updateNotificationStatus 更新单个通知的状态，处理乐观锁和重试次数
 func (d *notificationDAO) updateNotificationStatus(tx *gorm.DB, notification Notification, status string, now int64) error {
 	// 设置基本更新字段
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"status":  status,
 		"utime":   now,
 		"version": gorm.Expr("version + 1"),
@@ -329,7 +335,7 @@ func (d *notificationDAO) updateNotificationStatus(tx *gorm.DB, notification Not
 func (d *notificationDAO) BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error {
 	result := d.db.WithContext(ctx).Model(&Notification{}).
 		Where("id in ?", ids).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"status":  status,
 			"utime":   time.Now().Unix(),
 			"version": gorm.Expr("version + 1"),

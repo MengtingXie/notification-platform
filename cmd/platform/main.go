@@ -1,24 +1,68 @@
 package main
 
+import (
+	"context"
+
+	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/service/provider"
+	providersvc "gitee.com/flycash/notification-platform/internal/service/provider/manage"
+	"gitee.com/flycash/notification-platform/internal/service/provider/sequential"
+	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
+	templatesvc "gitee.com/flycash/notification-platform/internal/service/template/manage"
+)
+
 func main() {
-	//if err := ego.New().Serve(func() server.Server {
+	// if err := ego.New().Serve(func() server.Server {
 	//	return ioc.InitGrpcServer().GrpcServer
-	//}()).Run(); err != nil {
+	// }()).Run(); err != nil {
 	//	elog.Panic("startup", elog.Any("err", err))
-	//}
+	// }
 	println("hello, world")
 }
 
-//func newSelectorBuilder() *provider.SelectorBuilder {
-//	return provider.NewSelectorBuilder(initSMSProviders(nil))
-//}
-//
-//func initSMSProviders(psvc manage.Service) []provider.Provider {
-//	// 发起数据库查询
-//	ali, _ := sms.NewAliyunSMS("", "", "")
-//	tencent, _ := sms.NewTencentCloudSMS("", "", "", "")
-//	return []provider.Provider{
-//		provider.NewSMSProvider("ali", nil, ali),
-//		provider.NewSMSProvider("tencent", nil, tencent),
-//	}
-//}
+func newSMSSelectorBuilder(
+	ctx context.Context,
+	providerSvc providersvc.Service,
+	templateSvc templatesvc.ChannelTemplateService,
+) (*sequential.SelectorBuilder, error) {
+	providers, err := initSMSProviders(ctx, providerSvc, templateSvc)
+	if err != nil {
+		return nil, err
+	}
+	return sequential.NewSelectorBuilder(providers), nil
+}
+
+func initSMSProviders(
+	ctx context.Context,
+	providerSvc providersvc.Service,
+	templateSvc templatesvc.ChannelTemplateService,
+) ([]provider.Provider, error) {
+	entities, err := providerSvc.GetProvidersByChannel(ctx, domain.ChannelSMS)
+	if err != nil {
+		return nil, err
+	}
+
+	providers := make([]provider.Provider, 0, len(entities))
+
+	for i := range entities {
+		var client sms.Client
+		var err1 error
+		if entities[i].Name == "ali" {
+			client, err1 = sms.NewAliyunSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret)
+			if err1 != nil {
+				return nil, err
+			}
+		} else if entities[i].Name == "tencent" {
+			client, err1 = sms.NewTencentCloudSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret, entities[i].APPID)
+			if err1 != nil {
+				return nil, err
+			}
+		}
+		providers = append(providers, provider.NewSMSProvider(
+			entities[i].Name,
+			templateSvc,
+			client,
+		))
+	}
+	return providers, nil
+}
