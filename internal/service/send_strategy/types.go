@@ -6,13 +6,13 @@ import (
 	"gitee.com/flycash/notification-platform/internal/errs"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/service/sender"
 )
 
 // SendStrategy 发送策略接口
 type SendStrategy interface {
 	// Send 单条发送通知
 	Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error)
+	Commit(ctx context.Context, notification domain.Notification) (domain.SendResponse, error)
 	// BatchSend 批量发送通知，其中每个通知的发送策略必须相同
 	BatchSend(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error)
 }
@@ -20,29 +20,24 @@ type SendStrategy interface {
 // Dispatcher 通知发送分发器
 // 根据通知的策略类型选择合适的发送策略
 type Dispatcher struct {
-	sender     sender.NotificationSender
-	strategies map[domain.SendStrategyType]SendStrategy
+	immediate       *ImmediateSendStrategy
+	defaultStrategy *DefaultSendStrategy
 }
 
 // NewDispatcher 创建通知发送分发器
 func NewDispatcher(
-	strategies map[domain.SendStrategyType]SendStrategy,
-	sender sender.NotificationSender) SendStrategy {
+	immediate *ImmediateSendStrategy,
+	defaultStrategy *DefaultSendStrategy) SendStrategy {
 	return &Dispatcher{
-		sender:     sender,
-		strategies: strategies,
+		immediate:       immediate,
+		defaultStrategy: defaultStrategy,
 	}
 }
 
 // Send 发送通知
 func (d *Dispatcher) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
-	// 获取策略
-	strategy, ok := d.strategies[notification.SendStrategyConfig.Type]
-	if !ok {
-		return domain.SendResponse{}, fmt.Errorf("%w: 无效的发送策略 %s", errs.ErrInvalidParameter, notification.SendStrategyConfig.Type)
-	}
 	// 执行发送
-	return strategy.Send(ctx, notification)
+	return d.selectStrategy(notification).Send(ctx, notification)
 }
 
 // BatchSend 批量发送通知
@@ -50,16 +45,14 @@ func (d *Dispatcher) BatchSend(ctx context.Context, ns []domain.Notification) ([
 	if len(ns) == 0 {
 		return nil, fmt.Errorf("%w: 通知列表不能为空", errs.ErrInvalidParameter)
 	}
-
 	const first = 0
-	strategyType := ns[first].SendStrategyConfig.Type
-
-	// 获取策略
-	strategy, ok := d.strategies[strategyType]
-	if !ok {
-		return nil, fmt.Errorf("%w: 无效的发送策略 %s", errs.ErrInvalidParameter, strategyType)
-	}
-
 	// 执行发送
-	return strategy.BatchSend(ctx, ns)
+	return d.selectStrategy(ns[first]).BatchSend(ctx, ns)
+}
+
+func (d *Dispatcher) selectStrategy(not domain.Notification) SendStrategy {
+	if not.SendStrategyConfig.Type == domain.SendStrategyImmediate {
+		return d.immediate
+	}
+	return d.defaultStrategy
 }

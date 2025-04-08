@@ -86,6 +86,7 @@ func (t *TxNotificationServiceV1) GetNotification(ctx context.Context, bizID int
 }
 
 func (t *TxNotificationServiceV1) Prepare(ctx context.Context, txNotification domain.TxNotification) (uint64, error) {
+	txNotification.SetSendTime()
 	noti, nerr := t.notificationSvc.Create(ctx, txNotification.Notification)
 	if nerr != nil {
 		if errors.Is(nerr, errs.ErrNotificationDuplicate) {
