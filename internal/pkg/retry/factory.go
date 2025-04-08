@@ -15,28 +15,44 @@
 package retry
 
 import (
-	"time"
-
+	"fmt"
 	"github.com/ecodeclub/ekit/retry"
+	"time"
 )
 
 type Config struct {
+	Type               string                    `json:"type"` // 重试策略
 	FixedInterval      *FixedIntervalConfig      `json:"fixedInterval"`
 	ExponentialBackoff *ExponentialBackoffConfig `json:"exponentialBackoff"`
 }
 
-type ExponentialBackoffConfig struct{}
+type ExponentialBackoffConfig struct {
+	// 初始重试间隔 单位ms
+	InitialInterval int `json:"initialInterval"`
+	// 最大重试间隔 单位ms
+	MaxInterval int `json:"maxInterval"`
+	// 最大重试次数
+	MaxRetries int32 `json:"maxRetries"`
+}
 
-type FixedIntervalConfig struct{}
+type FixedIntervalConfig struct {
+	MaxRetries int32 `json:"maxRetries"`
+	Interval   int   `json:"interval"`
+}
 
-func NewRetry(_ Config) retry.Strategy {
+func NewRetry(cfg Config) (retry.Strategy, error) {
 	// 根据 config 中的字段来检测
-	// 为了过 ci，todo 需要去掉
-	const (
-		interval   = 10 * time.Second
-		maxRetries = 3
-	)
+	switch cfg.Type {
+	case "fixed":
+		return retry.NewFixedIntervalRetryStrategy(msToDuration(cfg.FixedInterval.Interval), cfg.FixedInterval.MaxRetries)
+	case "exponential":
+		return retry.NewExponentialBackoffRetryStrategy(msToDuration(cfg.ExponentialBackoff.InitialInterval), msToDuration(cfg.ExponentialBackoff.MaxInterval), cfg.ExponentialBackoff.MaxRetries)
+	default:
+		return nil, fmt.Errorf("unknown retry type: %s", cfg.Type)
+	}
 
-	v, _ := retry.NewFixedIntervalRetryStrategy(interval, maxRetries)
-	return v
+}
+
+func msToDuration(ms int) time.Duration {
+	return time.Duration(ms * 1e6) // 3ms = 3,000,000ns
 }

@@ -21,7 +21,37 @@ func newTimeWindowStrategy(repo repository.NotificationRepository) *TimeWindowSe
 	}
 }
 
-// Send 在指定时间窗口内发送通知
+// Send 单条发送通知
+func (s *TimeWindowSendStrategy) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
+	// 根据发送策略，计算调度窗口
+	now := time.Now().UnixMilli()
+	startTime := notification.SendStrategyConfig.StartTimeMilliseconds
+	endTime := notification.SendStrategyConfig.EndTimeMilliseconds
+
+	if startTime <= 0 || startTime >= endTime {
+		return domain.SendResponse{}, fmt.Errorf("%w: 时间窗口开始时间应该大于0且小于结束时间", ErrInvalidParameter)
+	}
+
+	if endTime <= now {
+		return domain.SendResponse{}, fmt.Errorf("%w: 时间窗口结束时间应该大于当前时间", ErrInvalidParameter)
+	}
+
+	notification.ScheduledSTime = startTime
+	notification.ScheduledETime = endTime
+
+	// 创建通知记录
+	created, err := s.repo.Create(ctx, notification)
+	if err != nil {
+		return domain.SendResponse{}, fmt.Errorf("创建延迟通知失败: %w", err)
+	}
+
+	return domain.SendResponse{
+		NotificationID: created.ID,
+		Status:         created.Status,
+	}, nil
+}
+
+// BatchSend 批量发送通知，其中每个通知的发送策略必须相同
 func (s *TimeWindowSendStrategy) BatchSend(ctx context.Context, ns []domain.Notification) ([]domain.SendResponse, error) {
 	if len(ns) == 0 {
 		return nil, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)

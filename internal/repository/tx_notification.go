@@ -39,7 +39,7 @@ func (t *txNotificationRepo) First(ctx context.Context, txID int64) (domain.TxNo
 func (t *txNotificationRepo) Create(ctx context.Context, txn domain.TxNotification) (uint64, error) {
 	// 转换领域模型到DAO对象
 	txnEntity := t.toDao(txn)
-	notificationEntity := notificationToEntity(txn.Notification)
+	notificationEntity := toNotificationEntity(txn.Notification)
 	// 调用DAO层创建记录
 	return t.txdao.Prepare(ctx, txnEntity, notificationEntity)
 }

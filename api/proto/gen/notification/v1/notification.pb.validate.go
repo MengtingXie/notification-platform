@@ -368,8 +368,6 @@ func (m *Notification) validate(all bool) error {
 
 	// no validation rules for Key
 
-	// no validation rules for Receiver
-
 	// no validation rules for Channel
 
 	// no validation rules for TemplateId

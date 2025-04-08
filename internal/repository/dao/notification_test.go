@@ -50,7 +50,7 @@ func (s *NotificationDAOTestSuite) TestCreate() {
 		ID:                1,
 		BizID:             123,
 		Key:               "test_key_1",
-		Receiver:          "user@example.com",
+		Receivers:          "user@example.com",
 		Channel:           notificationChannelEmail,
 		TemplateID:        101,
 		TemplateVersionID: 1001,
@@ -68,7 +68,7 @@ func (s *NotificationDAOTestSuite) TestCreate() {
 	assert.Equal(t, notification.ID, result.ID)
 	assert.Equal(t, notification.BizID, result.BizID)
 	assert.Equal(t, notification.Key, result.Key)
-	assert.Equal(t, notification.Receiver, result.Receiver)
+	assert.Equal(t, notification.Receivers, result.Receivers)
 	assert.Equal(t, notification.Channel, result.Channel)
 	assert.Equal(t, notification.TemplateID, result.TemplateID)
 	assert.Equal(t, notification.TemplateVersionID, result.TemplateVersionID)
@@ -87,7 +87,7 @@ func (s *NotificationDAOTestSuite) TestBatchCreate() {
 			ID:                2,
 			BizID:             234,
 			Key:               "test_key_2",
-			Receiver:          "user1@example.com",
+			Receivers:          "user1@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        102,
 			TemplateVersionID: 1002,
@@ -100,7 +100,7 @@ func (s *NotificationDAOTestSuite) TestBatchCreate() {
 			ID:                3,
 			BizID:             345,
 			Key:               "test_key_3",
-			Receiver:          "user2@example.com",
+			Receivers:          "user2@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        102,
 			TemplateVersionID: 1002,
@@ -122,7 +122,7 @@ func (s *NotificationDAOTestSuite) TestBatchCreate() {
 		assert.Equal(t, expected.ID, actual.ID)
 		assert.Equal(t, expected.BizID, actual.BizID)
 		assert.Equal(t, expected.Key, actual.Key)
-		assert.Equal(t, expected.Receiver, actual.Receiver)
+		assert.Equal(t, expected.Receivers, actual.Receivers)
 		assert.Equal(t, expected.Channel, actual.Channel)
 		assert.Equal(t, expected.TemplateID, actual.TemplateID)
 		assert.Equal(t, expected.TemplateVersionID, actual.TemplateVersionID)
@@ -145,7 +145,7 @@ func (s *NotificationDAOTestSuite) TestUpdateStatus() {
 		ID:                4,
 		BizID:             456,
 		Key:               "test_key_4",
-		Receiver:          "user@example.com",
+		Receivers:          "user@example.com",
 		Channel:           notificationChannelEmail,
 		TemplateID:        104,
 		TemplateVersionID: 1004,
@@ -192,7 +192,7 @@ func (s *NotificationDAOTestSuite) TestFindByID() {
 		ID:                5,
 		BizID:             567,
 		Key:               "test_key_5",
-		Receiver:          "user@example.com",
+		Receivers:          "user@example.com",
 		Channel:           notificationChannelEmail,
 		TemplateID:        105,
 		TemplateVersionID: 1005,
@@ -217,7 +217,7 @@ func (s *NotificationDAOTestSuite) TestFindByID() {
 	assert.Equal(t, notification.ID, result.ID)
 	assert.Equal(t, notification.BizID, result.BizID)
 	assert.Equal(t, notification.Key, result.Key)
-	assert.Equal(t, notification.Receiver, result.Receiver)
+	assert.Equal(t, notification.Receivers, result.Receivers)
 	assert.Equal(t, notification.Channel, result.Channel)
 	assert.Equal(t, notification.TemplateID, result.TemplateID)
 	assert.Equal(t, notification.TemplateVersionID, result.TemplateVersionID)
@@ -244,7 +244,7 @@ func (s *NotificationDAOTestSuite) TestFindByBizID() {
 			ID:                6,
 			BizID:             bizID,
 			Key:               "test_key_6",
-			Receiver:          "user1@example.com",
+			Receivers:          "user1@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        106,
 			TemplateVersionID: 1006,
@@ -258,7 +258,7 @@ func (s *NotificationDAOTestSuite) TestFindByBizID() {
 			ID:                7,
 			BizID:             bizID,
 			Key:               "test_key_7",
-			Receiver:          "user2@example.com",
+			Receivers:          "user2@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        106,
 			TemplateVersionID: 1006,
@@ -290,7 +290,7 @@ func (s *NotificationDAOTestSuite) TestFindByBizID() {
 		assert.True(t, ok, "未找到期望的记录ID: %d", expected.ID)
 		assert.Equal(t, expected.BizID, result.BizID)
 		assert.Equal(t, expected.Key, result.Key)
-		assert.Equal(t, expected.Receiver, result.Receiver)
+		assert.Equal(t, expected.Receivers, result.Receivers)
 		assert.Equal(t, expected.Channel, result.Channel)
 		assert.Equal(t, expected.TemplateID, result.TemplateID)
 		assert.Equal(t, expected.TemplateVersionID, result.TemplateVersionID)
@@ -318,7 +318,7 @@ func (s *NotificationDAOTestSuite) TestListByStatus() {
 			ID:                9,
 			BizID:             789,
 			Key:               "test_key_9",
-			Receiver:          "user1@example.com",
+			Receivers:          "user1@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        109,
 			TemplateVersionID: 1009,
@@ -332,7 +332,7 @@ func (s *NotificationDAOTestSuite) TestListByStatus() {
 			ID:                10,
 			BizID:             890,
 			Key:               "test_key_10",
-			Receiver:          "user2@example.com",
+			Receivers:          "user2@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        110,
 			TemplateVersionID: 1010,
@@ -346,7 +346,7 @@ func (s *NotificationDAOTestSuite) TestListByStatus() {
 			ID:                11,
 			BizID:             901,
 			Key:               "test_key_11",
-			Receiver:          "user3@example.com",
+			Receivers:          "user3@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        111,
 			TemplateVersionID: 1011,
@@ -384,7 +384,7 @@ func (s *NotificationDAOTestSuite) TestListByScheduleTime() {
 			ID:                12,
 			BizID:             1012,
 			Key:               "test_key_12",
-			Receiver:          "user1@example.com",
+			Receivers:          "user1@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        112,
 			TemplateVersionID: 1012,
@@ -398,7 +398,7 @@ func (s *NotificationDAOTestSuite) TestListByScheduleTime() {
 			ID:                13,
 			BizID:             1013,
 			Key:               "test_key_13",
-			Receiver:          "user2@example.com",
+			Receivers:          "user2@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        113,
 			TemplateVersionID: 1013,
@@ -422,7 +422,7 @@ func (s *NotificationDAOTestSuite) TestListByScheduleTime() {
 	assert.Equal(t, notifications[0].ID, results[0].ID)
 	assert.Equal(t, notifications[0].BizID, results[0].BizID)
 	assert.Equal(t, notifications[0].Key, results[0].Key)
-	assert.Equal(t, notifications[0].Receiver, results[0].Receiver)
+	assert.Equal(t, notifications[0].Receivers, results[0].Receivers)
 	assert.Equal(t, notifications[0].Channel, results[0].Channel)
 	assert.Equal(t, notifications[0].TemplateID, results[0].TemplateID)
 	assert.Equal(t, notifications[0].TemplateVersionID, results[0].TemplateVersionID)
@@ -445,7 +445,7 @@ func (s *NotificationDAOTestSuite) TestListByScheduleTime() {
 		assert.Equal(t, expected.ID, result.ID)
 		assert.Equal(t, expected.BizID, result.BizID)
 		assert.Equal(t, expected.Key, result.Key)
-		assert.Equal(t, expected.Receiver, result.Receiver)
+		assert.Equal(t, expected.Receivers, result.Receivers)
 		assert.Equal(t, expected.Channel, result.Channel)
 		assert.Equal(t, expected.TemplateID, result.TemplateID)
 		assert.Equal(t, expected.TemplateVersionID, result.TemplateVersionID)
@@ -466,7 +466,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ID:                201,
 			BizID:             1201,
 			Key:               "batch_update_key_1",
-			Receiver:          "user1@example.com",
+			Receivers:          "user1@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        201,
 			TemplateVersionID: 2001,
@@ -482,7 +482,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ID:                202,
 			BizID:             1202,
 			Key:               "batch_update_key_2",
-			Receiver:          "user2@example.com",
+			Receivers:          "user2@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        202,
 			TemplateVersionID: 2002,
@@ -498,7 +498,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ID:                203,
 			BizID:             1203,
 			Key:               "batch_update_key_3",
-			Receiver:          "user3@example.com",
+			Receivers:          "user3@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        203,
 			TemplateVersionID: 2003,
@@ -514,7 +514,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ID:                204,
 			BizID:             1204,
 			Key:               "batch_update_key_4",
-			Receiver:          "user4@example.com",
+			Receivers:          "user4@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        204,
 			TemplateVersionID: 2004,
@@ -530,7 +530,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ID:                205,
 			BizID:             1205,
 			Key:               "batch_update_key_5",
-			Receiver:          "user5@example.com",
+			Receivers:          "user5@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        205,
 			TemplateVersionID: 2005,
@@ -546,7 +546,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ID:                206,
 			BizID:             1206,
 			Key:               "batch_update_key_6",
-			Receiver:          "user6@example.com",
+			Receivers:          "user6@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        206,
 			TemplateVersionID: 2006,
@@ -562,7 +562,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ID:                207,
 			BizID:             1207,
 			Key:               "batch_update_key_7",
-			Receiver:          "user7@example.com",
+			Receivers:          "user7@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        207,
 			TemplateVersionID: 2007,
@@ -578,7 +578,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ID:                208,
 			BizID:             1208,
 			Key:               "batch_update_key_8",
-			Receiver:          "user8@example.com",
+			Receivers:          "user8@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        208,
 			TemplateVersionID: 2008,
@@ -594,7 +594,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 			ID:                209,
 			BizID:             1209,
 			Key:               "batch_update_key_9",
-			Receiver:          "user9@example.com",
+			Receivers:          "user9@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        209,
 			TemplateVersionID: 2009,
@@ -640,7 +640,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 		assert.Equal(t, notificationStatusSucceeded, result.Status)
 		assert.Equal(t, original.RetryCount, result.RetryCount)
 		assert.Equal(t, original.BizID, result.BizID)
-		assert.Equal(t, original.Receiver, result.Receiver)
+		assert.Equal(t, original.Receivers, result.Receivers)
 		assert.Equal(t, original.Channel, result.Channel)
 		assert.Equal(t, original.TemplateID, result.TemplateID)
 		assert.Equal(t, original.ScheduledSTime, result.ScheduledSTime)
@@ -674,7 +674,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	assert.Equal(t, notificationStatusSucceeded, resultWithRetry.Status)
 	assert.Equal(t, int8(5), resultWithRetry.RetryCount) // 更新为新的重试次数
 	assert.Equal(t, originalWithRetry.BizID, resultWithRetry.BizID)
-	assert.Equal(t, originalWithRetry.Receiver, resultWithRetry.Receiver)
+	assert.Equal(t, originalWithRetry.Receivers, resultWithRetry.Receivers)
 	assert.Equal(t, originalWithRetry.Channel, resultWithRetry.Channel)
 	assert.Equal(t, originalWithRetry.TemplateID, resultWithRetry.TemplateID)
 	assert.Equal(t, originalWithRetry.ScheduledSTime, resultWithRetry.ScheduledSTime)
@@ -710,7 +710,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	assert.Equal(t, notificationStatusFailed, result.Status)
 	assert.Equal(t, original.RetryCount, result.RetryCount)
 	assert.Equal(t, original.BizID, result.BizID)
-	assert.Equal(t, original.Receiver, result.Receiver)
+	assert.Equal(t, original.Receivers, result.Receivers)
 	assert.Equal(t, original.Channel, result.Channel)
 	assert.Equal(t, original.TemplateID, result.TemplateID)
 	assert.Equal(t, original.ScheduledSTime, result.ScheduledSTime)
@@ -747,7 +747,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	assert.Equal(t, notificationStatusFailed, result2.Status)
 	assert.Equal(t, int8(2), result2.RetryCount) // 更新为新的重试次数
 	assert.Equal(t, original.BizID, result2.BizID)
-	assert.Equal(t, original.Receiver, result2.Receiver)
+	assert.Equal(t, original.Receivers, result2.Receivers)
 	assert.Equal(t, original.Channel, result2.Channel)
 	assert.Equal(t, original.TemplateID, result2.TemplateID)
 	assert.Equal(t, original.ScheduledSTime, result2.ScheduledSTime)
@@ -788,7 +788,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	}
 	assert.Equal(t, int8(4), result3.RetryCount) // 更新为新的重试次数
 	assert.Equal(t, original.BizID, result3.BizID)
-	assert.Equal(t, original.Receiver, result3.Receiver)
+	assert.Equal(t, original.Receivers, result3.Receivers)
 	assert.Equal(t, original.Channel, result3.Channel)
 	assert.Equal(t, 2, result3.Version)
 
@@ -807,7 +807,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	}
 	assert.Equal(t, original.RetryCount, result4.RetryCount) // 保持原始重试次数不变
 	assert.Equal(t, original.BizID, result4.BizID)
-	assert.Equal(t, original.Receiver, result4.Receiver)
+	assert.Equal(t, original.Receivers, result4.Receivers)
 	assert.Equal(t, original.Channel, result4.Channel)
 	assert.Equal(t, 2, result4.Version)
 
@@ -826,7 +826,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 	}
 	assert.Equal(t, int8(3), result5.RetryCount) // 更新为新的重试次数
 	assert.Equal(t, original.BizID, result5.BizID)
-	assert.Equal(t, original.Receiver, result5.Receiver)
+	assert.Equal(t, original.Receivers, result5.Receivers)
 	assert.Equal(t, original.Channel, result5.Channel)
 	assert.Equal(t, 2, result5.Version)
 
@@ -839,7 +839,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatusSucceededOrFailed() {
 		ID:                210,
 		BizID:             1210,
 		Key:               "batch_update_key_10",
-		Receiver:          "user10@example.com",
+		Receivers:          "user10@example.com",
 		Channel:           notificationChannelEmail,
 		TemplateID:        210,
 		TemplateVersionID: 2010,
@@ -876,7 +876,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatus() {
 			ID:                10001,
 			BizID:             1001,
 			Key:               "batch_update_key_1",
-			Receiver:          "user1@example.com",
+			Receivers:          "user1@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        101,
 			TemplateVersionID: 1001,
@@ -889,7 +889,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatus() {
 			ID:                10002,
 			BizID:             1002,
 			Key:               "batch_update_key_2",
-			Receiver:          "user2@example.com",
+			Receivers:          "user2@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        102,
 			TemplateVersionID: 1002,
@@ -902,7 +902,7 @@ func (s *NotificationDAOTestSuite) TestBatchUpdateStatus() {
 			ID:                10003,
 			BizID:             1003,
 			Key:               "batch_update_key_3",
-			Receiver:          "user3@example.com",
+			Receivers:          "user3@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        103,
 			TemplateVersionID: 1003,
@@ -959,7 +959,7 @@ func (s *NotificationDAOTestSuite) TestBatchGetByIDs() {
 			ID:                301,
 			BizID:             1301,
 			Key:               "batch_get_key_1",
-			Receiver:          "user1@example.com",
+			Receivers:          "user1@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        301,
 			TemplateVersionID: 3001,
@@ -971,7 +971,7 @@ func (s *NotificationDAOTestSuite) TestBatchGetByIDs() {
 			ID:                302,
 			BizID:             1302,
 			Key:               "batch_get_key_2",
-			Receiver:          "user2@example.com",
+			Receivers:          "user2@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        302,
 			TemplateVersionID: 3002,
@@ -996,7 +996,7 @@ func (s *NotificationDAOTestSuite) TestBatchGetByIDs() {
 		assert.True(t, exists, "未找到期望的记录ID: %d", expected.ID)
 		assert.Equal(t, expected.BizID, actual.BizID)
 		assert.Equal(t, expected.Key, actual.Key)
-		assert.Equal(t, expected.Receiver, actual.Receiver)
+		assert.Equal(t, expected.Receivers, actual.Receivers)
 		assert.Equal(t, expected.Channel, actual.Channel)
 		assert.Equal(t, expected.TemplateID, actual.TemplateID)
 		assert.Equal(t, expected.TemplateVersionID, actual.TemplateVersionID)
@@ -1015,7 +1015,7 @@ func (s *NotificationDAOTestSuite) TestCreateDuplicate() {
 		ID:                100,
 		BizID:             100,
 		Key:               "duplicate_key",
-		Receiver:          "user@example.com",
+		Receivers:          "user@example.com",
 		Channel:           notificationChannelEmail,
 		TemplateID:        100,
 		TemplateVersionID: 1000,
@@ -1033,7 +1033,7 @@ func (s *NotificationDAOTestSuite) TestCreateDuplicate() {
 		ID:                101,
 		BizID:             100,             // 相同的BizID
 		Key:               "duplicate_key", // 相同的Key
-		Receiver:          "another@example.com",
+		Receivers:          "another@example.com",
 		Channel:           notificationChannelEmail,
 		TemplateID:        101,
 		TemplateVersionID: 1001,
@@ -1057,7 +1057,7 @@ func (s *NotificationDAOTestSuite) TestBatchCreateDuplicate() {
 		ID:                200,
 		BizID:             200,
 		Key:               "batch_duplicate_key",
-		Receiver:          "user@example.com",
+		Receivers:          "user@example.com",
 		Channel:           notificationChannelEmail,
 		TemplateID:        200,
 		TemplateVersionID: 2000,
@@ -1076,7 +1076,7 @@ func (s *NotificationDAOTestSuite) TestBatchCreateDuplicate() {
 			ID:                201,
 			BizID:             201,
 			Key:               "batch_key_1",
-			Receiver:          "user1@example.com",
+			Receivers:          "user1@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        201,
 			TemplateVersionID: 2001,
@@ -1089,7 +1089,7 @@ func (s *NotificationDAOTestSuite) TestBatchCreateDuplicate() {
 			ID:                202,
 			BizID:             200,                   // 与已存在记录相同的BizID
 			Key:               "batch_duplicate_key", // 与已存在记录相同的Key
-			Receiver:          "user2@example.com",
+			Receivers:          "user2@example.com",
 			Channel:           notificationChannelEmail,
 			TemplateID:        202,
 			TemplateVersionID: 2002,

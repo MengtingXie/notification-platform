@@ -3,7 +3,6 @@ package notification
 import (
 	"context"
 	"errors"
-
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/config"
@@ -14,9 +13,9 @@ import (
 	"github.com/meoying/dlock-go"
 )
 
-var ErrUpdateStatusFailed = errors.New("该消息不是准备状态，更新失败")
+var ErrUpdateStatusFailed = errors.New("update status failed")
 
-//go:generate mockgen -source=./tx_notification.go -destination=../../mocks/tx_notification.mock.go -package=txnotificationmocks -typed TxNotificationService
+//go:generate mockgen -source=./tx_notification.go -destination=./mocks/tx_notification.mock.go -package=notificationmocks -typed TxNotificationService
 type TxNotificationService interface {
 	// Prepare 准备消息,
 	Prepare(ctx context.Context, txNotification domain.TxNotification) (uint64, error)
@@ -28,7 +27,7 @@ type TxNotificationService interface {
 
 type TxNotificationServiceV1 struct {
 	repo            repository.TxNotificationRepository
-	notificationSvc NotificationService
+	notificationSvc Service
 	configSvc       config.BusinessConfigService
 	// retryStrategyBuilder retry.Builder
 	logger *elog.Component
@@ -37,7 +36,7 @@ type TxNotificationServiceV1 struct {
 
 func NewTxNotificationService(
 	repo repository.TxNotificationRepository,
-	notificationSvc NotificationService,
+	notificationSvc Service,
 	configSvc config.BusinessConfigService,
 	retryStrategyBuilder retry.Builder,
 	lock dlock.Client,
@@ -73,23 +72,9 @@ func (t *TxNotificationServiceV1) Prepare(ctx context.Context, txNotification do
 }
 
 func (t *TxNotificationServiceV1) Commit(ctx context.Context, bizID int64, key string) error {
-	err := t.repo.UpdateStatus(ctx, bizID, key, domain.TxNotificationStatusCommit.String(), string(domain.SendStatusPending))
-
-	// 你是要发送的，等我后续通知
-	// t.sender.Send()
-	if errors.Is(err, repository.ErrUpdateStatusFailed) {
-		return ErrUpdateStatusFailed
-	}
-	return err
+	return t.repo.UpdateStatus(ctx, bizID, key, domain.TxNotificationStatusCommit.String(), string(domain.SendStatusPending))
 }
 
 func (t *TxNotificationServiceV1) Cancel(ctx context.Context, bizID int64, key string) error {
-	err := t.repo.UpdateStatus(ctx, bizID, key, domain.TxNotificationStatusCommit.String(), string(domain.SendStatusCanceled))
-
-	// 你是要发送的，等我后续通知
-	// t.sender.Send()
-	if errors.Is(err, repository.ErrUpdateStatusFailed) {
-		return ErrUpdateStatusFailed
-	}
-	return err
+	return t.repo.UpdateStatus(ctx, bizID, key, domain.TxNotificationStatusCancel.String(), string(domain.SendStatusCanceled))
 }

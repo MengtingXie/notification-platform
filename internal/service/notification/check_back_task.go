@@ -26,7 +26,7 @@ import (
 
 type TxCheckTask struct {
 	repo                 repository.TxNotificationRepository
-	notificationSvc      NotificationService
+	notificationSvc      Service
 	configSvc            config.BusinessConfigService
 	retryStrategyBuilder retry.Builder
 	logger               *elog.Component

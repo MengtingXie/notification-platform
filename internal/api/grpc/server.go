@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
-	executorsvc "gitee.com/flycash/notification-platform/internal/service/backup/internal/executor"
-	txnotification "gitee.com/flycash/notification-platform/internal/service/backup/internal/tx_notification"
 
 	"gitee.com/flycash/notification-platform/internal/api/grpc/interceptor/jwt"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
@@ -25,14 +23,14 @@ import (
 type NotificationServer struct {
 	notificationv1.UnimplementedNotificationServiceServer
 	notificationv1.UnimplementedNotificationQueryServiceServer
-	executor executorsvc.Service
+	executor        notificationsvc.ExecutorService
+	notificationSvc notificationsvc.Service
 	// TODO: 配置服务 configService config.ConfigService
-	txnSvc txnotification.txnotification
+	txnSvc notificationsvc.TxNotificationService
 }
 
-// 在这里做
 // NewServer 创建通知平台gRPC服务器
-func NewServer(executor executorsvc.Service, txnSvc txnotification.Service) *NotificationServer {
+func NewServer(executor notificationsvc.ExecutorService, txnSvc notificationsvc.TxNotificationService) *NotificationServer {
 	return &NotificationServer{
 		executor: executor,
 		txnSvc:   txnSvc,
@@ -140,7 +138,7 @@ func (s *NotificationServer) BatchSendNotifications(ctx context.Context, req *no
 	}
 
 	// 2. 将请求转换为领域对象
-	notifications := make([]executorsvc.Notification, 0, len(req.Notifications))
+	notifications := make([]domain.Notification, 0, len(req.Notifications))
 	for _, n := range req.Notifications {
 		notification, err := s.convertToNotification(n, bizID)
 		if err != nil {
@@ -182,7 +180,7 @@ func (s *NotificationServer) BatchSendNotificationsAsync(ctx context.Context, re
 	}
 
 	// 2. 将请求转换为领域对象
-	notifications := make([]executorsvc.Notification, 0, len(req.Notifications))
+	notifications := make([]domain.Notification, 0, len(req.Notifications))
 	for _, n := range req.Notifications {
 		notification, err := s.convertToNotification(n, bizID)
 		if err != nil {
@@ -213,23 +211,23 @@ func (s *NotificationServer) BatchQueryNotifications(ctx context.Context, req *n
 		return nil, err
 	}
 
-	// 2. 调用执行器
-	results, err := s.executor.BatchQueryNotifications(ctx, bizID, req.Keys...)
+	// 查询通知
+	notifications, err := s.notificationSvc.GetByKeys(ctx, bizID, req.Keys...)
 	if err != nil {
+		// e.logger.Warn("同步批量查询通知失败", elog.Any("Error", err))
 		return nil, status.Errorf(codes.Internal, "批量查询通知失败: %v", err)
 	}
 
 	// 3. 将结果转换为响应
 	response := &notificationv1.BatchQueryNotificationsResponse{
-		Results: make([]*notificationv1.SendNotificationResponse, 0, len(results)),
+		Results: make([]*notificationv1.SendNotificationResponse, 0, len(notifications)),
 	}
 
-	for _, r := range results {
-		sendResp, err := s.convertToSendResponse(r, nil)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "转换响应失败: %v", err)
-		}
-		response.Results = append(response.Results, sendResp)
+	for i := range notifications {
+		response.Results = append(response.Results, &notificationv1.SendNotificationResponse{
+			NotificationId: notifications[i].ID,
+			Status:         s.convertSendStatus(notifications[i].Status),
+		})
 	}
 
 	return response, nil
@@ -243,20 +241,19 @@ func (s *NotificationServer) QueryNotification(ctx context.Context, req *notific
 		return nil, err
 	}
 
-	// 2. 调用执行器
-	result, err := s.executor.QueryNotification(ctx, bizID, req.Key)
+	// 查询通知
+	notifications, err := s.notificationSvc.GetByKeys(ctx, bizID, req.Key)
 	if err != nil {
+		// e.logger.Warn("同步单条查询通知失败", elog.Any("Error", err))
 		return nil, status.Errorf(codes.Internal, "查询通知失败: %v", err)
 	}
 
-	// 3. 将结果转换为响应
-	sendResp, err := s.convertToSendResponse(result, err)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "转换响应失败: %v", err)
-	}
-
+	const zero = 0
 	return &notificationv1.QueryNotificationResponse{
-		Result: sendResp,
+		Result: &notificationv1.SendNotificationResponse{
+			NotificationId: notifications[zero].ID,
+			Status:         s.convertSendStatus(notifications[zero].Status),
+		},
 	}, nil
 }
 
@@ -294,31 +291,31 @@ func (s *NotificationServer) extractAndValidateBizID(ctx context.Context) (int64
 }
 
 // convertToNotification 将请求转换为通知领域对象
-func (s *NotificationServer) convertToNotification(n *notificationv1.Notification, bizID int64) (executorsvc.Notification, error) {
+func (s *NotificationServer) convertToNotification(n *notificationv1.Notification, bizID int64) (domain.Notification, error) {
 	if n == nil {
-		return executorsvc.Notification{}, errors.New("通知不能为空")
+		return domain.Notification{}, errors.New("通知不能为空")
 	}
 
 	// 转换TemplateID
 	tid, err := strconv.ParseInt(n.TemplateId, 10, 64)
 	if err != nil {
-		return executorsvc.Notification{}, fmt.Errorf("无效的模板ID: %s", n.TemplateId)
+		return domain.Notification{}, fmt.Errorf("无效的模板ID: %s", n.TemplateId)
 	}
 
 	// 构建基本Notification
-	notification := domain{
-		BizID:    bizID,
-		Key:      n.Key,
-		Receiver: n.Receiver,
-		Channel:  convertChannel(n.Channel),
-		Template: notificationsvc.Template{
+	notification := domain.Notification{
+		BizID:     bizID,
+		Key:       n.Key,
+		Receivers: n.Receivers,
+		Channel:   s.convertChannel(n.Channel),
+		Template: domain.Template{
 			ID:     tid,
 			Params: n.TemplateParams,
 		},
 	}
 
 	// 构建发送策略
-	sendStrategyType := executorsvc.SendStrategyImmediate // 默认为立即发送
+	sendStrategyType := domain.SendStrategyImmediate // 默认为立即发送
 	var delaySeconds int64
 	var scheduledTime time.Time
 	var startTimeMilliseconds int64
@@ -329,47 +326,44 @@ func (s *NotificationServer) convertToNotification(n *notificationv1.Notificatio
 	if n.Strategy != nil {
 		switch s := n.Strategy.StrategyType.(type) {
 		case *notificationv1.SendStrategy_Immediate:
-			sendStrategyType = executorsvc.SendStrategyImmediate
+			sendStrategyType = domain.SendStrategyImmediate
 		case *notificationv1.SendStrategy_Delayed:
 			if s.Delayed != nil && s.Delayed.DelaySeconds > 0 {
-				sendStrategyType = executorsvc.SendStrategyDelayed
+				sendStrategyType = domain.SendStrategyDelayed
 				delaySeconds = s.Delayed.DelaySeconds
 			}
 		case *notificationv1.SendStrategy_Scheduled:
 			if s.Scheduled != nil && s.Scheduled.SendTime != nil {
-				sendStrategyType = executorsvc.SendStrategyScheduled
+				sendStrategyType = domain.SendStrategyScheduled
 				scheduledTime = s.Scheduled.SendTime.AsTime()
 			}
 		case *notificationv1.SendStrategy_TimeWindow:
 			if s.TimeWindow != nil {
-				sendStrategyType = executorsvc.SendStrategyTimeWindow
+				sendStrategyType = domain.SendStrategyTimeWindow
 				startTimeMilliseconds = s.TimeWindow.StartTimeMilliseconds
 				endTimeMilliseconds = s.TimeWindow.EndTimeMilliseconds
 			}
 		case *notificationv1.SendStrategy_Deadline:
 			if s.Deadline != nil && s.Deadline.Deadline != nil {
-				sendStrategyType = executorsvc.SendStrategyDeadline
+				sendStrategyType = domain.SendStrategyDeadline
 				deadlineTime = s.Deadline.Deadline.AsTime()
 			}
 		}
 	}
 
-	// 构建最终的Notification
-	return executorsvc.Notification{
-		Notification: notification,
-		SendStrategyConfig: executorsvc.SendStrategyConfig{
-			Type:                  sendStrategyType,
-			DelaySeconds:          delaySeconds,
-			ScheduledTime:         scheduledTime,
-			StartTimeMilliseconds: startTimeMilliseconds,
-			EndTimeMilliseconds:   endTimeMilliseconds,
-			DeadlineTime:          deadlineTime,
-		},
-	}, nil
+	notification.SendStrategyConfig = domain.SendStrategyConfig{
+		Type:                  sendStrategyType,
+		DelaySeconds:          delaySeconds,
+		ScheduledTime:         scheduledTime,
+		StartTimeMilliseconds: startTimeMilliseconds,
+		EndTimeMilliseconds:   endTimeMilliseconds,
+		DeadlineTime:          deadlineTime,
+	}
+	return notification, nil
 }
 
 // convertChannel 将gRPC通道转换为领域通道
-func convertChannel(channel notificationv1.Channel) domain.Channel {
+func (s *NotificationServer) convertChannel(channel notificationv1.Channel) domain.Channel {
 	switch channel {
 	case notificationv1.Channel_SMS:
 		return domain.ChannelSMS
@@ -383,10 +377,10 @@ func convertChannel(channel notificationv1.Channel) domain.Channel {
 }
 
 // convertToSendResponse 将领域响应转换为gRPC响应
-func (s *NotificationServer) convertToSendResponse(result executorsvc.SendResponse, err error) (*notificationv1.SendNotificationResponse, error) {
+func (s *NotificationServer) convertToSendResponse(result domain.SendResponse, err error) (*notificationv1.SendNotificationResponse, error) {
 	response := &notificationv1.SendNotificationResponse{
 		NotificationId: result.NotificationID,
-		Status:         convertSendStatus(result.Status),
+		Status:         s.convertSendStatus(result.Status),
 	}
 
 	// 如果有错误，提取错误代码和消息
@@ -408,27 +402,25 @@ func (s *NotificationServer) mapErrorToErrorCode(err error) notificationv1.Error
 	if err == nil {
 		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
 	}
-
 	// 根据错误类型进行匹配
 	switch {
-	case errors.Is(err, executorsvc.ErrInvalidParameter):
+	case errors.Is(err, notificationsvc.ErrInvalidParameter):
 		return notificationv1.ErrorCode_INVALID_PARAMETER
 
-	case errors.Is(err, executorsvc.ErrNotificationNotFound):
+	case errors.Is(err, notificationsvc.ErrNotificationNotFound):
 		// 目前我们没有专门的"NotFound"错误码，所以这里暂时使用通用错误码
 		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
 
-	case errors.Is(err, executorsvc.ErrSendNotificationFailed):
+	case errors.Is(err, notificationsvc.ErrSendNotificationFailed):
 		// 如果是发送失败错误，需要进一步判断具体原因
 		if strings.Contains(err.Error(), "创建通知失败") {
 			return notificationv1.ErrorCode_CREATE_NOTIFICATION_FAILED
 		}
 		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
 
-	case errors.Is(err, executorsvc.ErrQueryNotificationFailed):
+	case errors.Is(err, notificationsvc.ErrNotificationNotFound):
 		// 查询失败暂时使用通用错误码
 		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
-
 	default:
 		// 如果无法通过类型匹配，回退到消息内容匹配
 		errorMsg := err.Error()
@@ -453,44 +445,44 @@ func (s *NotificationServer) mapErrorToErrorCode(err error) notificationv1.Error
 }
 
 // convertSendStatus 将领域发送状态转换为gRPC发送状态
-func convertSendStatus(status notificationsvc.SendStatus) notificationv1.SendStatus {
+func (s *NotificationServer) convertSendStatus(status domain.SendStatus) notificationv1.SendStatus {
 	switch status {
-	case notificationsvc.SendStatusPrepare:
+	case domain.SendStatusPrepare:
 		return notificationv1.SendStatus_PREPARE
-	case notificationsvc.SendStatusCanceled:
+	case domain.SendStatusCanceled:
 		return notificationv1.SendStatus_CANCELED
-	case notificationsvc.SendStatusPending:
+	case domain.SendStatusPending:
 		return notificationv1.SendStatus_PENDING
-	case domain.StatusSucceeded:
+	case domain.SendStatusSucceeded:
 		return notificationv1.SendStatus_SUCCEEDED
-	case notificationsvc.SendStatusFailed:
+	case domain.SendStatusFailed:
 		return notificationv1.SendStatus_FAILED
 	default:
 		return notificationv1.SendStatus_SEND_STATUS_UNSPECIFIED
 	}
 }
 
-func (s *NotificationServer) convertToTxNotification(n *notificationv1.Notification, bizID int64) (txnotification.TxNotification, error) {
+func (s *NotificationServer) convertToTxNotification(n *notificationv1.Notification, bizID int64) (domain.TxNotification, error) {
 	if n == nil {
-		return txnotification.TxNotification{}, errors.New("通知不能为空")
+		return domain.TxNotification{}, errors.New("通知不能为空")
 	}
 
 	// 转换TemplateID
 	tid, err := strconv.ParseInt(n.TemplateId, 10, 64)
 	if err != nil {
-		return txnotification.TxNotification{}, fmt.Errorf("无效的模板ID: %s", n.TemplateId)
+		return domain.TxNotification{}, fmt.Errorf("无效的模板ID: %s", n.TemplateId)
 	}
 	// 构建基本Notification
-	noti := domain{
-		BizID:    bizID,
-		Key:      n.Key,
-		Receiver: n.Receiver,
-		Channel:  domain.Channel(n.Channel.String()),
-		Template: notificationsvc.Template{
+	noti := domain.Notification{
+		BizID:     bizID,
+		Key:       n.Key,
+		Receivers: n.Receivers,
+		Channel:   domain.Channel(n.Channel.String()),
+		Template: domain.Template{
 			ID:     tid,
 			Params: n.TemplateParams,
 		},
-		Status: notificationsvc.SendStatusPrepare,
+		Status: domain.SendStatusPrepare,
 	}
 	const (
 		d      = 24
@@ -520,10 +512,10 @@ func (s *NotificationServer) convertToTxNotification(n *notificationv1.Notificat
 			}
 		}
 	}
-	return txnotification.TxNotification{
+	return domain.TxNotification{
 		BizID:        bizID,
 		Key:          n.Key,
 		Notification: noti,
-		Status:       txnotification.TxNotificationStatusPrepare,
+		Status:       domain.TxNotificationStatusPrepare,
 	}, nil
 }
