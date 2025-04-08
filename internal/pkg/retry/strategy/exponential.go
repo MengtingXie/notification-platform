@@ -20,8 +20,6 @@ import (
 	"time"
 )
 
-var ()
-
 var _ Strategy = (*ExponentialBackoffRetryStrategy)(nil)
 
 // ExponentialBackoffRetryStrategy 指数退避重试
@@ -37,7 +35,6 @@ type ExponentialBackoffRetryStrategy struct {
 	// 是否已经达到最大重试间隔
 	maxIntervalReached atomic.Value
 }
-
 
 func NewExponentialBackoffRetryStrategy(initialInterval, maxInterval time.Duration, maxRetries int32) (*ExponentialBackoffRetryStrategy, error) {
 	return &ExponentialBackoffRetryStrategy{

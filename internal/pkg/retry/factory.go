@@ -16,8 +16,9 @@ package retry
 
 import (
 	"fmt"
-	"github.com/ecodeclub/ekit/retry"
 	"time"
+
+	"github.com/ecodeclub/ekit/retry"
 )
 
 type Config struct {
@@ -50,7 +51,6 @@ func NewRetry(cfg Config) (retry.Strategy, error) {
 	default:
 		return nil, fmt.Errorf("unknown retry type: %s", cfg.Type)
 	}
-
 }
 
 func msToDuration(ms int) time.Duration {

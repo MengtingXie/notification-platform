@@ -30,8 +30,6 @@ type FixedIntervalRetryStrategy struct {
 	retries    int32         // 当前重试次数
 }
 
-
-
 func NewFixedIntervalRetryStrategy(interval time.Duration, maxRetries int32) (*FixedIntervalRetryStrategy, error) {
 	if interval <= 0 {
 		return nil, errs.NewErrInvalidIntervalValue(interval)
@@ -48,7 +46,6 @@ func (s *FixedIntervalRetryStrategy) NextWithRetries(retries int32) (time.Durati
 	}
 	return 0, false
 }
-
 
 func (s *FixedIntervalRetryStrategy) Next() (time.Duration, bool) {
 	retries := atomic.AddInt32(&s.retries, 1)

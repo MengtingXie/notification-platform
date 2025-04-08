@@ -16,8 +16,9 @@ package strategy
 
 import (
 	"context"
-	"gitee.com/flycash/notification-platform/internal/pkg/retry/strategy/errs"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/pkg/retry/strategy/errs"
 )
 
 // Retry 会在以下条件满足的情况下返回：
@@ -27,7 +28,8 @@ import (
 // 而只要 bizFunc 返回 error，就会尝试重试
 func Retry(ctx context.Context,
 	s Strategy,
-	bizFunc func() error) error {
+	bizFunc func() error,
+) error {
 	var ticker *time.Ticker
 	defer func() {
 		if ticker != nil {

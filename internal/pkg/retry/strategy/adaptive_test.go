@@ -104,8 +104,7 @@ func ExampleAdaptiveTimeoutRetryStrategy_Next() {
 	// 5s
 }
 
-type MockStrategy struct {
-}
+type MockStrategy struct{}
 
 func (m MockStrategy) Next() (time.Duration, bool) {
 	return 1 * time.Second, true
