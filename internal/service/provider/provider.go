@@ -88,7 +88,7 @@ func (p *smsProvider) Send(ctx context.Context, notification domain.Notification
 	provider := version.Providers[0]
 
 	resp, err := p.client.Send(sms.SendReq{
-		PhoneNumbers:  []string{notification.Receiver},
+		PhoneNumbers:  notification.Receivers,
 		SignName:      version.Signature,
 		TemplateID:    provider.ProviderTemplateID,
 		TemplateParam: notification.Template.Params,
@@ -97,14 +97,13 @@ func (p *smsProvider) Send(ctx context.Context, notification domain.Notification
 		return domain.SendResponse{}, fmt.Errorf("%w: %w", ErrSendFailed, err)
 	}
 
-	respStatus := resp.PhoneNumbers[notification.Receiver]
-	if respStatus.Code != "OK" {
-		return domain.SendResponse{}, fmt.Errorf("%w: Code = %s, Message = %s", ErrSendFailed, respStatus.Code, respStatus.Message)
+	for _, status := range resp.PhoneNumbers {
+		if status.Code != "OK" {
+			return domain.SendResponse{}, fmt.Errorf("%w: Code = %s, Message = %s", ErrSendFailed, status.Code, status.Message)
+		}
 	}
-
 	return domain.SendResponse{
 		NotificationID: notification.ID,
-		//SendStatus:         domain.SendStatusSucceeded,
-		Status: domain.SendStatusSucceeded,
+		Status:         domain.SendStatusSucceeded,
 	}, nil
 }
