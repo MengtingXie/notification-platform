@@ -3,6 +3,10 @@ package integration
 import (
 	"context"
 	"fmt"
+	"strings"
+	"testing"
+	"time"
+
 	clientv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
@@ -20,9 +24,6 @@ import (
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/mock/gomock"
 	"gorm.io/gorm"
-	"strings"
-	"testing"
-	"time"
 )
 
 type TxNotificationServiceTestSuite struct {
@@ -132,7 +133,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 					RetryCount:        9,
 					Version:           1,
 				}, actualNotification)
-
 			},
 		},
 		{
@@ -274,7 +274,6 @@ func (s *TxNotificationServiceTestSuite) TestCommit() {
 				err = s.db.WithContext(ctx).Where("biz_id = ? AND `key` = ?", bizId, key).First(&actualNoti).Error
 				require.NoError(t, err)
 				assert.Equal(t, string(domain.SendStatusPending), actualNoti.Status)
-
 			},
 			checkErr: func(t *testing.T, err error) bool {
 				require.NoError(t, err)
@@ -566,6 +565,7 @@ func (s *TxNotificationServiceTestSuite) mockConfigMap() map[int64]domain.Busine
 func TestTxNotificationServiceSuite(t *testing.T) {
 	suite.Run(t, new(TxNotificationServiceTestSuite))
 }
+
 func (s *TxNotificationServiceTestSuite) mockNotifications() {
 	list := []dao.Notification{
 		mockNotification(1, string(domain.SendStatusPrepare)),

@@ -24,7 +24,7 @@ var (
 	ErrInvalidParameter             = errors.New("参数错误")
 	ErrSendNotificationFailed       = errors.New("发送通知失败")
 	ErrNotificationIDGenerateFailed = errors.New("通知ID生成失败")
-	ErrNotificationNotFound         =  errors.New("通知记录不存在")
+	ErrNotificationNotFound         = errors.New("通知记录不存在")
 	ErrCreateNotificationFailed     = errors.New("创建通知失败")
 	ErrNotificationDuplicate        = errors.New("通知记录主键冲突")
 )

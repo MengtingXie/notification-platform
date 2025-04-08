@@ -3,8 +3,9 @@ package domain
 import (
 	"encoding/json"
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/errs"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/errs"
 )
 
 // Channel 通知渠道

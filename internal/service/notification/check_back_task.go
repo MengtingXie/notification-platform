@@ -245,7 +245,6 @@ func (task *TxCheckTask) commit(ctx context.Context, txns []domain.TxNotificatio
 }
 
 func (task *TxCheckTask) fail(ctx context.Context, txns []domain.TxNotification) {
-
 	err := task.repo.UpdateCheckStatus(ctx, txns, string(domain.SendStatusCanceled))
 	if err != nil {
 		task.logger.Error("更新事务表中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))

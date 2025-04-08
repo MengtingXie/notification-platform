@@ -16,8 +16,9 @@ package retry
 
 import (
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/pkg/retry/strategy"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/pkg/retry/strategy"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 )

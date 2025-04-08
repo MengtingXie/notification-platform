@@ -2,8 +2,9 @@ package domain
 
 import (
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/errs"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/errs"
 )
 
 // SendStrategyType 发送策略类型
