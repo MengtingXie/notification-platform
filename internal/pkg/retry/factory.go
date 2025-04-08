@@ -16,31 +16,14 @@ package retry
 
 import (
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/domain"
 	"github.com/ecodeclub/ekit/retry"
 	"time"
 )
 
-type Config struct {
-	Type               string                    `json:"type"` // 重试策略
-	FixedInterval      *FixedIntervalConfig      `json:"fixedInterval"`
-	ExponentialBackoff *ExponentialBackoffConfig `json:"exponentialBackoff"`
-}
 
-type ExponentialBackoffConfig struct {
-	// 初始重试间隔 单位ms
-	InitialInterval int `json:"initialInterval"`
-	// 最大重试间隔 单位ms
-	MaxInterval int `json:"maxInterval"`
-	// 最大重试次数
-	MaxRetries int32 `json:"maxRetries"`
-}
 
-type FixedIntervalConfig struct {
-	MaxRetries int32 `json:"maxRetries"`
-	Interval   int   `json:"interval"`
-}
-
-func NewRetry(cfg Config) (retry.Strategy, error) {
+func NewRetry(cfg domain.RetryConfig) (retry.Strategy, error) {
 	// 根据 config 中的字段来检测
 	switch cfg.Type {
 	case "fixed":

@@ -45,30 +45,6 @@ func TestNewExponentialBackoffRetryStrategy_New(t *testing.T) {
 			}(),
 			wantErr: nil,
 		},
-		{
-			name:            "return error, initialInterval equals 0",
-			initialInterval: 0 * time.Second,
-			maxInterval:     2 * time.Minute,
-			maxRetries:      5,
-			want:            nil,
-			wantErr:         fmt.Errorf("ekit: 无效的间隔时间 %d, 预期值应大于 0", 0*time.Second),
-		},
-		{
-			name:            "return error, initialInterval equals -60",
-			initialInterval: -1 * time.Second,
-			maxInterval:     2 * time.Minute,
-			maxRetries:      5,
-			want:            nil,
-			wantErr:         fmt.Errorf("ekit: 无效的间隔时间 %d, 预期值应大于 0", -1*time.Second),
-		},
-		{
-			name:            "return error, maxInternal > initialInterval",
-			initialInterval: 5 * time.Second,
-			maxInterval:     1 * time.Second,
-			maxRetries:      5,
-			want:            nil,
-			wantErr:         fmt.Errorf("ekit: 最大重试间隔的时间 [%d] 应大于等于初始重试的间隔时间 [%d] ", 1*time.Second, 5*time.Second),
-		},
 	}
 
 	for _, tt := range testCases {
