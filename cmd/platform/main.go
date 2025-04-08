@@ -6,6 +6,7 @@ import (
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider/manage"
+	"gitee.com/flycash/notification-platform/internal/service/provider/sequential"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
 	templatesvc "gitee.com/flycash/notification-platform/internal/service/template/manage"
 )
@@ -19,16 +20,16 @@ func main() {
 	println("hello, world")
 }
 
-func newSelectorBuilder(
+func newSMSSelectorBuilder(
 	ctx context.Context,
 	providerSvc providersvc.Service,
 	templateSvc templatesvc.ChannelTemplateService,
-) (*provider.SelectorBuilder, error) {
+) (*sequential.SelectorBuilder, error) {
 	providers, err := initSMSProviders(ctx, providerSvc, templateSvc)
 	if err != nil {
 		return nil, err
 	}
-	return provider.NewSelectorBuilder(providers), nil
+	return sequential.NewSelectorBuilder(providers), nil
 }
 
 func initSMSProviders(

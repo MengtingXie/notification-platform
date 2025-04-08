@@ -16,17 +16,22 @@ package channel
 
 import (
 	"context"
+	"fmt"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
 )
 
 type baseChannel struct {
-	builder *provider.SelectorBuilder
+	builder provider.Builder
 }
 
 func (s *baseChannel) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
-	selector := s.builder.BuildSequentialSelector()
+	selector, err := s.builder.Build()
+	if err != nil {
+		return domain.SendResponse{}, fmt.Errorf("%w: %w", errs.ErrSendNotificationFailed, err)
+	}
 
 	var retryCount int8
 	for {
@@ -53,7 +58,7 @@ type smsChannel struct {
 	baseChannel
 }
 
-func NewSMSChannel(builder *provider.SelectorBuilder) Channel {
+func NewSMSChannel(builder provider.Builder) Channel {
 	return &smsChannel{
 		baseChannel{
 			builder: builder,
@@ -65,7 +70,7 @@ type emailChannel struct {
 	baseChannel
 }
 
-func NewEmailChannel(builder *provider.SelectorBuilder) Channel {
+func NewEmailChannel(builder provider.Builder) Channel {
 	return &smsChannel{
 		baseChannel{
 			builder: builder,

@@ -2,10 +2,8 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/errs"
 )
 
 // Selector 供应商选择器接口
@@ -16,36 +14,8 @@ type Selector interface {
 	Reset()
 }
 
-// SequentialSelector 供应商顺序选择器
-type SequentialSelector struct {
-	idx       int
-	providers []Provider
-}
-
-func (r *SequentialSelector) Next(_ context.Context, _ domain.Notification) (Provider, error) {
-	if len(r.providers) == r.idx {
-		return nil, fmt.Errorf("%w", errs.ErrNoAvailableProvider)
-	}
-
-	p := r.providers[r.idx]
-	r.idx++
-	return p, nil
-}
-
-func (r *SequentialSelector) Reset() {
-	r.idx = 0
-}
-
-type SelectorBuilder struct {
-	providers []Provider
-}
-
-func NewSelectorBuilder(providers []Provider) *SelectorBuilder {
-	return &SelectorBuilder{providers: providers}
-}
-
-func (s *SelectorBuilder) BuildSequentialSelector() Selector {
-	return &SequentialSelector{
-		providers: s.providers,
-	}
+// Builder 供应商选择器的构造器
+type Builder interface {
+	// Build 构造选择器，可以在Build方法上添加参数来构建更复杂选择器
+	Build() (Selector, error)
 }
