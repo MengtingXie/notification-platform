@@ -74,7 +74,7 @@ func (d *sender) BatchSend(ctx context.Context, notifications []domain.Notificat
 			if err1 != nil {
 				resp := domain.SendResponse{
 					NotificationID: n.ID,
-					Status:         domain.StatusFailed,
+					Status:         domain.SendStatusFailed,
 					RetryCount:     response.RetryCount,
 				}
 				failedMu.Lock()
@@ -83,7 +83,7 @@ func (d *sender) BatchSend(ctx context.Context, notifications []domain.Notificat
 			} else {
 				resp := domain.SendResponse{
 					NotificationID: n.ID,
-					Status:         domain.StatusSucceeded,
+					Status:         domain.SendStatusSucceeded,
 					RetryCount:     response.RetryCount,
 				}
 				succeedMu.Lock()
@@ -153,16 +153,4 @@ func (d *sender) batchUpdateStatus(ctx context.Context, succeedNotifications, fa
 		}
 	}
 	return nil
-}
-
-// isRateLimited 检查是否达到速率限制
-func (d *sender) isRateLimited(config domain.BusinessConfig, count int) bool {
-	return config.RateLimit > 0 && count > config.RateLimit
-}
-
-// isQuotaExceeded 检查是否超过配额
-func (d *sender) isQuotaExceeded(_ domain.BusinessConfig, _ []domain.Notification) bool {
-	// 实现配额检查逻辑
-	// 实际代码中需根据 config.Quota 检查各渠道的配额
-	return false
 }

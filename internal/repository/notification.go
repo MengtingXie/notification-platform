@@ -35,16 +35,16 @@ type NotificationRepository interface {
 	GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]domain.Notification, error)
 
 	// UpdateStatus 更新通知状态
-	UpdateStatus(ctx context.Context, id uint64, status domain.Status, version int) error
+	UpdateStatus(ctx context.Context, id uint64, status domain.SendStatus, version int) error
 
 	// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
 	BatchUpdateStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error
 
 	// BatchUpdateStatus 批量更新通知状态
-	BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.Status) error
+	BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.SendStatus) error
 
 	// ListByStatus 根据状态获取通知列表
-	ListByStatus(ctx context.Context, status domain.Status, limit int) ([]domain.Notification, error)
+	ListByStatus(ctx context.Context, status domain.SendStatus, limit int) ([]domain.Notification, error)
 
 	// ListByScheduleTime 根据计划发送时间范围获取通知列表
 	ListByScheduleTime(ctx context.Context, startTime, endTime time.Time, limit int) ([]domain.Notification, error)
@@ -128,7 +128,7 @@ func (r *notificationRepository) BatchCreate(ctx context.Context, notifications 
 }
 
 // UpdateStatus 更新通知状态
-func (r *notificationRepository) UpdateStatus(ctx context.Context, id uint64, status domain.Status, version int) error {
+func (r *notificationRepository) UpdateStatus(ctx context.Context, id uint64, status domain.SendStatus, version int) error {
 	return r.dao.UpdateStatus(ctx, id, string(status), version)
 }
 
@@ -174,7 +174,7 @@ func (r *notificationRepository) toDomain(n dao.Notification) domain.Notificatio
 			VersionID: n.TemplateVersionID,
 			Params:    templateParams,
 		},
-		Status:         domain.Status(n.Status),
+		Status:         domain.SendStatus(n.Status),
 		RetryCount:     n.RetryCount,
 		ScheduledSTime: n.ScheduledSTime,
 		ScheduledETime: n.ScheduledETime,
@@ -210,7 +210,7 @@ func (r *notificationRepository) GetByKeys(ctx context.Context, bizID int64, key
 }
 
 // ListByStatus 根据状态获取通知列表
-func (r *notificationRepository) ListByStatus(ctx context.Context, status domain.Status, limit int) ([]domain.Notification, error) {
+func (r *notificationRepository) ListByStatus(ctx context.Context, status domain.SendStatus, limit int) ([]domain.Notification, error) {
 	ns, err := r.dao.ListByStatus(ctx, string(status), limit)
 	if err != nil {
 		return nil, err
@@ -237,6 +237,6 @@ func (r *notificationRepository) ListByScheduleTime(ctx context.Context, startTi
 	return result, nil
 }
 
-func (r *notificationRepository) BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.Status) error {
+func (r *notificationRepository) BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.SendStatus) error {
 	return r.dao.BatchUpdateStatus(ctx, ids, string(status))
 }

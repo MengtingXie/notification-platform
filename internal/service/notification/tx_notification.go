@@ -121,7 +121,7 @@ func (t *TxNotificationServiceV1) Commit(ctx context.Context, bizID int64, key s
 		return fmt.Errorf("查找事务失败 err:%w", err)
 	}
 
-	err = t.notificationSvc.BatchUpdateStatus(ctx, []uint64{noti.Notification.ID}, domain.StatusPending)
+	err = t.notificationSvc.BatchUpdateStatus(ctx, []uint64{noti.Notification.ID}, domain.SendStatusPending)
 	if err != nil {
 		return fmt.Errorf("更新事务失败 err:%w", err)
 	}
@@ -138,7 +138,7 @@ func (t *TxNotificationServiceV1) Cancel(ctx context.Context, bizID int64, key s
 		return fmt.Errorf("查找事务失败 err:%w", err)
 	}
 
-	err = t.notificationSvc.BatchUpdateStatus(ctx, []uint64{noti.Notification.ID}, domain.StatusCanceled)
+	err = t.notificationSvc.BatchUpdateStatus(ctx, []uint64{noti.Notification.ID}, domain.SendStatusCanceled)
 	if err != nil {
 		return fmt.Errorf("更新事务失败 err:%w", err)
 	}

@@ -60,7 +60,7 @@ func NewExecutorService(templateSvc template.ChannelTemplateService, notificatio
 // SendNotification 同步单条发送
 func (e *executor) SendNotification(ctx context.Context, n domain.Notification) (domain.SendResponse, error) {
 	resp := domain.SendResponse{
-		Status: domain.StatusFailed,
+		Status: domain.SendStatusFailed,
 	}
 
 	// 参数校验
@@ -181,7 +181,7 @@ func (e *executor) validateSendStrategy(n domain.Notification) error {
 // SendNotificationAsync 异步单条发送
 func (e *executor) SendNotificationAsync(ctx context.Context, n domain.Notification) (domain.SendResponse, error) {
 	resp := domain.SendResponse{
-		Status: domain.StatusFailed,
+		Status: domain.SendStatusFailed,
 	}
 
 	// 参数校验
@@ -246,7 +246,7 @@ func (e *executor) BatchSendNotifications(ctx context.Context, notifications ...
 		return response, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)
 	}
 
-	resp := domain.SendResponse{Status: domain.StatusFailed}
+	resp := domain.SendResponse{Status: domain.SendStatusFailed}
 	errMessages := make([]string, 0, len(notifications))
 	for i := range notifications {
 
@@ -293,7 +293,7 @@ func (e *executor) BatchSendNotifications(ctx context.Context, notifications ...
 		// 部分失败
 		response.Results = results
 		for i := range results {
-			if results[i].Status == domain.StatusSucceeded {
+			if results[i].Status == domain.SendStatusSucceeded {
 				response.SuccessCount++
 			}
 		}
@@ -388,7 +388,7 @@ func (e *executor) BatchSendNotificationsAsync(ctx context.Context, notification
 func (e *executor) QueryNotification(ctx context.Context, bizID int64, key string) (domain.SendResponse, error) {
 	// 参数校验
 	resp := domain.SendResponse{
-		Status: domain.StatusFailed,
+		Status: domain.SendStatusFailed,
 	}
 
 	if err := e.validateBizID(bizID); err != nil {

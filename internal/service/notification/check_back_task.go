@@ -261,7 +261,7 @@ func (task *TxCheckTask) commit(ctx context.Context, txns []domain.TxNotificatio
 	ids := slice.Map(txns, func(_ int, src domain.TxNotification) uint64 {
 		return src.Notification.ID
 	})
-	err := task.notificationSvc.BatchUpdateStatus(ctx, ids, domain.StatusPending)
+	err := task.notificationSvc.BatchUpdateStatus(ctx, ids, domain.SendStatusPending)
 	if err != nil {
 		task.logger.Error("更新通知服务中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))
 		return
@@ -276,7 +276,7 @@ func (task *TxCheckTask) fail(ctx context.Context, txns []domain.TxNotification)
 	ids := slice.Map(txns, func(_ int, src domain.TxNotification) uint64 {
 		return src.Notification.ID
 	})
-	err := task.notificationSvc.BatchUpdateStatus(ctx, ids, domain.StatusCanceled)
+	err := task.notificationSvc.BatchUpdateStatus(ctx, ids, domain.SendStatusCanceled)
 	if err != nil {
 		task.logger.Error("更新通知服务中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))
 		return

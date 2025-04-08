@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/domain"
 	executorsvc "gitee.com/flycash/notification-platform/internal/service/backup/internal/executor"
 	"gitee.com/flycash/notification-platform/internal/service/backup/internal/tx_notification"
 	"strconv"
@@ -28,6 +29,7 @@ type NotificationServer struct {
 	txnSvc txnotification.txnotification
 }
 
+// 在这里做
 // NewServer 创建通知平台gRPC服务器
 func NewServer(executor executorsvc.Service, txnSvc txnotification.Service) *NotificationServer {
 	return &NotificationServer{

@@ -30,8 +30,7 @@ func (d *Dispatcher) Send(ctx context.Context, notification domain.Notification)
 	channel := d.channels[notification.Channel]
 	resp, err := channel.Send(ctx, notification)
 	// 配额计算一下就可以了
-	// biz+channel => 配额还有多少
-	// biz+channel => 速率控制
+
 	//if err == nil {
 	//	return resp, err
 	//}

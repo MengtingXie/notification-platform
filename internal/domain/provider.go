@@ -9,12 +9,12 @@ const (
 	ChannelInApp Channel = "IN_APP" // 站内信
 )
 
-// Status 供应商状态
+// SendStatus 供应商状态
 type ProviderStatus string
 
 const (
-	ProviderStatusActive   Status = "ACTIVE"   // 激活
-	ProviderStatusInactive Status = "INACTIVE" // 未激活
+	ProviderStatusActive   SendStatus = "ACTIVE"   // 激活
+	ProviderStatusInactive SendStatus = "INACTIVE" // 未激活
 )
 
 // Provider 供应商领域模型
@@ -36,5 +36,5 @@ type Provider struct {
 	DailyLimit int // 每日请求数限制
 
 	AuditCallbackURL string // 审核请求回调地址
-	Status           Status
+	Status           SendStatus
 }

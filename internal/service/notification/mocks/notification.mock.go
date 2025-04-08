@@ -120,7 +120,7 @@ func (c *MockNotificationServiceBatchGetByIDsCall) DoAndReturn(f func(context.Co
 }
 
 // BatchUpdateStatus mocks base method.
-func (m *MockNotificationService) BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.Status) error {
+func (m *MockNotificationService) BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.SendStatus) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BatchUpdateStatus", ctx, ids, status)
 	ret0, _ := ret[0].(error)
@@ -146,13 +146,13 @@ func (c *MockNotificationServiceBatchUpdateStatusCall) Return(arg0 error) *MockN
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockNotificationServiceBatchUpdateStatusCall) Do(f func(context.Context, []uint64, domain.Status) error) *MockNotificationServiceBatchUpdateStatusCall {
+func (c *MockNotificationServiceBatchUpdateStatusCall) Do(f func(context.Context, []uint64, domain.SendStatus) error) *MockNotificationServiceBatchUpdateStatusCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockNotificationServiceBatchUpdateStatusCall) DoAndReturn(f func(context.Context, []uint64, domain.Status) error) *MockNotificationServiceBatchUpdateStatusCall {
+func (c *MockNotificationServiceBatchUpdateStatusCall) DoAndReturn(f func(context.Context, []uint64, domain.SendStatus) error) *MockNotificationServiceBatchUpdateStatusCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -357,7 +357,7 @@ func (c *MockNotificationServiceGetByKeysCall) DoAndReturn(f func(context.Contex
 }
 
 // UpdateStatus mocks base method.
-func (m *MockNotificationService) UpdateStatus(ctx context.Context, id uint64, status domain.Status, version int) error {
+func (m *MockNotificationService) UpdateStatus(ctx context.Context, id uint64, status domain.SendStatus, version int) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateStatus", ctx, id, status, version)
 	ret0, _ := ret[0].(error)
@@ -383,13 +383,13 @@ func (c *MockNotificationServiceUpdateStatusCall) Return(arg0 error) *MockNotifi
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockNotificationServiceUpdateStatusCall) Do(f func(context.Context, uint64, domain.Status, int) error) *MockNotificationServiceUpdateStatusCall {
+func (c *MockNotificationServiceUpdateStatusCall) Do(f func(context.Context, uint64, domain.SendStatus, int) error) *MockNotificationServiceUpdateStatusCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockNotificationServiceUpdateStatusCall) DoAndReturn(f func(context.Context, uint64, domain.Status, int) error) *MockNotificationServiceUpdateStatusCall {
+func (c *MockNotificationServiceUpdateStatusCall) DoAndReturn(f func(context.Context, uint64, domain.SendStatus, int) error) *MockNotificationServiceUpdateStatusCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

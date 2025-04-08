@@ -40,12 +40,12 @@ type NotificationService interface {
 	GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]domain.Notification, error)
 
 	// UpdateStatus 更新通知状态
-	UpdateStatus(ctx context.Context, id uint64, status domain.Status, version int) error
+	UpdateStatus(ctx context.Context, id uint64, status domain.SendStatus, version int) error
 
 	// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
 	BatchUpdateStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error
 
-	BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.Status) error
+	BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.SendStatus) error
 }
 
 // notificationService 通知服务实现
@@ -186,7 +186,7 @@ func (s *notificationService) GetByKeys(ctx context.Context, bizID int64, keys .
 }
 
 // UpdateStatus 更新通知状态
-func (s *notificationService) UpdateStatus(ctx context.Context, id uint64, status domain.Status, version int) error {
+func (s *notificationService) UpdateStatus(ctx context.Context, id uint64, status domain.SendStatus, version int) error {
 	err := s.repo.UpdateStatus(ctx, id, status, version)
 	if err != nil {
 		return fmt.Errorf("更新通知状态失败: %w", err)
@@ -194,7 +194,7 @@ func (s *notificationService) UpdateStatus(ctx context.Context, id uint64, statu
 	return nil
 }
 
-func (s *notificationService) BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.Status) error {
+func (s *notificationService) BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.SendStatus) error {
 	return s.repo.BatchUpdateStatus(ctx, ids, status)
 }
 

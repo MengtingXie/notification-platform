@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
 	"sync"
 	"time"
@@ -21,7 +22,7 @@ type NotificationScheduler interface {
 
 // scheduler 通知调度服务实现
 type scheduler struct {
-	notificationSvc notificationsvc.Service
+	notificationSvc notificationsvc.NotificationService
 	sender          sender.NotificationSender
 
 	batchSize       int
@@ -33,7 +34,7 @@ type scheduler struct {
 
 // NewScheduler 创建通知调度服务
 func NewScheduler(
-	notificationSvc notificationsvc.Service,
+	notificationSvc notificationsvc.NotificationService,
 	dispatcher sender.NotificationSender,
 	batchSize int,
 	intervalSeconds int,
@@ -79,17 +80,18 @@ func (s *scheduler) Stop() error {
 
 // scheduleLoop 调度循环
 func (s *scheduler) scheduleLoop() {
-	ticker := time.NewTicker(time.Duration(s.intervalSeconds) * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			s.processPendingNotifications()
-		case <-s.stopCh:
-			return
-		}
-	}
+	// 不是 ticker，无限循环，然后没找到数据的时候就 sleep 1s
+	//ticker := time.NewTicker(time.Duration(s.intervalSeconds) * time.Second)
+	//defer ticker.Stop()
+	//
+	//for {
+	//	select {
+	//	case <-ticker.C:
+	//		s.processPendingNotifications()
+	//	case <-s.stopCh:
+	//		return
+	//	}
+	//}
 }
 
 // processPendingNotifications 处理待发送的通知
@@ -117,19 +119,20 @@ func (s *scheduler) processPendingNotifications() {
 	}
 
 	// 按业务ID分组，避免单个业务超出限制影响其他业务
-	bizGroups := groupByBizID(notifications)
+	//bizGroups := groupByBizID(notifications)
 
 	// 对每个业务分组单独处理
-	for _, group := range bizGroups {
-		_, err := s.sender.BatchSend(ctx, group)
-		if err != nil {
-			fmt.Printf("发送通知组失败: %v\n", err)
-			// 继续处理其他组
-		}
-	}
+	s.sender.BatchSend(ctx, notifications)
+	//for _, group := range notifications {
+	//	_, err :=
+	//	if err != nil {
+	//		fmt.Printf("发送通知组失败: %v\n", err)
+	//		// 继续处理其他组
+	//	}
+	//}
 }
 
-func (s *scheduler) getNotifications(ctx context.Context, stime int64, limit int) ([]domain, error) {
+func (s *scheduler) getNotifications(ctx context.Context, stime int64, limit int) ([]domain.Notification, error) {
 	// 从Notification模块中获取可以发送
 	// where status = PENDING and SSTime <= stime limit  GROUP BY bizID
 	// stime = time.Now() // 当前时间必须大于等于开始时间
@@ -138,14 +141,14 @@ func (s *scheduler) getNotifications(ctx context.Context, stime int64, limit int
 }
 
 // groupByBizID 按业务ID分组通知
-func groupByBizID(notifications []domain) [][]domain {
-	bizMap := make(map[int64][]domain)
+func groupByBizID(notifications []domain.Notification) [][]domain.Notification {
+	bizMap := make(map[int64][]domain.Notification)
 	// 按业务ID归类
 	for i := range notifications {
 		bizMap[notifications[i].BizID] = append(bizMap[notifications[i].BizID], notifications[i])
 	}
 	// 转换为分组列表
-	result := make([][]domain, 0, len(bizMap))
+	result := make([][]domain.Notification, 0, len(bizMap))
 	for _, group := range bizMap {
 		result = append(result, group)
 	}

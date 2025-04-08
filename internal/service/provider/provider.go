@@ -104,7 +104,7 @@ func (p *smsProvider) Send(ctx context.Context, notification domain.Notification
 
 	return domain.SendResponse{
 		NotificationID: notification.ID,
-		//Status:         domain.StatusSucceeded,
-		Status: domain.StatusSucceeded,
+		//SendStatus:         domain.SendStatusSucceeded,
+		Status: domain.SendStatusSucceeded,
 	}, nil
 }

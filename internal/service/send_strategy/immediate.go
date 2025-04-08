@@ -58,7 +58,7 @@ func (s *ImmediateSendStrategy) BatchSend(ctx context.Context, ns []domain.Notif
 	}
 
 	// 已经发送成功了
-	if notifications[first].Status == domain.StatusSucceeded {
+	if notifications[first].Status == domain.SendStatusSucceeded {
 		return []domain.SendResponse{
 			{
 				NotificationID: notifications[first].ID,
@@ -68,13 +68,13 @@ func (s *ImmediateSendStrategy) BatchSend(ctx context.Context, ns []domain.Notif
 	}
 
 	// 事务消息直接返回错误
-	if notifications[first].Status == domain.StatusPrepare ||
-		notifications[first].Status == domain.StatusCanceled {
+	if notifications[first].Status == domain.SendStatusPrepare ||
+		notifications[first].Status == domain.SendStatusCanceled {
 		return nil, fmt.Errorf("事务消息")
 	}
 
 	// 更新通知状态为PENDING同时获取乐观锁（版本号）
-	notifications[first].Status = domain.StatusPending
+	notifications[first].Status = domain.SendStatusPending
 	err = s.repo.UpdateStatus(ctx, notifications[first].ID, notifications[first].Status, notifications[first].Version)
 	if err != nil {
 		return nil, fmt.Errorf("更新通知状态失败: %w", err)

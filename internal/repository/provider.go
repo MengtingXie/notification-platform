@@ -53,7 +53,7 @@ func (p *providerRepository) toDomain(d dao.Provider) domain.Provider {
 		QPSLimit:         d.QPSLimit,
 		DailyLimit:       d.DailyLimit,
 		AuditCallbackURL: d.AuditCallbackURL,
-		Status:           domain.Status(d.Status),
+		Status:           domain.SendStatus(d.Status),
 	}
 }
 
