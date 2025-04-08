@@ -6,8 +6,9 @@ import (
 	"gitee.com/flycash/notification-platform/internal/repository"
 	dao2 "gitee.com/flycash/notification-platform/internal/repository/dao"
 	auditsvc "gitee.com/flycash/notification-platform/internal/service/audit"
+	"gitee.com/flycash/notification-platform/internal/service/backup/internal/template/internal/repository/dao"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
-	"gitee.com/flycash/notification-platform/internal/service/template/internal/repository/dao"
+	template2 "gitee.com/flycash/notification-platform/internal/service/template"
 	"github.com/ego-component/egorm"
 	"github.com/google/wire"
 )
@@ -15,7 +16,7 @@ import (
 var ProviderSet = wire.NewSet(
 	dao2.NewChannelTemplateDAO,
 	repository.NewChannelTemplateRepository,
-	NewChannelTemplateService,
+	template2.NewChannelTemplateService,
 )
 
 func InitModule(db *egorm.Component, providerSvc providersvc.Service, auditsvc auditsvc.Service) Module {
@@ -28,7 +29,7 @@ func InitModule(db *egorm.Component, providerSvc providersvc.Service, auditsvc a
 	return Module{}
 }
 
-func convert(svc ChannelTemplateService) Service {
+func convert(svc template2.ChannelTemplateService) Service {
 	return svc.(Service)
 }
 

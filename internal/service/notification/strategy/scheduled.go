@@ -4,20 +4,19 @@ import (
 	"context"
 	"fmt"
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/repository"
 	"time"
-
-	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 )
 
 // ScheduledSendStrategy 定时发送策略
 type ScheduledSendStrategy struct {
-	notificationSvc notificationsvc.Service
+	repo repository.NotificationRepository
 }
 
 // newScheduledStrategy 创建定时发送策略
-func newScheduledStrategy(notificationSvc notificationsvc.Service) *ScheduledSendStrategy {
+func newScheduledStrategy(repo repository.NotificationRepository) *ScheduledSendStrategy {
 	return &ScheduledSendStrategy{
-		notificationSvc: notificationSvc,
+		repo: repo,
 	}
 }
 
@@ -27,22 +26,18 @@ func (s *ScheduledSendStrategy) Send(ctx context.Context, ns []domain.Notificati
 		return nil, fmt.Errorf("%w: 通知列表不能为空", ErrInvalidParameter)
 	}
 
-	notificationSvcDomains := make([]notificationsvc.Notification, len(ns))
 	for i := range ns {
 		// 根据发送策略，计算调度窗口
 		scheduledTime := ns[i].SendStrategyConfig.ScheduledTime
 		if scheduledTime.Before(time.Now()) {
 			return nil, fmt.Errorf("%w: 定时参数已过期", ErrInvalidParameter)
 		}
-		ns[i].Notification.ScheduledSTime = scheduledTime.UnixMilli()
-		ns[i].Notification.ScheduledETime = scheduledTime.UnixMilli()
-
-		// 获取notification模块的领域模型
-		notificationSvcDomains[i] = ns[i].Notification
+		ns[i].ScheduledSTime = scheduledTime.UnixMilli()
+		ns[i].ScheduledETime = scheduledTime.UnixMilli()
 	}
 
 	// 创建通知记录
-	createdNotifications, err := s.notificationSvc.BatchCreate(ctx, notificationSvcDomains)
+	createdNotifications, err := s.repo.BatchCreate(ctx, ns)
 	if err != nil {
 		return nil, fmt.Errorf("创建定时通知失败: %w", err)
 	}

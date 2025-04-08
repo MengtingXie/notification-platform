@@ -4,20 +4,19 @@ import (
 	"context"
 	"fmt"
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/repository"
 	"time"
-
-	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 )
 
 // DeadlineSendStrategy 截止日期发送策略
 type DeadlineSendStrategy struct {
-	notificationSvc notificationsvc.Service
+	repo repository.NotificationRepository
 }
 
 // newDeadlineStrategy 创建截止日期发送策略
-func newDeadlineStrategy(notificationSvc notificationsvc.Service) *DeadlineSendStrategy {
+func newDeadlineStrategy(repo repository.NotificationRepository) *DeadlineSendStrategy {
 	return &DeadlineSendStrategy{
-		notificationSvc: notificationSvc,
+		repo: repo,
 	}
 }
 
@@ -28,7 +27,6 @@ func (s *DeadlineSendStrategy) Send(ctx context.Context, ns []domain.Notificatio
 	}
 
 	now := time.Now()
-	notificationSvcDomains := make([]notificationsvc.Notification, len(ns))
 	for i := range ns {
 		// 根据发送策略，计算调度窗口
 		deadlineTime := ns[i].SendStrategyConfig.DeadlineTime
@@ -37,15 +35,15 @@ func (s *DeadlineSendStrategy) Send(ctx context.Context, ns []domain.Notificatio
 		}
 
 		// 设置时间窗口: 从现在到截止日期
-		ns[i].Notification.ScheduledSTime = now.UnixMilli()
-		ns[i].Notification.ScheduledETime = deadlineTime.UnixMilli()
+		ns[i].ScheduledSTime = now.UnixMilli()
+		ns[i].ScheduledETime = deadlineTime.UnixMilli()
 
 		// 获取notification模块的领域模型
-		notificationSvcDomains[i] = ns[i].Notification
+		//notificationSvcDomains[i] = ns[i].Notification
 	}
 
 	// 创建通知记录
-	createdNotifications, err := s.notificationSvc.BatchCreate(ctx, notificationSvcDomains)
+	createdNotifications, err := s.repo.BatchCreate(ctx, ns)
 	if err != nil {
 		return nil, fmt.Errorf("创建截止日期通知失败: %w", err)
 	}

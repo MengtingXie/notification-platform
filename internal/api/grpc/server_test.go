@@ -112,11 +112,11 @@ func (s *ServerTestSuite) TestSendNotification() {
 				notificationID := uint64(1000 + timestamp%100)
 				// 期望转换后的notification
 				expectedNotification := executor.Notification{
-					Notification: notificationsvc.Notification{
+					Notification: domain{
 						BizID:    int64(101), // 测试用bizID
 						Key:      req.Notification.Key,
 						Receiver: req.Notification.Receiver,
-						Channel:  notificationsvc.ChannelSMS,
+						Channel:  domain.ChannelSMS,
 						Template: notificationsvc.Template{
 							ID:     100,
 							Params: req.Notification.TemplateParams,
@@ -139,7 +139,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 						// 返回模拟响应
 						return executor.SendResponse{
 							NotificationID: notificationID,
-							Status:         notificationsvc.SendStatusSucceeded,
+							Status:         domain.StatusSucceeded,
 						}, nil
 					})
 			},
@@ -174,7 +174,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 					SendNotification(gomock.Any(), gomock.Any()).
 					Return(executor.SendResponse{
 						NotificationID: notificationID,
-						Status:         notificationsvc.SendStatusSucceeded,
+						Status:         domain.StatusSucceeded,
 					}, nil)
 			},
 			after: func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse) {
@@ -214,7 +214,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 
 						return executor.SendResponse{
 							NotificationID: notificationID,
-							Status:         notificationsvc.SendStatusSucceeded,
+							Status:         domain.StatusSucceeded,
 						}, nil
 					})
 			},
@@ -255,7 +255,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 
 						return executor.SendResponse{
 							NotificationID: notificationID,
-							Status:         notificationsvc.SendStatusSucceeded,
+							Status:         domain.StatusSucceeded,
 						}, nil
 					})
 			},
@@ -298,7 +298,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 
 						return executor.SendResponse{
 							NotificationID: notificationID,
-							Status:         notificationsvc.SendStatusSucceeded,
+							Status:         domain.StatusSucceeded,
 						}, nil
 					})
 			},
@@ -339,7 +339,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 
 						return executor.SendResponse{
 							NotificationID: notificationID,
-							Status:         notificationsvc.SendStatusSucceeded,
+							Status:         domain.StatusSucceeded,
 						}, nil
 					})
 			},
@@ -546,7 +546,7 @@ func (s *ServerTestSuite) TestBatchQueryNotifications() {
 				mockResponses := []executor.SendResponse{
 					{
 						NotificationID: 1001,
-						Status:         notificationsvc.SendStatusSucceeded,
+						Status:         domain.StatusSucceeded,
 					},
 					{
 						NotificationID: 1002,
@@ -687,7 +687,7 @@ func (s *ServerTestSuite) TestQueryNotification() {
 			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, key string) {
 				mockResponse := executor.SendResponse{
 					NotificationID: 2001,
-					Status:         notificationsvc.SendStatusSucceeded,
+					Status:         domain.StatusSucceeded,
 				}
 
 				mockExecutor.EXPECT().
@@ -921,11 +921,11 @@ func (s *ServerTestSuite) TestPrepare() {
 						assert.LessOrEqual(s.T(), now.Add(59*time.Minute).UnixMilli(), txn.Notification.ScheduledETime)
 						txn.Notification.ScheduledETime = 0
 						txn.Notification.ScheduledSTime = 0
-						assert.Equal(s.T(), notificationsvc.Notification{
+						assert.Equal(s.T(), domain{
 							BizID:    13,
 							Key:      fmt.Sprintf("test-key-immediate-%d", timestamp),
 							Receiver: "13800138000",
-							Channel:  notificationsvc.ChannelSMS,
+							Channel:  domain.ChannelSMS,
 							Template: notificationsvc.Template{
 								ID: 100,
 								Params: map[string]string{
@@ -969,11 +969,11 @@ func (s *ServerTestSuite) TestPrepare() {
 						assert.LessOrEqual(s.T(), now.Add(69*time.Second).UnixMilli(), txn.Notification.ScheduledETime)
 						txn.Notification.ScheduledETime = 0
 						txn.Notification.ScheduledSTime = 0
-						assert.Equal(s.T(), notificationsvc.Notification{
+						assert.Equal(s.T(), domain{
 							BizID:    13,
 							Key:      fmt.Sprintf("test-key-delayed-%d", timestamp),
 							Receiver: "13800138001",
-							Channel:  notificationsvc.ChannelSMS,
+							Channel:  domain.ChannelSMS,
 							Template: notificationsvc.Template{
 								ID: 100,
 								Params: map[string]string{
@@ -1017,11 +1017,11 @@ func (s *ServerTestSuite) TestPrepare() {
 						assert.LessOrEqual(s.T(), now.Add(60*time.Second).UnixMilli(), txn.Notification.ScheduledETime)
 						txn.Notification.ScheduledETime = 0
 						txn.Notification.ScheduledSTime = 0
-						assert.Equal(s.T(), notificationsvc.Notification{
+						assert.Equal(s.T(), domain{
 							BizID:    13,
 							Key:      fmt.Sprintf("test-key-scheduled-%d", timestamp),
 							Receiver: "13800138002",
-							Channel:  notificationsvc.ChannelSMS,
+							Channel:  domain.ChannelSMS,
 							Template: notificationsvc.Template{
 								ID: 100,
 								Params: map[string]string{
@@ -1066,11 +1066,11 @@ func (s *ServerTestSuite) TestPrepare() {
 						assert.LessOrEqual(s.T(), now.Add(179*time.Minute).UnixMilli(), txn.Notification.ScheduledETime)
 						txn.Notification.ScheduledETime = 0
 						txn.Notification.ScheduledSTime = 0
-						assert.Equal(s.T(), notificationsvc.Notification{
+						assert.Equal(s.T(), domain{
 							BizID:    13,
 							Key:      fmt.Sprintf("test-key-timewindow-%d", timestamp),
 							Receiver: "13800138003",
-							Channel:  notificationsvc.ChannelSMS,
+							Channel:  domain.ChannelSMS,
 							Template: notificationsvc.Template{
 								ID: 100,
 								Params: map[string]string{

@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/adapter/sms"
-	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
-	templatesvc "gitee.com/flycash/notification-platform/internal/service/template"
+	"gitee.com/flycash/notification-platform/internal/service/template"
 )
 
 var ErrSendFailed = errors.New("发送失败")
@@ -15,7 +15,7 @@ var ErrSendFailed = errors.New("发送失败")
 // Provider 供应商接口
 type Provider interface {
 	// Send 发送消息
-	Send(ctx context.Context, notification notificationsvc.Notification) (domain.SendResponse, error)
+	Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error)
 }
 
 // Dispatcher 供应商分发器，对外伪装成Provider，作为统一入口。负责创建和调用Selector
@@ -25,17 +25,17 @@ type Dispatcher struct {
 
 // NewDispatcher 创建供应商分发器
 func NewDispatcher(
-	providerSvc Service,
-	templateSvc templatesvc.Service,
+	providerSvc ManageService,
+	templateRepo repository.ChannelTemplateRepository,
 	smsClients map[string]sms.Client,
 ) Provider {
 	d := &Dispatcher{
-		selector: newSelector(providerSvc, templateSvc, smsClients),
+		//selector: newSelector(providerSvc, templateSvc, smsClients),
 	}
 	return d
 }
 
-func (d *Dispatcher) Send(ctx context.Context, notification notificationsvc.Notification) (domain.SendResponse, error) {
+func (d *Dispatcher) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
 	d.selector.Reset()
 
 	var retryCount int8
@@ -62,12 +62,12 @@ func (d *Dispatcher) Send(ctx context.Context, notification notificationsvc.Noti
 // smsProvider SMS供应商
 type smsProvider struct {
 	name        string
-	templateSvc templatesvc.Service
+	templateSvc template.ChannelTemplateService
 	client      sms.Client
 }
 
 // NewSMSProvider SMS供应商
-func NewSMSProvider(name string, templateSvc templatesvc.Service, client sms.Client) Provider {
+func NewSMSProvider(name string, templateSvc template.ChannelTemplateService, client sms.Client) Provider {
 	return &smsProvider{
 		name:        name,
 		templateSvc: templateSvc,
@@ -76,8 +76,8 @@ func NewSMSProvider(name string, templateSvc templatesvc.Service, client sms.Cli
 }
 
 // Send 发送短信
-func (p *smsProvider) Send(ctx context.Context, notification notificationsvc.Notification) (domain.SendResponse, error) {
-	template, err := p.templateSvc.GetTemplate(ctx, notification.Template.ID, notification.Template.VersionID, p.name, templatesvc.ChannelSMS)
+func (p *smsProvider) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
+	template, err := p.templateSvc.GetTemplate(ctx, notification.Template.ID, notification.Template.VersionID, p.name, template.ChannelSMS)
 	if err != nil {
 		return domain.SendResponse{}, fmt.Errorf("%w: %w", ErrSendFailed, err)
 	}
@@ -102,6 +102,7 @@ func (p *smsProvider) Send(ctx context.Context, notification notificationsvc.Not
 
 	return domain.SendResponse{
 		NotificationID: notification.ID,
-		Status:         notificationsvc.SendStatusSucceeded,
+		//Status:         domain.StatusSucceeded,
+		Status: domain.StatusSucceeded,
 	}, nil
 }

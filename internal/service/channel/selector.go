@@ -44,7 +44,7 @@ type Selector interface {
 	// Reset 重置选择器状态
 	Reset()
 	// Next 获取下一个可用的渠道实现
-	Next(ctx context.Context, notification notificationsvc.Notification) (Channel, error)
+	Next(ctx context.Context, notification domain) (Channel, error)
 }
 
 // selector 渠道选择器实现
@@ -64,13 +64,13 @@ type selector struct {
 	retryPolicyCache map[int64]RetryPolicy
 
 	// 缓存的渠道列表，按业务ID和通知渠道索引
-	channelListCache map[string][]notificationsvc.Channel
+	channelListCache map[string][]domain.Channel
 
 	// 当前处理的通知状态
 	currentState struct {
-		notification       notificationsvc.Notification
-		attemptedChannels  map[notificationsvc.Channel]bool
-		currentChannelType notificationsvc.Channel
+		notification       domain
+		attemptedChannels  map[domain.Channel]bool
+		currentChannelType domain.Channel
 		currentChannelIdx  int
 	}
 }
@@ -82,7 +82,7 @@ func newSelector(providerDispatcher provider.Provider, configSvc configsvc.Servi
 		providerDispatcher: providerDispatcher,
 		bizConfigCache:     make(map[int64]configsvc.BusinessConfig),
 		retryPolicyCache:   make(map[int64]RetryPolicy),
-		channelListCache:   make(map[string][]notificationsvc.Channel),
+		channelListCache:   make(map[string][]domain.Channel),
 	}
 }
 
@@ -92,14 +92,14 @@ func (s *selector) Reset() {
 	defer s.mu.Unlock()
 
 	// 重置当前处理的通知状态
-	s.currentState.notification = notificationsvc.Notification{}
-	s.currentState.attemptedChannels = make(map[notificationsvc.Channel]bool)
+	s.currentState.notification = domain{}
+	s.currentState.attemptedChannels = make(map[domain.Channel]bool)
 	s.currentState.currentChannelType = ""
 	s.currentState.currentChannelIdx = 0
 }
 
 // Next 获取下一个可用渠道
-func (s *selector) Next(ctx context.Context, notification notificationsvc.Notification) (Channel, error) {
+func (s *selector) Next(ctx context.Context, notification domain) (Channel, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -107,7 +107,7 @@ func (s *selector) Next(ctx context.Context, notification notificationsvc.Notifi
 	if s.currentState.notification.ID != notification.ID ||
 		s.currentState.notification.BizID != notification.BizID {
 		s.currentState.notification = notification
-		s.currentState.attemptedChannels = make(map[notificationsvc.Channel]bool)
+		s.currentState.attemptedChannels = make(map[domain.Channel]bool)
 		s.currentState.currentChannelIdx = 0
 	}
 
@@ -138,7 +138,7 @@ func (s *selector) Next(ctx context.Context, notification notificationsvc.Notifi
 }
 
 // getAvailableChannels 获取可用渠道列表
-func (s *selector) getAvailableChannels(ctx context.Context, notification notificationsvc.Notification) ([]notificationsvc.Channel, error) {
+func (s *selector) getAvailableChannels(ctx context.Context, notification domain) ([]domain.Channel, error) {
 	bizID := notification.BizID
 	cacheKey := getCacheKey(bizID, notification.Channel)
 
@@ -162,7 +162,7 @@ func (s *selector) getAvailableChannels(ctx context.Context, notification notifi
 }
 
 // getCacheKey 生成缓存键
-func getCacheKey(bizID int64, channel notificationsvc.Channel) string {
+func getCacheKey(bizID int64, channel domain.Channel) string {
 	return fmt.Sprintf("%d:%s", bizID, channel)
 }
 
@@ -212,8 +212,8 @@ func (s *selector) unmarshalRetryPolicy(retryPolicyStr string) RetryPolicy {
 	return defaultRetryPolicy
 }
 
-func (s *selector) unmarshalChannelConfig(channelConfigStr string, channel notificationsvc.Channel) []notificationsvc.Channel {
-	channels := make([]notificationsvc.Channel, 0)
+func (s *selector) unmarshalChannelConfig(channelConfigStr string, channel domain.Channel) []domain.Channel {
+	channels := make([]domain.Channel, 0)
 
 	// 首先添加通知指定的渠道作为默认渠道
 	if channel != "" {
@@ -226,15 +226,15 @@ func (s *selector) unmarshalChannelConfig(channelConfigStr string, channel notif
 		return channels
 	}
 	for _, ch := range channelConfig.Channels {
-		if ch.Enabled && notificationsvc.Channel(ch.Channel) != channel {
-			channels = append(channels, notificationsvc.Channel(ch.Channel))
+		if ch.Enabled && domain.Channel(ch.Channel) != channel {
+			channels = append(channels, domain.Channel(ch.Channel))
 		}
 	}
 	return channels
 }
 
 // createChannelHandler 创建渠道处理器
-func (s *selector) createChannelHandler(bizID int64, channelType notificationsvc.Channel) Channel {
+func (s *selector) createChannelHandler(bizID int64, channelType domain.Channel) Channel {
 	// 获取重试策略
 	var retryPolicy RetryPolicy
 	if policy, ok := s.retryPolicyCache[bizID]; ok {
@@ -261,10 +261,10 @@ type channelHandler struct {
 }
 
 // Send 使用特定渠道发送通知
-func (ch *channelHandler) Send(ctx context.Context, notification notificationsvc.Notification) (domain.SendResponse, error) {
+func (ch *channelHandler) Send(ctx context.Context, notification domain) (domain.SendResponse, error) {
 	// 创建该渠道的通知副本
 	channelNotification := notification
-	channelNotification.Channel = notificationsvc.Channel(ch.ChannelName)
+	channelNotification.Channel = domain.Channel(ch.ChannelName)
 
 	// 应用重试策略，对同一个渠道进行多次尝试
 	var lastError error

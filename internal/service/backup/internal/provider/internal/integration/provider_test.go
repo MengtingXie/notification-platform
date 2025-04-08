@@ -4,13 +4,13 @@ package integration
 
 import (
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/service/backup/internal/provider/internal/integration/startup"
+	"gitee.com/flycash/notification-platform/internal/service/provider"
 	"math/rand"
 	"testing"
 	"time"
 
-	"gitee.com/flycash/notification-platform/internal/service/provider/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/service/provider/internal/integration/startup"
-	"gitee.com/flycash/notification-platform/internal/service/provider/internal/service"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/ego-component/egorm"
 	"github.com/stretchr/testify/assert"
@@ -25,7 +25,7 @@ func TestProviderServiceSuite(t *testing.T) {
 type ProviderServiceTestSuite struct {
 	suite.Suite
 	db  *egorm.Component
-	svc service.ProviderService
+	svc provider.ManageService
 }
 
 func (s *ProviderServiceTestSuite) SetupSuite() {
@@ -83,7 +83,7 @@ func (s *ProviderServiceTestSuite) TestCreateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
@@ -94,7 +94,7 @@ func (s *ProviderServiceTestSuite) TestCreateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
@@ -105,7 +105,7 @@ func (s *ProviderServiceTestSuite) TestCreateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
@@ -116,7 +116,7 @@ func (s *ProviderServiceTestSuite) TestCreateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
@@ -127,7 +127,7 @@ func (s *ProviderServiceTestSuite) TestCreateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
@@ -138,7 +138,7 @@ func (s *ProviderServiceTestSuite) TestCreateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
@@ -149,7 +149,7 @@ func (s *ProviderServiceTestSuite) TestCreateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
@@ -160,7 +160,7 @@ func (s *ProviderServiceTestSuite) TestCreateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
@@ -171,7 +171,7 @@ func (s *ProviderServiceTestSuite) TestCreateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 	}
@@ -236,7 +236,7 @@ func (s *ProviderServiceTestSuite) TestUpdateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
@@ -247,7 +247,7 @@ func (s *ProviderServiceTestSuite) TestUpdateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
@@ -258,7 +258,7 @@ func (s *ProviderServiceTestSuite) TestUpdateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
@@ -269,7 +269,7 @@ func (s *ProviderServiceTestSuite) TestUpdateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
@@ -280,7 +280,7 @@ func (s *ProviderServiceTestSuite) TestUpdateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
@@ -291,7 +291,7 @@ func (s *ProviderServiceTestSuite) TestUpdateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
@@ -302,7 +302,7 @@ func (s *ProviderServiceTestSuite) TestUpdateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
@@ -313,7 +313,7 @@ func (s *ProviderServiceTestSuite) TestUpdateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
@@ -324,7 +324,7 @@ func (s *ProviderServiceTestSuite) TestUpdateProviderFailed() {
 				return p
 			}(),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 	}
@@ -362,21 +362,21 @@ func (s *ProviderServiceTestSuite) TestGetProviderByIDFailed() {
 			name: "ID为0",
 			id:   0,
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
 			name: "ID为负数",
 			id:   -1,
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 		{
 			name: "ID不存在",
 			id:   9999,
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrProviderNotFound)
+				return assert.ErrorIs(t, err, provider.ErrProviderNotFound)
 			},
 		},
 	}
@@ -447,7 +447,7 @@ func (s *ProviderServiceTestSuite) TestGetProvidersByChannel() {
 			},
 			channel: domain.Channel("Unknown"),
 			assertErrFunc: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.ErrorIs(t, err, service.ErrInvalidParameter)
+				return assert.ErrorIs(t, err, provider.ErrInvalidParameter)
 			},
 		},
 	}

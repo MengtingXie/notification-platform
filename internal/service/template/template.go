@@ -59,12 +59,12 @@ type ChannelTemplateService interface {
 // templateService 模板服务实现
 type templateService struct {
 	repo        repository.ChannelTemplateRepository
-	providerSvc providersvc.Service
+	providerSvc providersvc.ManageService
 	auditSvc    auditsvc.Service
 }
 
 // NewChannelTemplateService 创建模板服务实例
-func NewChannelTemplateService(repo repository.ChannelTemplateRepository, providerSvc providersvc.Service, auditSvc auditsvc.Service) ChannelTemplateService {
+func NewChannelTemplateService(repo repository.ChannelTemplateRepository, providerSvc providersvc.ManageService, auditSvc auditsvc.Service) ChannelTemplateService {
 	return &templateService{
 		repo:        repo,
 		providerSvc: providerSvc,
@@ -133,7 +133,7 @@ func (t *templateService) CreateTemplate(ctx context.Context, template domain.Ch
 	// 为每个供应商创建关联
 
 	// 获取当前渠道的供应商列表
-	providers, err := t.providerSvc.GetProvidersByChannel(ctx, providersvc.Channel(template.Channel))
+	providers, err := t.providerSvc.GetProvidersByChannel(ctx, template.Channel)
 	if err != nil {
 		return domain.ChannelTemplate{}, fmt.Errorf("%w: 获取供应商列表失败: %w", ErrCreateTemplateFailed, err)
 	}

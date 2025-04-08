@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/adapter/sms"
 	"sort"
 	"sync"
 
-	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
-	templatesvc "gitee.com/flycash/notification-platform/internal/service/template"
 	"github.com/gotomicro/ego/core/elog"
 )
 
@@ -21,7 +20,7 @@ var (
 // Selector 供应商选择器接口
 type Selector interface {
 	// Next 获取下一个供应商
-	Next(ctx context.Context, notification notificationsvc.Notification) (Provider, error)
+	Next(ctx context.Context, notification domain.Notification) (Provider, error)
 	// Reset 重置选择器状态
 	Reset()
 }
@@ -30,31 +29,29 @@ type Selector interface {
 type selector struct {
 	mu sync.Mutex // 添加互斥锁保护并发访问
 
-	providerSvc Service
-	templateSvc templatesvc.Service
+	providerSvc ManageService
 
-	providers  map[notificationsvc.Channel]map[string]Provider
+	providers  map[domain.Channel]map[string]Provider
 	smsClients map[string]sms.Client
 
 	// 当前处理状态
-	providerConfigs []Provider
+	providerConfigs []domain.Provider
 	currentIndex    int
 
 	logger *elog.Component
 }
 
 // newSelector 创建供应商选择器
-func newSelector(providerSvc Service, templateSvc templatesvc.Service, smsClients map[string]sms.Client) Selector {
+func newSelector(providerSvc ManageService, smsClients map[string]sms.Client) Selector {
 	return &selector{
 		providerSvc:  providerSvc,
-		templateSvc:  templateSvc,
 		smsClients:   smsClients,
 		currentIndex: 0,
 	}
 }
 
 // Next 获取下一个供应商
-func (s *selector) Next(ctx context.Context, notification notificationsvc.Notification) (Provider, error) {
+func (s *selector) Next(ctx context.Context, notification domain.Notification) (Provider, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -94,9 +91,9 @@ func (s *selector) Next(ctx context.Context, notification notificationsvc.Notifi
 }
 
 // initProviderConfigs 初始化供应商列表
-func (s *selector) initProviderConfigs(ctx context.Context, channelType notificationsvc.Channel) error {
+func (s *selector) initProviderConfigs(ctx context.Context, channelType domain.Channel) error {
 	// 注意：该方法应该在持有锁的情况下调用
-	providerConfigs, err := s.providerSvc.GetProvidersByChannel(ctx, Channel(channelType))
+	providerConfigs, err := s.providerSvc.GetProvidersByChannel(ctx, channelType)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrNoAvailableProvider, err)
 	}
@@ -123,10 +120,10 @@ func (s *selector) initProviderConfigs(ctx context.Context, channelType notifica
 }
 
 // initProviders 根据供应商配置和传入的渠道客户端初始化供应商对象
-func (s *selector) initProviders(channelType notificationsvc.Channel) error {
-	s.providers = make(map[notificationsvc.Channel]map[string]Provider)
+func (s *selector) initProviders(channelType domain.Channel) error {
+	s.providers = make(map[domain.Channel]map[string]Provider)
 	for i := range s.providerConfigs {
-		if channelType == notificationsvc.ChannelSMS {
+		if channelType == domain.ChannelSMS {
 			switch s.providerConfigs[i].Code {
 			case "tencentCloud":
 				// 渠道类型: 供应商名称(aliyun-sms或aliyun): 供应商对象

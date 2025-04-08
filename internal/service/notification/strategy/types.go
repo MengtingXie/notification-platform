@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
-
-	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 )
 
 // 定义统一的错误类型
@@ -25,24 +23,17 @@ type SendStrategy interface {
 // Dispatcher 通知发送分发器
 // 根据通知的策略类型选择合适的发送策略
 type Dispatcher struct {
-	notificationSvc notificationsvc.Service
-	sender          sender.NotificationSender
-	strategies      map[domain.SendStrategyType]SendStrategy
+	sender     sender.NotificationSender
+	strategies map[domain.SendStrategyType]SendStrategy
 }
 
 // NewDispatcher 创建通知发送分发器
-func NewDispatcher(notificationSvc notificationsvc.Service, sender sender.NotificationSender) SendStrategy {
-	strategies := map[domain.SendStrategyType]SendStrategy{
-		domain.SendStrategyImmediate:  newImmediateStrategy(notificationSvc, sender),
-		domain.SendStrategyScheduled:  newScheduledStrategy(notificationSvc),
-		domain.SendStrategyDelayed:    newDelayedStrategy(notificationSvc),
-		domain.SendStrategyTimeWindow: newTimeWindowStrategy(notificationSvc),
-		domain.SendStrategyDeadline:   newDeadlineStrategy(notificationSvc),
-	}
+func NewDispatcher(
+	strategies map[domain.SendStrategyType]SendStrategy,
+	sender sender.NotificationSender) SendStrategy {
 	return &Dispatcher{
-		notificationSvc: notificationSvc,
-		sender:          sender,
-		strategies:      strategies,
+		sender:     sender,
+		strategies: strategies,
 	}
 }
 

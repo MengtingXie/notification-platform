@@ -303,7 +303,7 @@ func (s *NotificationServer) convertToNotification(n *notificationv1.Notificatio
 	}
 
 	// 构建基本Notification
-	notification := notificationsvc.Notification{
+	notification := domain{
 		BizID:    bizID,
 		Key:      n.Key,
 		Receiver: n.Receiver,
@@ -366,14 +366,14 @@ func (s *NotificationServer) convertToNotification(n *notificationv1.Notificatio
 }
 
 // convertChannel 将gRPC通道转换为领域通道
-func convertChannel(channel notificationv1.Channel) notificationsvc.Channel {
+func convertChannel(channel notificationv1.Channel) domain.Channel {
 	switch channel {
 	case notificationv1.Channel_SMS:
-		return notificationsvc.ChannelSMS
+		return domain.ChannelSMS
 	case notificationv1.Channel_EMAIL:
-		return notificationsvc.ChannelEmail
+		return domain.ChannelEmail
 	case notificationv1.Channel_IN_APP:
-		return notificationsvc.ChannelInApp
+		return domain.ChannelInApp
 	default:
 		return ""
 	}
@@ -458,7 +458,7 @@ func convertSendStatus(status notificationsvc.SendStatus) notificationv1.SendSta
 		return notificationv1.SendStatus_CANCELED
 	case notificationsvc.SendStatusPending:
 		return notificationv1.SendStatus_PENDING
-	case notificationsvc.SendStatusSucceeded:
+	case domain.StatusSucceeded:
 		return notificationv1.SendStatus_SUCCEEDED
 	case notificationsvc.SendStatusFailed:
 		return notificationv1.SendStatus_FAILED
@@ -478,11 +478,11 @@ func (s *NotificationServer) convertToTxNotification(n *notificationv1.Notificat
 		return txnotification.TxNotification{}, fmt.Errorf("无效的模板ID: %s", n.TemplateId)
 	}
 	// 构建基本Notification
-	noti := notificationsvc.Notification{
+	noti := domain{
 		BizID:    bizID,
 		Key:      n.Key,
 		Receiver: n.Receiver,
-		Channel:  notificationsvc.Channel(n.Channel.String()),
+		Channel:  domain.Channel(n.Channel.String()),
 		Template: notificationsvc.Template{
 			ID:     tid,
 			Params: n.TemplateParams,

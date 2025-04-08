@@ -8,16 +8,16 @@ package startup
 
 import (
 	"gitee.com/flycash/notification-platform/internal/service/audit"
+	template2 "gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
-	"gitee.com/flycash/notification-platform/internal/service/template"
 	"gitee.com/flycash/notification-platform/internal/test/ioc"
 )
 
 // Injectors from wire.go:
 
-func InitChannelTemplateService(providerSvc provider.Service, auditSvc audit.Service) template.Service {
+func InitChannelTemplateService(providerSvc provider.Service, auditSvc audit.Service) template2.Service {
 	db := ioc.InitDB()
-	module := template.InitModule(db, providerSvc, auditSvc)
+	module := template2.InitModule(db, providerSvc, auditSvc)
 	service := module.Svc
 	return service
 }

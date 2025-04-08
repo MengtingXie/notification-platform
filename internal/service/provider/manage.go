@@ -1,12 +1,11 @@
-package service
+package provider
 
 import (
 	"context"
 	"errors"
 	"fmt"
-
-	"gitee.com/flycash/notification-platform/internal/service/provider/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/service/provider/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/repository"
 )
 
 var (
@@ -14,10 +13,10 @@ var (
 	ErrInvalidParameter = errors.New("参数非法")
 )
 
-// ProviderService 供应商服务接口
+// ManageService 供应商服务接口
 //
 //go:generate mockgen -source=./provider.go -destination=../../mocks/provider.mock.go -package=providermocks -typed ProviderService
-type ProviderService interface {
+type ManageService interface {
 	// CreateProvider 创建供应商
 	CreateProvider(ctx context.Context, provider domain.Provider) (domain.Provider, error)
 	// UpdateProvider 更新供应商
@@ -36,7 +35,7 @@ type providerService struct {
 }
 
 // NewProviderService 创建供应商服务
-func NewProviderService(repo repository.ProviderRepository) ProviderService {
+func NewProviderService(repo repository.ProviderRepository) ManageService {
 	return &providerService{
 		repo: repo,
 	}

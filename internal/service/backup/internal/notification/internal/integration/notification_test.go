@@ -25,7 +25,7 @@ func TestNotificationServiceSuite(t *testing.T) {
 type NotificationServiceTestSuite struct {
 	suite.Suite
 	db  *egorm.Component
-	svc notificationsvc.NotificationService
+	svc domainService
 }
 
 func (s *NotificationServiceTestSuite) SetupSuite() {

@@ -1,13 +1,6 @@
 package domain
 
 // Channel 通知渠道
-type Channel string
-
-const (
-	ChannelSMS   Channel = "SMS"    // 短信
-	ChannelEmail Channel = "EMAIL"  // 邮件
-	ChannelInApp Channel = "IN_APP" // 站内信
-)
 
 // Status 通知状态
 type Status string

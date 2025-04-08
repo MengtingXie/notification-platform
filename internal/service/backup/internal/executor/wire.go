@@ -4,12 +4,12 @@ package executor
 
 import (
 	"gitee.com/flycash/notification-platform/internal/service/adapter/sms"
+	templatesvc "gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
 	configsvc "gitee.com/flycash/notification-platform/internal/service/config"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
+	"gitee.com/flycash/notification-platform/internal/service/notification/strategy"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
-	"gitee.com/flycash/notification-platform/internal/service/strategy"
-	templatesvc "gitee.com/flycash/notification-platform/internal/service/template"
 	"github.com/google/wire"
 	"github.com/sony/sonyflake"
 )

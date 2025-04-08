@@ -4,20 +4,19 @@ import (
 	"context"
 	"fmt"
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/repository"
 	"time"
-
-	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 )
 
 // TimeWindowSendStrategy 时间窗口发送策略
 type TimeWindowSendStrategy struct {
-	notificationSvc notificationsvc.Service
+	repo repository.NotificationRepository
 }
 
 // newTimeWindowStrategy 创建时间窗口发送策略
-func newTimeWindowStrategy(notificationSvc notificationsvc.Service) *TimeWindowSendStrategy {
+func newTimeWindowStrategy(repo repository.NotificationRepository) *TimeWindowSendStrategy {
 	return &TimeWindowSendStrategy{
-		notificationSvc: notificationSvc,
+		repo: repo,
 	}
 }
 
@@ -29,7 +28,6 @@ func (s *TimeWindowSendStrategy) Send(ctx context.Context, ns []domain.Notificat
 
 	// 校验时间窗口
 	now := time.Now().UnixMilli()
-	notificationSvcDomains := make([]notificationsvc.Notification, len(ns))
 	for i := range ns {
 		// 根据发送策略，计算调度窗口
 		startTime := ns[i].SendStrategyConfig.StartTimeMilliseconds
@@ -43,15 +41,13 @@ func (s *TimeWindowSendStrategy) Send(ctx context.Context, ns []domain.Notificat
 			return nil, fmt.Errorf("%w: 时间窗口结束时间应该大于当前时间", ErrInvalidParameter)
 		}
 
-		ns[i].Notification.ScheduledSTime = startTime
-		ns[i].Notification.ScheduledETime = endTime
+		ns[i].ScheduledSTime = startTime
+		ns[i].ScheduledETime = endTime
 
-		// 获取notification模块的领域模型
-		notificationSvcDomains[i] = ns[i].Notification
 	}
 
 	// 创建通知记录
-	createdNotifications, err := s.notificationSvc.BatchCreate(ctx, notificationSvcDomains)
+	createdNotifications, err := s.repo.BatchCreate(ctx, ns)
 	if err != nil {
 		return nil, fmt.Errorf("创建时间窗口通知失败: %w", err)
 	}

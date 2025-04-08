@@ -10,8 +10,9 @@ import (
 	"gitee.com/flycash/notification-platform/internal/repository"
 	dao2 "gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/audit"
+	"gitee.com/flycash/notification-platform/internal/service/backup/internal/template/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
-	"gitee.com/flycash/notification-platform/internal/service/template/internal/repository/dao"
+	template2 "gitee.com/flycash/notification-platform/internal/service/template"
 	"github.com/ego-component/egorm"
 	"github.com/google/wire"
 )
@@ -22,7 +23,7 @@ func InitModule(db *egorm.Component, providerSvc provider.Service, auditsvc audi
 	error2 := initTables(db)
 	channelTemplateDAO := dao2.NewChannelTemplateDAO(db)
 	channelTemplateRepository := repository.NewChannelTemplateRepository(channelTemplateDAO)
-	channelTemplateService := NewChannelTemplateService(channelTemplateRepository, providerSvc, auditsvc)
+	channelTemplateService := template2.NewChannelTemplateService(channelTemplateRepository, providerSvc, auditsvc)
 	templateService := convert(channelTemplateService)
 	module := Module{
 		ignoredInitTablesErr: error2,
@@ -33,9 +34,9 @@ func InitModule(db *egorm.Component, providerSvc provider.Service, auditsvc audi
 
 // wire.go:
 
-var ProviderSet = wire.NewSet(dao2.NewChannelTemplateDAO, repository.NewChannelTemplateRepository, NewChannelTemplateService)
+var ProviderSet = wire.NewSet(dao2.NewChannelTemplateDAO, repository.NewChannelTemplateRepository, template2.NewChannelTemplateService)
 
-func convert(svc ChannelTemplateService) Service {
+func convert(svc template2.ChannelTemplateService) Service {
 	return svc.(Service)
 }
 

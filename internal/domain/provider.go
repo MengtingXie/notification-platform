@@ -10,11 +10,11 @@ const (
 )
 
 // Status 供应商状态
-type Status string
+type ProviderStatus string
 
 const (
-	StatusActive   Status = "ACTIVE"   // 激活
-	StatusInactive Status = "INACTIVE" // 未激活
+	ProviderStatusActive   Status = "ACTIVE"   // 激活
+	ProviderStatusInactive Status = "INACTIVE" // 未激活
 )
 
 // Provider 供应商领域模型

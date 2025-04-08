@@ -129,7 +129,7 @@ func (s *scheduler) processPendingNotifications() {
 	}
 }
 
-func (s *scheduler) getNotifications(ctx context.Context, stime int64, limit int) ([]notificationsvc.Notification, error) {
+func (s *scheduler) getNotifications(ctx context.Context, stime int64, limit int) ([]domain, error) {
 	// 从Notification模块中获取可以发送
 	// where status = PENDING and SSTime <= stime limit  GROUP BY bizID
 	// stime = time.Now() // 当前时间必须大于等于开始时间
@@ -138,14 +138,14 @@ func (s *scheduler) getNotifications(ctx context.Context, stime int64, limit int
 }
 
 // groupByBizID 按业务ID分组通知
-func groupByBizID(notifications []notificationsvc.Notification) [][]notificationsvc.Notification {
-	bizMap := make(map[int64][]notificationsvc.Notification)
+func groupByBizID(notifications []domain) [][]domain {
+	bizMap := make(map[int64][]domain)
 	// 按业务ID归类
 	for i := range notifications {
 		bizMap[notifications[i].BizID] = append(bizMap[notifications[i].BizID], notifications[i])
 	}
 	// 转换为分组列表
-	result := make([][]notificationsvc.Notification, 0, len(bizMap))
+	result := make([][]domain, 0, len(bizMap))
 	for _, group := range bizMap {
 		result = append(result, group)
 	}

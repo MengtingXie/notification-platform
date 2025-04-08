@@ -9,10 +9,10 @@ package startup
 import (
 	"gitee.com/flycash/notification-platform/internal/service/adapter/sms"
 	"gitee.com/flycash/notification-platform/internal/service/backup/internal/executor"
+	"gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
-	"gitee.com/flycash/notification-platform/internal/service/template"
 	"gitee.com/flycash/notification-platform/internal/test/ioc"
 )
 

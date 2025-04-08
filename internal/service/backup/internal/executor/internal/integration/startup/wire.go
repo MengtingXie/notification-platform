@@ -5,10 +5,10 @@ package startup
 import (
 	"gitee.com/flycash/notification-platform/internal/service/adapter/sms"
 	executor2 "gitee.com/flycash/notification-platform/internal/service/backup/internal/executor"
+	templatesvc "gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
 	configsvc "gitee.com/flycash/notification-platform/internal/service/config"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
-	templatesvc "gitee.com/flycash/notification-platform/internal/service/template"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/google/wire"
 )

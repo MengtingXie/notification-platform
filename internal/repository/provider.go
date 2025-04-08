@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/repository/dao"
 
-	"gitee.com/flycash/notification-platform/internal/service/provider/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/service/provider/internal/repository/dao"
 	"gorm.io/gorm"
 )
 

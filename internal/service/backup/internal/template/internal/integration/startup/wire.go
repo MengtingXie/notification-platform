@@ -4,17 +4,17 @@ package startup
 
 import (
 	auditsvc "gitee.com/flycash/notification-platform/internal/service/audit"
+	"gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
-	templatesvc "gitee.com/flycash/notification-platform/internal/service/template"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/google/wire"
 )
 
-func InitChannelTemplateService(providerSvc providersvc.Service, auditSvc auditsvc.Service) templatesvc.Service {
+func InitChannelTemplateService(providerSvc providersvc.Service, auditSvc auditsvc.Service) template.Service {
 	wire.Build(
 		testioc.BaseSet,
-		templatesvc.InitModule,
-		wire.FieldsOf(new(templatesvc.Module), "Svc"),
+		template.InitModule,
+		wire.FieldsOf(new(template.Module), "Svc"),
 	)
 	return nil
 }

@@ -5,12 +5,12 @@ package integration
 import (
 	"gitee.com/flycash/notification-platform/internal/service/adapter/sms"
 	"gitee.com/flycash/notification-platform/internal/service/backup/internal/executor/internal/integration/startup"
+	templatesvc "gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
 	"testing"
 
 	configsvc "gitee.com/flycash/notification-platform/internal/service/config"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
-	templatesvc "gitee.com/flycash/notification-platform/internal/service/template"
 	"github.com/stretchr/testify/suite"
 )
 

@@ -6,11 +6,11 @@ import (
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
 	"gitee.com/flycash/notification-platform/internal/service/audit"
 	"gitee.com/flycash/notification-platform/internal/service/backup/internal/executor"
+	template2 "gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
 	"gitee.com/flycash/notification-platform/internal/service/backup/internal/tx_notification"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
-	"gitee.com/flycash/notification-platform/internal/service/template"
 	"github.com/google/wire"
 )
 
@@ -39,8 +39,8 @@ func InitGrpcServer() *App {
 		wire.FieldsOf(new(providersvc.Module), "Svc"),
 
 		// 模板服务
-		template.InitModule,
-		wire.FieldsOf(new(template.Module), "Svc"),
+		template2.InitModule,
+		wire.FieldsOf(new(template2.Module), "Svc"),
 
 		// 审计服务
 		audit.InitMoudle,

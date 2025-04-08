@@ -2,6 +2,7 @@ package template
 
 import (
 	"gitee.com/flycash/notification-platform/internal/domain"
+	template2 "gitee.com/flycash/notification-platform/internal/service/template"
 )
 
 type (
@@ -10,7 +11,7 @@ type (
 		Svc                  Service
 	}
 
-	Service                 ChannelTemplateService
+	Service                 template2.ChannelTemplateService
 	ChannelTemplateVersion  = domain.ChannelTemplateVersion
 	ChannelTemplateProvider = domain.ChannelTemplateProvider
 	ChannelTemplate         = domain.ChannelTemplate

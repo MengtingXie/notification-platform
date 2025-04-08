@@ -5,14 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/adapter/sms"
+	templatesvc "gitee.com/flycash/notification-platform/internal/service/backup/internal/template"
 	"gitee.com/flycash/notification-platform/internal/service/channel"
+	"gitee.com/flycash/notification-platform/internal/service/template"
 	"sync"
 
 	configsvc "gitee.com/flycash/notification-platform/internal/service/config"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
-	templatesvc "gitee.com/flycash/notification-platform/internal/service/template"
 	"github.com/gotomicro/ego/core/elog"
 )
 
@@ -24,48 +26,36 @@ var (
 // NotificationSender 通知发送接口
 type NotificationSender interface {
 	// Send 发送一批通知，返回发送结果
-	Send(ctx context.Context, notifications []notificationsvc.Notification) ([]domain.SendResponse, error)
+	Send(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error)
 }
 
 // sender 通知发送器实现
 type sender struct {
 	notificationSvc   notificationsvc.Service
-	configSvc         configsvc.Service
+	repo              repository.NotificationRepository
+	configSvc         configsvc.BusinessConfigService
 	channelDispatcher channel.Channel
 	logger            *elog.Component
 }
 
 // NewSender 创建通知发送器
 func NewSender(
-	notificationSvc notificationsvc.Service,
-	configSvc configsvc.Service,
-	providerSvc providersvc.Service,
-	templateSvc templatesvc.Service,
-	smsClients map[string]sms.Client,
+	repo repository.NotificationRepository,
+	configSvc configsvc.BusinessConfigService,
+	channelDispatcher channel.Dispatcher,
+	providerDispatcher providersvc.Dispatcher,
 ) NotificationSender {
-	// 创建 provider.Dispatcher
-	providerDispatcher := providersvc.NewDispatcher(
-		providerSvc,
-		templateSvc,
-		smsClients,
-	)
-
-	// 创建 channel.Dispatcher
-	channelDispatcher := channel.NewDispatcher(
-		providerDispatcher,
-		configSvc,
-	)
-
+	
 	return &sender{
-		notificationSvc:   notificationSvc,
 		configSvc:         configSvc,
+		repo:              repo,
 		channelDispatcher: channelDispatcher,
 		logger:            elog.DefaultLogger,
 	}
 }
 
 // Send 批量发送通知
-func (d *sender) Send(ctx context.Context, notifications []notificationsvc.Notification) ([]domain.SendResponse, error) {
+func (d *sender) Send(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error) {
 	if len(notifications) == 0 {
 		return nil, nil
 	}
@@ -104,7 +94,7 @@ func (d *sender) Send(ctx context.Context, notifications []notificationsvc.Notif
 			if err1 != nil {
 				resp := domain.SendResponse{
 					NotificationID: n.ID,
-					Status:         notificationsvc.SendStatusFailed,
+					Status:         domain.StatusFailed,
 					RetryCount:     response.RetryCount,
 				}
 				failedMu.Lock()
@@ -113,7 +103,7 @@ func (d *sender) Send(ctx context.Context, notifications []notificationsvc.Notif
 			} else {
 				resp := domain.SendResponse{
 					NotificationID: n.ID,
-					Status:         notificationsvc.SendStatusSucceeded,
+					Status:         domain.StatusSucceeded,
 					RetryCount:     response.RetryCount,
 				}
 				succeedMu.Lock()
@@ -134,7 +124,7 @@ func (d *sender) Send(ctx context.Context, notifications []notificationsvc.Notif
 	}
 
 	// 获取所有通知的详细信息，包括版本号
-	notificationsMap, err := d.notificationSvc.BatchGetByIDs(ctx, allNotificationIDs)
+	notificationsMap, err := d.repo.BatchGetByIDs(ctx, allNotificationIDs)
 	if err != nil {
 		d.logger.Warn("批量获取通知失败",
 			elog.Any("Error", err),
@@ -157,8 +147,8 @@ func (d *sender) Send(ctx context.Context, notifications []notificationsvc.Notif
 }
 
 // getUpdatedNotifications 获取更新字段后的实体
-func (d *sender) getUpdatedNotifications(responses []domain.SendResponse, notificationsMap map[uint64]notificationsvc.Notification) []notificationsvc.Notification {
-	notifications := make([]notificationsvc.Notification, 0, len(responses))
+func (d *sender) getUpdatedNotifications(responses []domain.SendResponse, notificationsMap map[uint64]domain.Notification) []domain.Notification {
+	notifications := make([]domain.Notification, 0, len(responses))
 	for i := range responses {
 		if notification, ok := notificationsMap[responses[i].NotificationID]; ok {
 			notification.Status = responses[i].Status
@@ -170,9 +160,9 @@ func (d *sender) getUpdatedNotifications(responses []domain.SendResponse, notifi
 }
 
 // batchUpdateStatus 更新发送状态
-func (d *sender) batchUpdateStatus(ctx context.Context, succeedNotifications, failedNotifications []notificationsvc.Notification) error {
+func (d *sender) batchUpdateStatus(ctx context.Context, succeedNotifications, failedNotifications []domain) error {
 	if len(succeedNotifications) > 0 || len(failedNotifications) > 0 {
-		err := d.notificationSvc.BatchUpdateStatusSucceededOrFailed(ctx, succeedNotifications, failedNotifications)
+		err := d.repo.BatchUpdateStatusSucceededOrFailed(ctx, succeedNotifications, failedNotifications)
 		if err != nil {
 			d.logger.Warn("批量更新通知状态失败",
 				elog.Any("Error", err),
@@ -186,12 +176,12 @@ func (d *sender) batchUpdateStatus(ctx context.Context, succeedNotifications, fa
 }
 
 // isRateLimited 检查是否达到速率限制
-func (d *sender) isRateLimited(config configsvc.BusinessConfig, count int) bool {
+func (d *sender) isRateLimited(config domain.BusinessConfig, count int) bool {
 	return config.RateLimit > 0 && count > config.RateLimit
 }
 
 // isQuotaExceeded 检查是否超过配额
-func (d *sender) isQuotaExceeded(_ configsvc.BusinessConfig, _ []notificationsvc.Notification) bool {
+func (d *sender) isQuotaExceeded(_ domain.BusinessConfig, _ []domain.Notification) bool {
 	// 实现配额检查逻辑
 	// 实际代码中需根据 config.Quota 检查各渠道的配额
 	return false
