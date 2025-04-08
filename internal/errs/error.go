@@ -16,8 +16,6 @@ package errs
 
 import (
 	"errors"
-
-	"gitee.com/flycash/notification-platform/internal/repository"
 )
 
 // 定义统一的错误类型
