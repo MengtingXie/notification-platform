@@ -3,11 +3,11 @@ package notification
 import (
 	"context"
 	"errors"
+	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/config"
-	"gitee.com/flycash/notification-platform/internal/service/notification/retry"
 	"github.com/ecodeclub/ekit/syncx"
 	"github.com/gotomicro/ego/client/egrpc"
 	"github.com/gotomicro/ego/core/elog"
@@ -19,7 +19,7 @@ var ErrUpdateStatusFailed = errors.New("update status failed")
 //go:generate mockgen -source=./tx_notification.go -destination=./mocks/tx_notification.mock.go -package=notificationmocks -typed TxNotificationService
 type TxNotificationService interface {
 	// Prepare 准备消息,
-	Prepare(ctx context.Context, txNotification domain.TxNotification) (uint64, error)
+	Prepare(ctx context.Context, notification domain.Notification) (uint64, error)
 	// Commit 提交
 	Commit(ctx context.Context, bizID int64, key string) error
 	// Cancel 取消
@@ -30,25 +30,20 @@ type TxNotificationServiceV1 struct {
 	repo            repository.TxNotificationRepository
 	notificationSvc Service
 	configSvc       config.BusinessConfigService
-	// retryStrategyBuilder retry.Builder
-	logger *elog.Component
-	lock   dlock.Client
+	logger          *elog.Component
+	lock            dlock.Client
 }
 
 func NewTxNotificationService(
 	repo repository.TxNotificationRepository,
-	notificationSvc Service,
 	configSvc config.BusinessConfigService,
-	retryStrategyBuilder retry.Builder,
 	lock dlock.Client,
 ) *TxNotificationServiceV1 {
 	return &TxNotificationServiceV1{
-		repo:            repo,
-		notificationSvc: notificationSvc,
-		configSvc:       configSvc,
-		// retryStrategyBuilder: retryStrategyBuilder,
-		logger: elog.DefaultLogger,
-		lock:   lock,
+		repo:      repo,
+		configSvc: configSvc,
+		logger:    elog.DefaultLogger,
+		lock:      lock,
 	}
 }
 
@@ -59,17 +54,31 @@ func (t *TxNotificationServiceV1) StartTask(ctx context.Context) {
 		repo:            t.repo,
 		notificationSvc: t.notificationSvc,
 		configSvc:       t.configSvc,
-		// retryStrategyBuilder: t.retryStrategyBuilder,
-		logger:    t.logger,
-		lock:      t.lock,
-		batchSize: defaultBatchSize,
-		clientMap: syncx.Map[string, *egrpc.Component]{},
+		logger:          t.logger,
+		lock:            t.lock,
+		batchSize:       defaultBatchSize,
+		clientMap:       syncx.Map[string, *egrpc.Component]{},
 	}
 	go task.Start(ctx)
 }
 
-func (t *TxNotificationServiceV1) Prepare(ctx context.Context, txNotification domain.TxNotification) (uint64, error) {
-	return t.repo.Create(ctx, txNotification)
+func (t *TxNotificationServiceV1) Prepare(ctx context.Context, notification domain.Notification) (uint64, error) {
+	notification.Status = domain.SendStatusPrepare
+	txn := domain.TxNotification{
+		Notification: notification,
+		Key:          notification.Key,
+		BizID:        notification.BizID,
+		Status:       domain.TxNotificationStatusPrepare,
+	}
+
+	cfg, err := t.configSvc.GetByID(ctx, notification.BizID)
+	if err == nil {
+		now := time.Now().UnixMilli()
+		const second = 1000
+		txn.NextCheckTime = now + int64(cfg.TxnConfig.InitialDelay*second)
+	}
+
+	return t.repo.Create(ctx, txn)
 }
 
 func (t *TxNotificationServiceV1) Commit(ctx context.Context, bizID int64, key string) error {

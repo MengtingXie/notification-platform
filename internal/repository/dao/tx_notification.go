@@ -30,8 +30,8 @@ type TxNotification struct {
 	BizID int64 `gorm:"column:biz_id;type:bigint;not null;uniqueIndex:idx_biz_id_key"`
 	// 通知状态
 	Status string `gorm:"column:status;type:varchar(20);not null;default:'PREPARE';index:idx_next_check_time_status"`
-	// 检查次数
-	CheckCount int `gorm:"column:check_count;type:int;not null;default:0"`
+	// 第几次检查从1开始
+	CheckCount int `gorm:"column:check_count;type:int;not null;default:1"`
 	// 下一次的回查时间戳
 	NextCheckTime int64 `gorm:"column:next_check_time;type:bigint;not null;default:0;index:idx_next_check_time_status"`
 	// 创建时间
@@ -76,7 +76,7 @@ func (t *txNotificationDAO) UpdateStatus(ctx context.Context, bizID int64, key s
 	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		res := tx.WithContext(ctx).
 			Model(&TxNotification{}).
-			Where("biz_id = ? AND key = ? AND status = 'PREPARE'", bizID, key).
+			Where("biz_id = ? AND `key` = ? AND status = 'PREPARE'", bizID, key).
 			Update("status", status)
 		if res.Error != nil {
 			return res.Error
@@ -86,7 +86,7 @@ func (t *txNotificationDAO) UpdateStatus(ctx context.Context, bizID int64, key s
 		}
 		return tx.WithContext(ctx).
 			Model(&Notification{}).
-			Where("biz_id = ? AND key = ? ", bizID, key).
+			Where("biz_id = ? AND `key` = ? ", bizID, key).
 			Update("status", notificationStatus).Error
 	})
 }
@@ -109,8 +109,8 @@ func (t *txNotificationDAO) Prepare(ctx context.Context, txn TxNotification, not
 		if res.Error != nil {
 			return res.Error
 		}
+		notificationID = notification.ID
 		if res.RowsAffected == 0 {
-			notificationID = notification.ID
 			return nil
 		}
 		txn.NotificationID = notification.ID
@@ -207,8 +207,11 @@ func (t *txNotificationDAO) UpdateCheckStatus(ctx context.Context, txNotificatio
 			if err != nil {
 				return err
 			}
-			return tx.WithContext(ctx).Model(&Notification{}).Where("id in ?", notificationIds).
-				Update("status", status).Error
+			if status != string(domain.SendStatusPrepare) {
+				return tx.WithContext(ctx).Model(&Notification{}).Where("id in ?", notificationIds).
+					Update("status", status).Error
+			}
+			return nil
 		})
 	}
 	return nil

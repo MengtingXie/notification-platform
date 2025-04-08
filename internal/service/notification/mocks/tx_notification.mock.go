@@ -5,6 +5,7 @@
 //
 //	mockgen -source=./tx_notification.go -destination=./mocks/tx_notification.mock.go -package=notificationmocks -typed TxNotificationService
 //
+
 // Package notificationmocks is a generated GoMock package.
 package notificationmocks
 
@@ -20,6 +21,7 @@ import (
 type MockTxNotificationService struct {
 	ctrl     *gomock.Controller
 	recorder *MockTxNotificationServiceMockRecorder
+	isgomock struct{}
 }
 
 // MockTxNotificationServiceMockRecorder is the mock recorder for MockTxNotificationService.
@@ -48,31 +50,31 @@ func (m *MockTxNotificationService) Cancel(ctx context.Context, bizID int64, key
 }
 
 // Cancel indicates an expected call of Cancel.
-func (mr *MockTxNotificationServiceMockRecorder) Cancel(ctx, bizID, key any) *TxNotificationServiceCancelCall {
+func (mr *MockTxNotificationServiceMockRecorder) Cancel(ctx, bizID, key any) *MockTxNotificationServiceCancelCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cancel", reflect.TypeOf((*MockTxNotificationService)(nil).Cancel), ctx, bizID, key)
-	return &TxNotificationServiceCancelCall{Call: call}
+	return &MockTxNotificationServiceCancelCall{Call: call}
 }
 
-// TxNotificationServiceCancelCall wrap *gomock.Call
-type TxNotificationServiceCancelCall struct {
+// MockTxNotificationServiceCancelCall wrap *gomock.Call
+type MockTxNotificationServiceCancelCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TxNotificationServiceCancelCall) Return(arg0 error) *TxNotificationServiceCancelCall {
+func (c *MockTxNotificationServiceCancelCall) Return(arg0 error) *MockTxNotificationServiceCancelCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TxNotificationServiceCancelCall) Do(f func(context.Context, int64, string) error) *TxNotificationServiceCancelCall {
+func (c *MockTxNotificationServiceCancelCall) Do(f func(context.Context, int64, string) error) *MockTxNotificationServiceCancelCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TxNotificationServiceCancelCall) DoAndReturn(f func(context.Context, int64, string) error) *TxNotificationServiceCancelCall {
+func (c *MockTxNotificationServiceCancelCall) DoAndReturn(f func(context.Context, int64, string) error) *MockTxNotificationServiceCancelCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -86,70 +88,31 @@ func (m *MockTxNotificationService) Commit(ctx context.Context, bizID int64, key
 }
 
 // Commit indicates an expected call of Commit.
-func (mr *MockTxNotificationServiceMockRecorder) Commit(ctx, bizID, key any) *TxNotificationServiceCommitCall {
+func (mr *MockTxNotificationServiceMockRecorder) Commit(ctx, bizID, key any) *MockTxNotificationServiceCommitCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Commit", reflect.TypeOf((*MockTxNotificationService)(nil).Commit), ctx, bizID, key)
-	return &TxNotificationServiceCommitCall{Call: call}
+	return &MockTxNotificationServiceCommitCall{Call: call}
 }
 
-// TxNotificationServiceCommitCall wrap *gomock.Call
-type TxNotificationServiceCommitCall struct {
+// MockTxNotificationServiceCommitCall wrap *gomock.Call
+type MockTxNotificationServiceCommitCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TxNotificationServiceCommitCall) Return(arg0 error) *TxNotificationServiceCommitCall {
+func (c *MockTxNotificationServiceCommitCall) Return(arg0 error) *MockTxNotificationServiceCommitCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TxNotificationServiceCommitCall) Do(f func(context.Context, int64, string) error) *TxNotificationServiceCommitCall {
+func (c *MockTxNotificationServiceCommitCall) Do(f func(context.Context, int64, string) error) *MockTxNotificationServiceCommitCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TxNotificationServiceCommitCall) DoAndReturn(f func(context.Context, int64, string) error) *TxNotificationServiceCommitCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// GetNotification mocks base method.
-func (m *MockTxNotificationService) GetNotification(ctx context.Context, bizID int64, key string) (domain.TxNotification, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNotification", ctx, bizID, key)
-	ret0, _ := ret[0].(domain.TxNotification)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetNotification indicates an expected call of GetNotification.
-func (mr *MockTxNotificationServiceMockRecorder) GetNotification(ctx, bizID, key any) *TxNotificationServiceGetNotificationCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNotification", reflect.TypeOf((*MockTxNotificationService)(nil).GetNotification), ctx, bizID, key)
-	return &TxNotificationServiceGetNotificationCall{Call: call}
-}
-
-// TxNotificationServiceGetNotificationCall wrap *gomock.Call
-type TxNotificationServiceGetNotificationCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *TxNotificationServiceGetNotificationCall) Return(arg0 domain.TxNotification, arg1 error) *TxNotificationServiceGetNotificationCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *TxNotificationServiceGetNotificationCall) Do(f func(context.Context, int64, string) (domain.TxNotification, error)) *TxNotificationServiceGetNotificationCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TxNotificationServiceGetNotificationCall) DoAndReturn(f func(context.Context, int64, string) (domain.TxNotification, error)) *TxNotificationServiceGetNotificationCall {
+func (c *MockTxNotificationServiceCommitCall) DoAndReturn(f func(context.Context, int64, string) error) *MockTxNotificationServiceCommitCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -164,31 +127,31 @@ func (m *MockTxNotificationService) Prepare(ctx context.Context, txNotification 
 }
 
 // Prepare indicates an expected call of Prepare.
-func (mr *MockTxNotificationServiceMockRecorder) Prepare(ctx, txNotification any) *TxNotificationServicePrepareCall {
+func (mr *MockTxNotificationServiceMockRecorder) Prepare(ctx, txNotification any) *MockTxNotificationServicePrepareCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Prepare", reflect.TypeOf((*MockTxNotificationService)(nil).Prepare), ctx, txNotification)
-	return &TxNotificationServicePrepareCall{Call: call}
+	return &MockTxNotificationServicePrepareCall{Call: call}
 }
 
-// TxNotificationServicePrepareCall wrap *gomock.Call
-type TxNotificationServicePrepareCall struct {
+// MockTxNotificationServicePrepareCall wrap *gomock.Call
+type MockTxNotificationServicePrepareCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TxNotificationServicePrepareCall) Return(arg0 uint64, arg1 error) *TxNotificationServicePrepareCall {
+func (c *MockTxNotificationServicePrepareCall) Return(arg0 uint64, arg1 error) *MockTxNotificationServicePrepareCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TxNotificationServicePrepareCall) Do(f func(context.Context, domain.TxNotification) (uint64, error)) *TxNotificationServicePrepareCall {
+func (c *MockTxNotificationServicePrepareCall) Do(f func(context.Context, domain.TxNotification) (uint64, error)) *MockTxNotificationServicePrepareCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TxNotificationServicePrepareCall) DoAndReturn(f func(context.Context, domain.TxNotification) (uint64, error)) *TxNotificationServicePrepareCall {
+func (c *MockTxNotificationServicePrepareCall) DoAndReturn(f func(context.Context, domain.TxNotification) (uint64, error)) *MockTxNotificationServicePrepareCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
