@@ -1,13 +1,11 @@
 package domain
 
-import "gitee.com/flycash/notification-platform/internal/service/notification"
-
 type TxNotification struct {
 	// 事务id
 	TxID int64
 
 	// 创建的通知id
-	Notification notification.Notification
+	Notification Notification
 	// 业务方标识
 	BizID int64
 	// 业务内的唯一标识

@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	executorsvc "gitee.com/flycash/notification-platform/internal/service/backup/executor"
-	"gitee.com/flycash/notification-platform/internal/service/backup/tx_notification"
+	executorsvc "gitee.com/flycash/notification-platform/internal/service/backup/internal/executor"
+	"gitee.com/flycash/notification-platform/internal/service/backup/internal/tx_notification"
 	"strconv"
 	"strings"
 	"time"
@@ -25,7 +25,7 @@ type NotificationServer struct {
 	notificationv1.UnimplementedNotificationQueryServiceServer
 	executor executorsvc.Service
 	// TODO: 配置服务 configService config.ConfigService
-	txnSvc txnotification.Service
+	txnSvc txnotification.txnotification
 }
 
 // NewServer 创建通知平台gRPC服务器

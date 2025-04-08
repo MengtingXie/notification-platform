@@ -2,8 +2,6 @@ package domain
 
 import (
 	"time"
-
-	"gitee.com/flycash/notification-platform/internal/service/notification"
 )
 
 // SendStrategyType 发送策略类型
@@ -27,17 +25,11 @@ type SendStrategyConfig struct {
 	DeadlineTime          time.Time        // 截止日期策略使用，截止日期
 }
 
-// Notification 通知模型
-type Notification struct {
-	Notification       notification.Notification
-	SendStrategyConfig SendStrategyConfig
-}
-
 // SendResponse 发送响应
 type SendResponse struct {
-	NotificationID uint64                  // 通知ID
-	Status         notification.SendStatus // 发送状态
-	RetryCount     int8                    // 重试次数
+	NotificationID uint64     // 通知ID
+	Status         SendStatus // 发送状态
+	RetryCount     int8       // 重试次数
 }
 
 // BatchSendResponse 批量发送响应

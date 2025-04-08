@@ -3,9 +3,8 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
-
-	"gitee.com/flycash/notification-platform/internal/service/config/internal/domain"
 )
 
 type BusinessConfigRepository interface {

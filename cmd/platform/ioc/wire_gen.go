@@ -9,8 +9,7 @@ package ioc
 import (
 	"gitee.com/flycash/notification-platform/internal/api/grpc"
 	"gitee.com/flycash/notification-platform/internal/service/audit"
-	"gitee.com/flycash/notification-platform/internal/service/backup/executor"
-	"gitee.com/flycash/notification-platform/internal/service/backup/tx_notification"
+	"gitee.com/flycash/notification-platform/internal/service/backup/internal/executor"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
 	"gitee.com/flycash/notification-platform/internal/service/provider"

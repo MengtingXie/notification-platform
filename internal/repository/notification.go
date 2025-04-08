@@ -4,10 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"time"
-
-	"gitee.com/flycash/notification-platform/internal/service/notification/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/service/notification/internal/repository/dao"
 )
 
 var (

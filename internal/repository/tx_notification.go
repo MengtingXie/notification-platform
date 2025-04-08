@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/service/notification"
-
-	"gitee.com/flycash/notification-platform/internal/service/tx_notification/internal/repository/dao"
+	"gitee.com/flycash/notification-platform/internal/repository/dao"
 )
 
 var ErrUpdateStatusFailed = errors.New("没有更新")
@@ -109,7 +107,7 @@ func (t *txNotificationRepo) UpdateCheckStatus(ctx context.Context, txNotificati
 func (t *txNotificationRepo) toDomain(daoNotification dao.TxNotification) domain.TxNotification {
 	return domain.TxNotification{
 		TxID: daoNotification.TxID,
-		Notification: notification.Notification{
+		Notification: domain.Notification{
 			ID: daoNotification.NotificationID,
 		},
 		Key:           daoNotification.Key,

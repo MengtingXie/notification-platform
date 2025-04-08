@@ -3,9 +3,8 @@ package repository
 import (
 	"context"
 	"errors"
-
-	"gitee.com/flycash/notification-platform/internal/service/template/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/service/template/internal/repository/dao"
+	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/repository/dao"
 )
 
 // 添加错误定义

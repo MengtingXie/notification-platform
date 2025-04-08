@@ -5,8 +5,8 @@ package ioc
 import (
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
 	"gitee.com/flycash/notification-platform/internal/service/audit"
-	executor2 "gitee.com/flycash/notification-platform/internal/service/backup/executor"
-	txnotification2 "gitee.com/flycash/notification-platform/internal/service/backup/tx_notification"
+	"gitee.com/flycash/notification-platform/internal/service/backup/internal/executor"
+	"gitee.com/flycash/notification-platform/internal/service/backup/internal/tx_notification"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
@@ -50,12 +50,12 @@ func InitGrpcServer() *App {
 		InitSmsClients,
 
 		// 事务通知服务
-		txnotification2.InitModule,
-		wire.FieldsOf(new(*txnotification2.Module), "Svc"),
+		txnotification.InitModule,
+		wire.FieldsOf(new(*txnotification.Module), "Svc"),
 
 		// 执行器服务 - 使用原生的InitModule
-		executor2.InitModule,
-		wire.FieldsOf(new(*executor2.Module), "Svc"),
+		executor.InitModule,
+		wire.FieldsOf(new(*executor.Module), "Svc"),
 
 		// GRPC服务器
 		grpcapi.NewServer,

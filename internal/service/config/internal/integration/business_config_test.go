@@ -5,11 +5,11 @@ package integration
 import (
 	"context"
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/service/config"
 	"testing"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/service/config/internal/integration/startup"
-	"gitee.com/flycash/notification-platform/internal/service/config/internal/service"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
@@ -18,7 +18,7 @@ import (
 
 type BusinessConfigTestSuite struct {
 	suite.Suite
-	svc service.BusinessConfigService
+	svc config.BusinessConfigService
 }
 
 func (s *BusinessConfigTestSuite) SetupSuite() {
@@ -162,7 +162,7 @@ func (s *BusinessConfigTestSuite) TestServiceSaveConfig() {
 				ID: 0,
 			},
 			after:   func(t *testing.T) {},
-			wantErr: service.ErrIDNotSet,
+			wantErr: config.ErrIDNotSet,
 		},
 	}
 	for _, tc := range testcases {
@@ -199,7 +199,7 @@ func (s *BusinessConfigTestSuite) TestServiceGetByID() {
 			before: func(t *testing.T) int64 {
 				return 9999
 			},
-			wantErr: service.ErrConfigNotFound,
+			wantErr: config.ErrConfigNotFound,
 		},
 	}
 	for _, tc := range testcases {
@@ -266,7 +266,7 @@ func (s *BusinessConfigTestSuite) TestServiceDelete() {
 			},
 			after: func(t *testing.T) {
 				_, err := s.svc.GetByID(context.Background(), 5)
-				assert.Equal(t, service.ErrConfigNotFound, err, "应返回配置不存在错误")
+				assert.Equal(t, config.ErrConfigNotFound, err, "应返回配置不存在错误")
 			},
 		},
 	}

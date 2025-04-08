@@ -1,14 +1,5 @@
 package domain
 
-// Channel 渠道类型
-type Channel string
-
-const (
-	ChannelSMS   Channel = "SMS"    // 短信
-	ChannelEmail Channel = "EMAIL"  // 邮件
-	ChannelInApp Channel = "IN_APP" // 站内信
-)
-
 // AuditStatus 审核状态
 type AuditStatus string
 
