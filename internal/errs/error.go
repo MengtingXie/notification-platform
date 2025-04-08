@@ -29,4 +29,7 @@ var (
 	ErrNotificationNotFound         = repository.ErrNotificationNotFound
 	ErrCreateNotificationFailed     = errors.New("创建通知失败")
 	ErrNotificationDuplicate        = repository.ErrNotificationDuplicate
+
+	ErrNoAvailableProvider = errors.New("无可用供应商")
+	ErrNoAvailableChannel  = errors.New("无可用渠道")
 )

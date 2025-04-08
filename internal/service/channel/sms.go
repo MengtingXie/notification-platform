@@ -21,14 +21,54 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/provider"
 )
 
-type SMSChannel struct {
-	builder provider.SelectorBuilder
+type baseChannel struct {
+	builder *provider.SelectorBuilder
 }
 
-func (s *SMSChannel) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
-	selector := s.builder.Build()
+func (s *baseChannel) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
+	selector := s.builder.BuildSequentialSelector()
+
+	var retryCount int8
 	for {
-		p, _ := selector.Next(ctx, notification)
-		return p.Send(ctx, notification)
+		// 获取供应商
+		p, err1 := selector.Next(ctx, notification)
+		if err1 != nil {
+			// 没有可用的供应商
+			return domain.SendResponse{RetryCount: retryCount}, err1
+		}
+
+		// 使用当前供应商发送
+		resp, err2 := p.Send(ctx, notification)
+		if err2 == nil {
+			// 发送成功，填写重试次数
+			resp.RetryCount += retryCount
+			return resp, nil
+		}
+
+		retryCount += resp.RetryCount
+	}
+}
+
+type smsChannel struct {
+	baseChannel
+}
+
+func NewSMSChannel(builder *provider.SelectorBuilder) Channel {
+	return &smsChannel{
+		baseChannel{
+			builder: builder,
+		},
+	}
+}
+
+type emailChannel struct {
+	baseChannel
+}
+
+func NewEmailChannel(builder *provider.SelectorBuilder) Channel {
+	return &smsChannel{
+		baseChannel{
+			builder: builder,
+		},
 	}
 }

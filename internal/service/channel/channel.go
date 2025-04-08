@@ -2,8 +2,10 @@ package channel
 
 import (
 	"context"
+	"fmt"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/errs"
 )
 
 // Channel 渠道接口
@@ -18,25 +20,16 @@ type Dispatcher struct {
 }
 
 // NewDispatcher 创建渠道分发器
-//func NewDispatcher(
-//	provider provider.Provider,
-//	configSvc configsvc.BusinessConfigService,
-//) Channel {
-//	return &Dispatcher{
-//		selector: newSelector(provider, configSvc),
-//	}
-//}
+func NewDispatcher(channels map[domain.Channel]Channel) *Dispatcher {
+	return &Dispatcher{
+		channels: channels,
+	}
+}
 
 func (d *Dispatcher) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
-	channel := d.channels[notification.Channel]
-	resp, err := channel.Send(ctx, notification)
-	// 配额计算一下就可以了
-
-	//if err == nil {
-	//	return resp, err
-	//}
-	//
-	//// 切换 backup
-	//var bizConfig
-	return resp, err
+	channel, ok := d.channels[notification.Channel]
+	if !ok {
+		return domain.SendResponse{}, fmt.Errorf("%w: %s", errs.ErrNoAvailableChannel, notification.Channel)
+	}
+	return channel.Send(ctx, notification)
 }

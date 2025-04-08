@@ -36,7 +36,7 @@ type NotificationRepository interface {
 	GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]domain.Notification, error)
 
 	// UpdateStatus 更新通知状态
-	UpdateStatus(ctx context.Context, id uint64, status domain.SendStatus, version int) error
+	UpdateStatus(ctx context.Context, notification domain.Notification) error
 
 	// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
 	BatchUpdateStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error
@@ -78,32 +78,31 @@ func (r *notificationRepository) BatchGetByIDs(ctx context.Context, ids []uint64
 
 // Create 创建一条通知
 func (r *notificationRepository) Create(ctx context.Context, notification domain.Notification) (domain.Notification, error) {
-	ds, err := r.dao.Create(ctx, toNotificationEntity(notification))
+	ds, err := r.dao.Create(ctx, r.toEntity(notification))
 	if err != nil {
 		return domain.Notification{}, err
 	}
 	return r.toDomain(ds), nil
 }
 
-// toNotificationEntity 将领域对象转换为DAO实体
-func toNotificationEntity(n domain.Notification) dao.Notification {
-	templateParams, _ := n.MarshalTemplateParams()
-	receivers, _ := n.MarshalReceivers()
-
+// toEntity 将领域对象转换为DAO实体
+func (r *notificationRepository) toEntity(notification domain.Notification) dao.Notification {
+	templateParams, _ := notification.MarshalTemplateParams()
+	receivers, _ := notification.MarshalReceivers()
 	return dao.Notification{
-		ID:                n.ID,
-		BizID:             n.BizID,
-		Key:               n.Key,
+		ID:                notification.ID,
+		BizID:             notification.BizID,
+		Key:               notification.Key,
 		Receivers:         receivers,
-		Channel:           string(n.Channel),
-		TemplateID:        n.Template.ID,
-		TemplateVersionID: n.Template.VersionID,
+		Channel:           string(notification.Channel),
+		TemplateID:        notification.Template.ID,
+		TemplateVersionID: notification.Template.VersionID,
 		TemplateParams:    templateParams,
-		Status:            string(n.Status),
-		RetryCount:        n.RetryCount,
-		ScheduledSTime:    n.ScheduledSTime.UnixMilli(),
-		ScheduledETime:    n.ScheduledETime.UnixMilli(),
-		Version:           n.Version,
+		Status:            string(notification.Status),
+		RetryCount:        notification.RetryCount,
+		ScheduledSTime:    notification.ScheduledSTime.UnixMilli(),
+		ScheduledETime:    notification.ScheduledETime.UnixMilli(),
+		Version:           notification.Version,
 	}
 }
 
@@ -115,7 +114,7 @@ func (r *notificationRepository) BatchCreate(ctx context.Context, notifications 
 
 	daoNotifications := make([]dao.Notification, len(notifications))
 	for i := range notifications {
-		daoNotifications[i] = toNotificationEntity(notifications[i])
+		daoNotifications[i] = r.toEntity(notifications[i])
 	}
 
 	createdNotifications, err := r.dao.BatchCreate(ctx, daoNotifications)
@@ -127,28 +126,6 @@ func (r *notificationRepository) BatchCreate(ctx context.Context, notifications 
 		notifications[i] = r.toDomain(createdNotifications[i])
 	}
 	return notifications, nil
-}
-
-// UpdateStatus 更新通知状态
-func (r *notificationRepository) UpdateStatus(ctx context.Context, id uint64, status domain.SendStatus, version int) error {
-	return r.dao.UpdateStatus(ctx, id, string(status), version)
-}
-
-// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
-func (r *notificationRepository) BatchUpdateStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error {
-	// 转换成功的通知为DAO层的实体
-	successItems := make([]dao.Notification, len(succeededNotifications))
-	for i := range succeededNotifications {
-		successItems[i] = toNotificationEntity(succeededNotifications[i])
-	}
-
-	// 转换失败的通知为DAO层的实体
-	failedItems := make([]dao.Notification, len(failedNotifications))
-	for i := range failedNotifications {
-		failedItems[i] = toNotificationEntity(failedNotifications[i])
-	}
-
-	return r.dao.BatchUpdateStatusSucceededOrFailed(ctx, successItems, failedItems)
 }
 
 // GetByID 根据ID获取通知
@@ -214,6 +191,32 @@ func (r *notificationRepository) GetByKeys(ctx context.Context, bizID int64, key
 	return result, nil
 }
 
+// UpdateStatus 更新通知状态
+func (r *notificationRepository) UpdateStatus(ctx context.Context, notification domain.Notification) error {
+	return r.dao.UpdateStatus(ctx, r.toEntity(notification))
+}
+
+// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
+func (r *notificationRepository) BatchUpdateStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error {
+	// 转换成功的通知为DAO层的实体
+	successItems := make([]dao.Notification, len(succeededNotifications))
+	for i := range succeededNotifications {
+		successItems[i] = r.toEntity(succeededNotifications[i])
+	}
+
+	// 转换失败的通知为DAO层的实体
+	failedItems := make([]dao.Notification, len(failedNotifications))
+	for i := range failedNotifications {
+		failedItems[i] = r.toEntity(failedNotifications[i])
+	}
+
+	return r.dao.BatchUpdateStatusSucceededOrFailed(ctx, successItems, failedItems)
+}
+
+func (r *notificationRepository) BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.SendStatus) error {
+	return r.dao.BatchUpdateStatus(ctx, ids, string(status))
+}
+
 // ListByStatus 根据状态获取通知列表
 func (r *notificationRepository) ListByStatus(ctx context.Context, status domain.SendStatus, limit int) ([]domain.Notification, error) {
 	ns, err := r.dao.ListByStatus(ctx, string(status), limit)
@@ -240,8 +243,4 @@ func (r *notificationRepository) ListByScheduleTime(ctx context.Context, startTi
 		result[i] = r.toDomain(ns[i])
 	}
 	return result, nil
-}
-
-func (r *notificationRepository) BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.SendStatus) error {
-	return r.dao.BatchUpdateStatus(ctx, ids, string(status))
 }

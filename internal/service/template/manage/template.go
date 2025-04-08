@@ -1,4 +1,4 @@
-package template
+package manage
 
 import (
 	"context"

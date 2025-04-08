@@ -60,7 +60,8 @@ func (s *ImmediateSendStrategy) Send(ctx context.Context, notification domain.No
 	// 更新通知状态为PENDING同时获取乐观锁（版本号）
 	oldStatus := found.Status
 	found.Status = domain.SendStatusPending
-	err = s.repo.UpdateStatus(ctx, found.ID, found.Status, found.Version)
+	found.RetryCount++
+	err = s.repo.UpdateStatus(ctx, found)
 	if err != nil {
 		s.logger.Warn("更新通知状态失败", elog.FieldErr(err))
 		return domain.SendResponse{
