@@ -4,9 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/service/backup/internal/executor/mocks"
-	"gitee.com/flycash/notification-platform/internal/service/backup/internal/tx_notification"
-	"gitee.com/flycash/notification-platform/internal/service/backup/internal/tx_notification/mocks"
+	"gitee.com/flycash/notification-platform/internal/domain"
+	notificationmocks "gitee.com/flycash/notification-platform/internal/service/notification/mocks"
 	"net"
 	"testing"
 	"time"
@@ -34,11 +33,11 @@ type ServerTestSuite struct {
 	suite.Suite
 }
 
-func (s *ServerTestSuite) newGRPCServer(ctrl *gomock.Controller) (*grpc.Server, *bufconn.Listener, *executormocks.executormocks) {
+func (s *ServerTestSuite) newGRPCServer(ctrl *gomock.Controller) (*grpc.Server, *bufconn.Listener, *notificationmocks.MockExecutorService) {
 	listener := bufconn.Listen(1024 * 1024)
 
 	// 创建mock控制器
-	mockExecutor := executormocks.NewMockExecutorService(ctrl)
+	mockExecutor := notificationmocks.NewMockExecutorService(ctrl)
 
 	// 启动grpc.Server
 	grpcServer := grpc.NewServer()
@@ -49,11 +48,11 @@ func (s *ServerTestSuite) newGRPCServer(ctrl *gomock.Controller) (*grpc.Server, 
 }
 
 // 新增方法，支持同时创建执行器和事务通知服务的mock
-func (s *ServerTestSuite) newGRPCServerWithTx(ctrl *gomock.Controller, jwtKey string) (*grpc.Server, *jwt.InterceptorBuilder, *bufconn.Listener, *txnotificationmocks.txnotificationmocks) {
+func (s *ServerTestSuite) newGRPCServerWithTx(ctrl *gomock.Controller, jwtKey string) (*grpc.Server, *jwt.InterceptorBuilder, *bufconn.Listener, *notificationmocks.MockTxNotificationService) {
 	listener := bufconn.Listen(1024 * 1024)
 
 	// 创建mock控制器
-	mockTxSvc := txnotificationmocks.NewMockTxNotificationService(ctrl)
+	mockTxSvc := notificationmocks.NewMockTxNotificationService(ctrl)
 
 	// 启动grpc.Server，添加JWT认证拦截器
 	jwtAuth := jwt.NewJwtAuth(jwtKey)
@@ -88,14 +87,14 @@ func (s *ServerTestSuite) TestSendNotification() {
 		req     *notificationv1.SendNotificationRequest
 		after   func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse)
 		wantErr error
-		setup   func(t *testing.T, mockExecutor *executormocks.MockExecutorService, req *notificationv1.SendNotificationRequest) // 设置mock期望
+		setup   func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, req *notificationv1.SendNotificationRequest) // 设置mock期望
 	}{
 		{
 			name: "SMS_立即发送_成功",
 			req: &notificationv1.SendNotificationRequest{
 				Notification: &notificationv1.Notification{
 					Key:        fmt.Sprintf("test-key-sms-%d", timestamp),
-					Receiver:   fmt.Sprintf("138%010d", timestamp%10000000000),
+					Receivers:  []string{fmt.Sprintf("138%010d", timestamp%10000000000)},
 					Channel:    notificationv1.Channel_SMS,
 					TemplateId: "100",
 					TemplateParams: map[string]string{
@@ -108,38 +107,36 @@ func (s *ServerTestSuite) TestSendNotification() {
 					},
 				},
 			},
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
 				notificationID := uint64(1000 + timestamp%100)
 				// 期望转换后的notification
-				expectedNotification := executor.Notification{
-					Notification: domain{
-						BizID:    int64(101), // 测试用bizID
-						Key:      req.Notification.Key,
-						Receiver: req.Notification.Receiver,
-						Channel:  domain.ChannelSMS,
-						Template: notificationsvc.Template{
-							ID:     100,
-							Params: req.Notification.TemplateParams,
-						},
+				expectedNotification := domain.Notification{
+					BizID:     int64(101), // 测试用bizID
+					Key:       req.Notification.Key,
+					Receivers: req.Notification.Receivers,
+					Channel:   domain.ChannelSMS,
+					Template: domain.Template{
+						ID:     100,
+						Params: req.Notification.TemplateParams,
 					},
-					SendStrategyConfig: executor.SendStrategyConfig{
-						Type: executor.SendStrategyImmediate,
+					SendStrategyConfig: domain.SendStrategyConfig{
+						Type: domain.SendStrategyImmediate,
 					},
 				}
 
 				mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, n executor.Notification) (executor.SendResponse, error) {
+					DoAndReturn(func(_ context.Context, n domain.Notification) (domain.SendResponse, error) {
 						// 确认参数正确
-						require.Equal(t, expectedNotification.Notification.BizID, n.Notification.BizID)
-						require.Equal(t, expectedNotification.Notification.Key, n.Notification.Key)
-						require.Equal(t, expectedNotification.Notification.Channel, n.Notification.Channel)
+						require.Equal(t, expectedNotification.BizID, n.BizID)
+						require.Equal(t, expectedNotification.Key, n.Key)
+						require.Equal(t, expectedNotification.Channel, n.Channel)
 						require.Equal(t, expectedNotification.SendStrategyConfig.Type, n.SendStrategyConfig.Type)
 
 						// 返回模拟响应
-						return executor.SendResponse{
+						return domain.SendResponse{
 							NotificationID: notificationID,
-							Status:         domain.StatusSucceeded,
+							Status:         domain.SendStatusSucceeded,
 						}, nil
 					})
 			},
@@ -154,7 +151,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 			req: &notificationv1.SendNotificationRequest{
 				Notification: &notificationv1.Notification{
 					Key:        fmt.Sprintf("test-key-email-%d", timestamp),
-					Receiver:   fmt.Sprintf("test%d@example.com", timestamp),
+					Receivers:  []string{fmt.Sprintf("test%d@example.com", timestamp)},
 					Channel:    notificationv1.Channel_EMAIL,
 					TemplateId: "200",
 					TemplateParams: map[string]string{
@@ -168,13 +165,13 @@ func (s *ServerTestSuite) TestSendNotification() {
 					},
 				},
 			},
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
 				notificationID := uint64(2000 + timestamp%100)
 				mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
-					Return(executor.SendResponse{
+					Return(domain.SendResponse{
 						NotificationID: notificationID,
-						Status:         domain.StatusSucceeded,
+						Status:         domain.SendStatusSucceeded,
 					}, nil)
 			},
 			after: func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse) {
@@ -188,7 +185,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 			req: &notificationv1.SendNotificationRequest{
 				Notification: &notificationv1.Notification{
 					Key:        fmt.Sprintf("test-key-delayed-%d", timestamp),
-					Receiver:   fmt.Sprintf("138%010d", timestamp%10000000000+1),
+					Receivers:  []string{fmt.Sprintf("138%010d", timestamp%10000000000+1)},
 					Channel:    notificationv1.Channel_SMS,
 					TemplateId: "100",
 					TemplateParams: map[string]string{
@@ -203,18 +200,18 @@ func (s *ServerTestSuite) TestSendNotification() {
 					},
 				},
 			},
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
 				notificationID := uint64(3000 + timestamp%100)
 				mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, n executor.Notification) (executor.SendResponse, error) {
+					DoAndReturn(func(_ context.Context, n domain.Notification) (domain.SendResponse, error) {
 						// 验证延迟策略被正确转换
-						require.Equal(t, executor.SendStrategyDelayed, n.SendStrategyConfig.Type)
+						require.Equal(t, domain.SendStrategyDelayed, n.SendStrategyConfig.Type)
 						require.Equal(t, int64(60), n.SendStrategyConfig.DelaySeconds)
 
-						return executor.SendResponse{
+						return domain.SendResponse{
 							NotificationID: notificationID,
-							Status:         domain.StatusSucceeded,
+							Status:         domain.SendStatusSucceeded,
 						}, nil
 					})
 			},
@@ -229,7 +226,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 			req: &notificationv1.SendNotificationRequest{
 				Notification: &notificationv1.Notification{
 					Key:        fmt.Sprintf("test-key-scheduled-%d", timestamp),
-					Receiver:   fmt.Sprintf("138%010d", timestamp%10000000000+2),
+					Receivers:  []string{fmt.Sprintf("138%010d", timestamp%10000000000+2)},
 					Channel:    notificationv1.Channel_IN_APP,
 					TemplateId: "100",
 					TemplateParams: map[string]string{
@@ -244,18 +241,18 @@ func (s *ServerTestSuite) TestSendNotification() {
 					},
 				},
 			},
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
 				notificationID := uint64(4000 + timestamp%100)
 				mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, n executor.Notification) (executor.SendResponse, error) {
+					DoAndReturn(func(_ context.Context, n domain.Notification) (domain.SendResponse, error) {
 						// 验证定时策略被正确转换
-						require.Equal(t, executor.SendStrategyScheduled, n.SendStrategyConfig.Type)
+						require.Equal(t, domain.SendStrategyScheduled, n.SendStrategyConfig.Type)
 						require.False(t, n.SendStrategyConfig.ScheduledTime.IsZero())
 
-						return executor.SendResponse{
+						return domain.SendResponse{
 							NotificationID: notificationID,
-							Status:         domain.StatusSucceeded,
+							Status:         domain.SendStatusSucceeded,
 						}, nil
 					})
 			},
@@ -270,7 +267,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 			req: &notificationv1.SendNotificationRequest{
 				Notification: &notificationv1.Notification{
 					Key:        fmt.Sprintf("test-key-timewindow-%d", timestamp),
-					Receiver:   fmt.Sprintf("138%010d", timestamp%10000000000+3),
+					Receivers:  []string{fmt.Sprintf("138%010d", timestamp%10000000000+3)},
 					Channel:    notificationv1.Channel_IN_APP,
 					TemplateId: "100",
 					TemplateParams: map[string]string{
@@ -286,19 +283,19 @@ func (s *ServerTestSuite) TestSendNotification() {
 					},
 				},
 			},
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
 				notificationID := uint64(5000 + timestamp%100)
 				mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, n executor.Notification) (executor.SendResponse, error) {
+					DoAndReturn(func(_ context.Context, n domain.Notification) (domain.SendResponse, error) {
 						// 验证时间窗口策略被正确转换
-						require.Equal(t, executor.SendStrategyTimeWindow, n.SendStrategyConfig.Type)
+						require.Equal(t, domain.SendStrategyTimeWindow, n.SendStrategyConfig.Type)
 						require.True(t, n.SendStrategyConfig.StartTimeMilliseconds > 0)
 						require.True(t, n.SendStrategyConfig.EndTimeMilliseconds > n.SendStrategyConfig.StartTimeMilliseconds)
 
-						return executor.SendResponse{
+						return domain.SendResponse{
 							NotificationID: notificationID,
-							Status:         domain.StatusSucceeded,
+							Status:         domain.SendStatusSucceeded,
 						}, nil
 					})
 			},
@@ -313,7 +310,7 @@ func (s *ServerTestSuite) TestSendNotification() {
 			req: &notificationv1.SendNotificationRequest{
 				Notification: &notificationv1.Notification{
 					Key:        fmt.Sprintf("test-key-deadline-%d", timestamp),
-					Receiver:   fmt.Sprintf("138%010d", timestamp%10000000000+4),
+					Receivers:  []string{fmt.Sprintf("138%010d", timestamp%10000000000+4)},
 					Channel:    notificationv1.Channel_SMS,
 					TemplateId: "100",
 					TemplateParams: map[string]string{
@@ -328,18 +325,18 @@ func (s *ServerTestSuite) TestSendNotification() {
 					},
 				},
 			},
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
 				notificationID := uint64(6000 + timestamp%100)
 				mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, n executor.Notification) (executor.SendResponse, error) {
+					DoAndReturn(func(_ context.Context, n domain.Notification) (domain.SendResponse, error) {
 						// 验证截止日期策略被正确转换
-						require.Equal(t, executor.SendStrategyDeadline, n.SendStrategyConfig.Type)
+						require.Equal(t, domain.SendStrategyDeadline, n.SendStrategyConfig.Type)
 						require.False(t, n.SendStrategyConfig.DeadlineTime.IsZero())
 
-						return executor.SendResponse{
+						return domain.SendResponse{
 							NotificationID: notificationID,
-							Status:         domain.StatusSucceeded,
+							Status:         domain.SendStatusSucceeded,
 						}, nil
 					})
 			},
@@ -354,17 +351,17 @@ func (s *ServerTestSuite) TestSendNotification() {
 			req: &notificationv1.SendNotificationRequest{
 				Notification: &notificationv1.Notification{
 					Key:        fmt.Sprintf("test-key-invalid-channel-%d", timestamp),
-					Receiver:   fmt.Sprintf("user-invalid-channel-%d", timestamp),
+					Receivers:  []string{fmt.Sprintf("user-invalid-channel-%d", timestamp)},
 					Channel:    notificationv1.Channel_CHANNEL_UNSPECIFIED,
 					TemplateId: "300",
 				},
 			},
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
 				mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
-					Return(executor.SendResponse{
-						Status: notificationsvc.SendStatusFailed,
-					}, fmt.Errorf("%w: 不支持的通知渠道", executor.ErrInvalidParameter))
+					Return(domain.SendResponse{
+						Status: domain.SendStatusFailed,
+					}, fmt.Errorf("%w: 不支持的通知渠道", notificationsvc.ErrInvalidParameter))
 			},
 			after: func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse) {
 				require.Equal(t, notificationv1.SendStatus_FAILED, resp.Status)
@@ -378,17 +375,17 @@ func (s *ServerTestSuite) TestSendNotification() {
 			req: &notificationv1.SendNotificationRequest{
 				Notification: &notificationv1.Notification{
 					Key:        fmt.Sprintf("test-key-invalid-template-%d", timestamp),
-					Receiver:   fmt.Sprintf("user-invalid-template-%d", timestamp),
+					Receivers:  []string{fmt.Sprintf("user-invalid-template-%d", timestamp)},
 					Channel:    notificationv1.Channel_SMS,
 					TemplateId: "798",
 				},
 			},
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
 				mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
-					Return(executor.SendResponse{
-						Status: notificationsvc.SendStatusFailed,
-					}, fmt.Errorf("%w: 无效的模板ID", executor.ErrInvalidParameter))
+					Return(domain.SendResponse{
+						Status: domain.SendStatusFailed,
+					}, fmt.Errorf("%w: 无效的模板ID", notificationsvc.ErrInvalidParameter))
 			},
 			after: func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse) {
 				require.Equal(t, notificationv1.SendStatus_FAILED, resp.Status)
@@ -402,17 +399,17 @@ func (s *ServerTestSuite) TestSendNotification() {
 			req: &notificationv1.SendNotificationRequest{
 				Notification: &notificationv1.Notification{
 					Key:        fmt.Sprintf("test-key-empty-receiver-%d", timestamp),
-					Receiver:   "", // 空接收者
+					Receivers:  []string{""}, // 空接收者
 					Channel:    notificationv1.Channel_SMS,
 					TemplateId: "100",
 				},
 			},
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
 				mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
-					Return(executor.SendResponse{
-						Status: notificationsvc.SendStatusFailed,
-					}, fmt.Errorf("%w: 接收者不能为空", executor.ErrInvalidParameter))
+					Return(domain.SendResponse{
+						Status: domain.SendStatusFailed,
+					}, fmt.Errorf("%w: 接收者不能为空", notificationsvc.ErrInvalidParameter))
 			},
 			after: func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse) {
 				require.Equal(t, notificationv1.SendStatus_FAILED, resp.Status)
@@ -426,17 +423,17 @@ func (s *ServerTestSuite) TestSendNotification() {
 			req: &notificationv1.SendNotificationRequest{
 				Notification: &notificationv1.Notification{
 					Key:        fmt.Sprintf("test-key-send-error-%d", timestamp),
-					Receiver:   fmt.Sprintf("138%010d", timestamp%10000000000+3),
+					Receivers:  []string{fmt.Sprintf("138%010d", timestamp%10000000000+3)},
 					Channel:    notificationv1.Channel_SMS,
 					TemplateId: "100",
 				},
 			},
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
 				mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
-					Return(executor.SendResponse{
-						Status: notificationsvc.SendStatusFailed,
-					}, fmt.Errorf("%w: 发送短信失败", executor.ErrSendNotificationFailed))
+					Return(domain.SendResponse{
+						Status: domain.SendStatusFailed,
+					}, fmt.Errorf("%w: 发送短信失败", notificationsvc.ErrSendNotificationFailed))
 			},
 			after: func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse) {
 				require.Equal(t, notificationv1.SendStatus_FAILED, resp.Status)
@@ -450,17 +447,17 @@ func (s *ServerTestSuite) TestSendNotification() {
 			req: &notificationv1.SendNotificationRequest{
 				Notification: &notificationv1.Notification{
 					Key:        fmt.Sprintf("test-key-not-found-%d", timestamp),
-					Receiver:   fmt.Sprintf("138%010d", timestamp%10000000000+5),
+					Receivers:  []string{fmt.Sprintf("138%010d", timestamp%10000000000+5)},
 					Channel:    notificationv1.Channel_SMS,
 					TemplateId: "100",
 				},
 			},
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, req *notificationv1.SendNotificationRequest) {
 				mockExecutor.EXPECT().
 					SendNotification(gomock.Any(), gomock.Any()).
-					Return(executor.SendResponse{
-						Status: notificationsvc.SendStatusFailed,
-					}, fmt.Errorf("%w: 未找到通知", executor.ErrNotificationNotFound))
+					Return(domain.SendResponse{
+						Status: domain.SendStatusFailed,
+					}, fmt.Errorf("%w: 未找到通知", notificationsvc.ErrNotificationNotFound))
 			},
 			after: func(t *testing.T, req *notificationv1.SendNotificationRequest, resp *notificationv1.SendNotificationResponse) {
 				require.Equal(t, notificationv1.SendStatus_FAILED, resp.Status)
@@ -532,7 +529,7 @@ func (s *ServerTestSuite) TestBatchQueryNotifications() {
 	testCases := []struct {
 		name    string
 		keys    []string
-		setup   func(t *testing.T, mockExecutor *executormocks.MockExecutorService, keys []string)
+		setup   func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, keys []string)
 		after   func(t *testing.T, resp *notificationv1.BatchQueryNotificationsResponse)
 		wantErr error
 	}{
@@ -542,15 +539,15 @@ func (s *ServerTestSuite) TestBatchQueryNotifications() {
 				fmt.Sprintf("key-1-%d", timestamp),
 				fmt.Sprintf("key-2-%d", timestamp),
 			},
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, keys []string) {
-				mockResponses := []executor.SendResponse{
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockNotificationService, keys []string) {
+				mockResponses := []domain.SendResponse{
 					{
 						NotificationID: 1001,
-						Status:         domain.StatusSucceeded,
+						Status:         domain.SendStatusSucceeded,
 					},
 					{
 						NotificationID: 1002,
-						Status:         notificationsvc.SendStatusPending,
+						Status:         domain.SendStatusPending,
 					},
 				}
 
@@ -570,10 +567,10 @@ func (s *ServerTestSuite) TestBatchQueryNotifications() {
 		{
 			name: "查询通知_参数错误",
 			keys: []string{},
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, keys []string) {
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, keys []string) {
 				mockExecutor.EXPECT().
 					BatchQueryNotifications(gomock.Any(), int64(101), gomock.Any()).
-					Return(nil, fmt.Errorf("%w: 业务唯一标识列表不能为空", executor.ErrInvalidParameter))
+					Return(nil, fmt.Errorf("%w: 业务唯一标识列表不能为空", notificationsvc.ErrInvalidParameter))
 			},
 			after: func(t *testing.T, resp *notificationv1.BatchQueryNotificationsResponse) {
 				// 响应为nil，无需验证
@@ -585,10 +582,10 @@ func (s *ServerTestSuite) TestBatchQueryNotifications() {
 			keys: []string{
 				fmt.Sprintf("key-not-found-%d", timestamp),
 			},
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, keys []string) {
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, keys []string) {
 				mockExecutor.EXPECT().
 					BatchQueryNotifications(gomock.Any(), int64(101), gomock.Any()).
-					Return(nil, fmt.Errorf("%w: 未找到通知", executor.ErrNotificationNotFound))
+					Return(nil, fmt.Errorf("%w: 未找到通知", notificationsvc.ErrNotificationNotFound))
 			},
 			after: func(t *testing.T, resp *notificationv1.BatchQueryNotificationsResponse) {
 				// 响应为nil，无需验证
@@ -600,10 +597,10 @@ func (s *ServerTestSuite) TestBatchQueryNotifications() {
 			keys: []string{
 				fmt.Sprintf("key-error-%d", timestamp),
 			},
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, keys []string) {
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, keys []string) {
 				mockExecutor.EXPECT().
 					BatchQueryNotifications(gomock.Any(), int64(101), gomock.Any()).
-					Return(nil, fmt.Errorf("%w: 数据库错误", executor.ErrQueryNotificationFailed))
+					Return(nil, fmt.Errorf("%w: 数据库错误", notificationsvc.ErrQueryNotificationFailed))
 			},
 			after: func(t *testing.T, resp *notificationv1.BatchQueryNotificationsResponse) {
 				// 响应为nil，无需验证
@@ -677,17 +674,17 @@ func (s *ServerTestSuite) TestQueryNotification() {
 	testCases := []struct {
 		name    string
 		key     string
-		setup   func(t *testing.T, mockExecutor *executormocks.MockExecutorService, key string)
+		setup   func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, key string)
 		after   func(t *testing.T, resp *notificationv1.QueryNotificationResponse)
 		wantErr error
 	}{
 		{
 			name: "查询单条通知_成功",
 			key:  fmt.Sprintf("key-single-%d", timestamp),
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, key string) {
-				mockResponse := executor.SendResponse{
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, key string) {
+				mockResponse := domain.SendResponse{
 					NotificationID: 2001,
-					Status:         domain.StatusSucceeded,
+					Status:         domain.SendStatusSucceeded,
 				}
 
 				mockExecutor.EXPECT().
@@ -703,11 +700,11 @@ func (s *ServerTestSuite) TestQueryNotification() {
 		{
 			name: "查询单条通知_参数错误",
 			key:  "",
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, key string) {
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, key string) {
 				mockExecutor.EXPECT().
 					QueryNotification(gomock.Any(), int64(101), key).
-					Return(executor.SendResponse{Status: notificationsvc.SendStatusFailed},
-						fmt.Errorf("%w: 业务唯一标识不能为空", executor.ErrInvalidParameter))
+					Return(domain.SendResponse{Status: domain.SendStatusFailed},
+						fmt.Errorf("%w: 业务唯一标识不能为空", notificationsvc.ErrInvalidParameter))
 			},
 			after: func(t *testing.T, resp *notificationv1.QueryNotificationResponse) {
 				// 响应为nil，无需验证
@@ -717,11 +714,11 @@ func (s *ServerTestSuite) TestQueryNotification() {
 		{
 			name: "查询单条通知_不存在",
 			key:  fmt.Sprintf("key-single-not-found-%d", timestamp),
-			setup: func(t *testing.T, mockExecutor *executormocks.MockExecutorService, key string) {
+			setup: func(t *testing.T, mockExecutor *notificationmocks.MockExecutorService, key string) {
 				mockExecutor.EXPECT().
 					QueryNotification(gomock.Any(), int64(101), key).
-					Return(executor.SendResponse{Status: notificationsvc.SendStatusFailed},
-						fmt.Errorf("%w: 未找到通知", executor.ErrNotificationNotFound))
+					Return(domain.SendResponse{Status: domain.SendStatusFailed},
+						fmt.Errorf("%w: 未找到通知", notificationsvc.ErrNotificationNotFound))
 			},
 			after: func(t *testing.T, resp *notificationv1.QueryNotificationResponse) {
 				// 响应为nil，无需验证
@@ -890,13 +887,13 @@ func (s *ServerTestSuite) TestPrepare() {
 	testCases := []struct {
 		name      string
 		input     *notificationv1.Notification
-		setupMock func(mockTxSvc *txnotificationmocks.MockTxNotificationService, noti *notificationv1.Notification)
+		setupMock func(mockTxSvc *notificationmocks.MockTxNotificationService, noti *notificationv1.Notification)
 	}{
 		{
 			name: "立即发送策略",
 			input: &notificationv1.Notification{
 				Key:        fmt.Sprintf("test-key-immediate-%d", timestamp),
-				Receiver:   "13800138000",
+				Receivers:  "13800138000",
 				Channel:    notificationv1.Channel_SMS,
 				TemplateId: "100",
 				TemplateParams: map[string]string{
@@ -908,7 +905,7 @@ func (s *ServerTestSuite) TestPrepare() {
 					},
 				},
 			},
-			setupMock: func(mockTxSvc *txnotificationmocks.MockTxNotificationService, noti *notificationv1.Notification) {
+			setupMock: func(mockTxSvc *notificationmocks.MockTxNotificationService, noti *notificationv1.Notification) {
 				mockTxSvc.EXPECT().
 					Prepare(gomock.Any(), gomock.Any()).
 					DoAndReturn(func(ctx context.Context, txn txnotification.txnotification) (uint64, error) {
@@ -916,23 +913,23 @@ func (s *ServerTestSuite) TestPrepare() {
 						now := time.Now()
 						assert.Equal(s.T(), int64(13), txn.BizID)
 						assert.Equal(s.T(), noti.Key, txn.Key)
-						assert.GreaterOrEqual(s.T(), now.UnixMilli(), txn.Notification.ScheduledSTime)
-						assert.LessOrEqual(s.T(), now.Add(-1*time.Second).UnixMilli(), txn.Notification.ScheduledSTime)
-						assert.LessOrEqual(s.T(), now.Add(59*time.Minute).UnixMilli(), txn.Notification.ScheduledETime)
-						txn.Notification.ScheduledETime = 0
-						txn.Notification.ScheduledSTime = 0
+						assert.GreaterOrEqual(s.T(), now.UnixMilli(), txn.ScheduledSTime)
+						assert.LessOrEqual(s.T(), now.Add(-1*time.Second).UnixMilli(), txn.ScheduledSTime)
+						assert.LessOrEqual(s.T(), now.Add(59*time.Minute).UnixMilli(), txn.ScheduledETime)
+						txn.ScheduledETime = 0
+						txn.ScheduledSTime = 0
 						assert.Equal(s.T(), domain{
-							BizID:    13,
-							Key:      fmt.Sprintf("test-key-immediate-%d", timestamp),
-							Receiver: "13800138000",
-							Channel:  domain.ChannelSMS,
+							BizID:     13,
+							Key:       fmt.Sprintf("test-key-immediate-%d", timestamp),
+							Receivers: "13800138000",
+							Channel:   domain.ChannelSMS,
 							Template: notificationsvc.Template{
 								ID: 100,
 								Params: map[string]string{
 									"code": "123456",
 								},
 							},
-							Status: notificationsvc.SendStatusPrepare,
+							Status: domain.SendStatusPrepare,
 						}, txn.Notification)
 						return 12345, nil
 					})
@@ -942,7 +939,7 @@ func (s *ServerTestSuite) TestPrepare() {
 			name: "延迟发送策略",
 			input: &notificationv1.Notification{
 				Key:        fmt.Sprintf("test-key-delayed-%d", timestamp),
-				Receiver:   "13800138001",
+				Receivers:  "13800138001",
 				Channel:    notificationv1.Channel_SMS,
 				TemplateId: "100",
 				TemplateParams: map[string]string{
@@ -956,7 +953,7 @@ func (s *ServerTestSuite) TestPrepare() {
 					},
 				},
 			},
-			setupMock: func(mockTxSvc *txnotificationmocks.MockTxNotificationService, noti *notificationv1.Notification) {
+			setupMock: func(mockTxSvc *notificationmocks.MockTxNotificationService, noti *notificationv1.Notification) {
 				mockTxSvc.EXPECT().
 					Prepare(gomock.Any(), gomock.Any()).
 					DoAndReturn(func(ctx context.Context, txn txnotification.TxNotification) (uint64, error) {
@@ -964,23 +961,23 @@ func (s *ServerTestSuite) TestPrepare() {
 						now := time.Now()
 						assert.Equal(s.T(), int64(13), txn.BizID)
 						assert.Equal(s.T(), noti.Key, txn.Key)
-						assert.GreaterOrEqual(s.T(), now.Add(60*time.Second).UnixMilli(), txn.Notification.ScheduledSTime)
-						assert.LessOrEqual(s.T(), now.Add(59*time.Second).UnixMilli(), txn.Notification.ScheduledSTime)
-						assert.LessOrEqual(s.T(), now.Add(69*time.Second).UnixMilli(), txn.Notification.ScheduledETime)
-						txn.Notification.ScheduledETime = 0
-						txn.Notification.ScheduledSTime = 0
+						assert.GreaterOrEqual(s.T(), now.Add(60*time.Second).UnixMilli(), txn.ScheduledSTime)
+						assert.LessOrEqual(s.T(), now.Add(59*time.Second).UnixMilli(), txn.ScheduledSTime)
+						assert.LessOrEqual(s.T(), now.Add(69*time.Second).UnixMilli(), txn.ScheduledETime)
+						txn.ScheduledETime = 0
+						txn.ScheduledSTime = 0
 						assert.Equal(s.T(), domain{
-							BizID:    13,
-							Key:      fmt.Sprintf("test-key-delayed-%d", timestamp),
-							Receiver: "13800138001",
-							Channel:  domain.ChannelSMS,
+							BizID:     13,
+							Key:       fmt.Sprintf("test-key-delayed-%d", timestamp),
+							Receivers: "13800138001",
+							Channel:   domain.ChannelSMS,
 							Template: notificationsvc.Template{
 								ID: 100,
 								Params: map[string]string{
 									"code": "234567",
 								},
 							},
-							Status: notificationsvc.SendStatusPrepare,
+							Status: domain.SendStatusPrepare,
 						}, txn.Notification)
 						return 12345, nil
 					})
@@ -990,7 +987,7 @@ func (s *ServerTestSuite) TestPrepare() {
 			name: "定时发送策略",
 			input: &notificationv1.Notification{
 				Key:        fmt.Sprintf("test-key-scheduled-%d", timestamp),
-				Receiver:   "13800138002",
+				Receivers:  "13800138002",
 				Channel:    notificationv1.Channel_SMS,
 				TemplateId: "100",
 				TemplateParams: map[string]string{
@@ -1004,7 +1001,7 @@ func (s *ServerTestSuite) TestPrepare() {
 					},
 				},
 			},
-			setupMock: func(mockTxSvc *txnotificationmocks.MockTxNotificationService, noti *notificationv1.Notification) {
+			setupMock: func(mockTxSvc *notificationmocks.MockTxNotificationService, noti *notificationv1.Notification) {
 				mockTxSvc.EXPECT().
 					Prepare(gomock.Any(), gomock.Any()).
 					DoAndReturn(func(ctx context.Context, txn txnotification.TxNotification) (uint64, error) {
@@ -1012,23 +1009,23 @@ func (s *ServerTestSuite) TestPrepare() {
 						now := time.Now()
 						assert.Equal(s.T(), int64(13), txn.BizID)
 						assert.Equal(s.T(), noti.Key, txn.Key)
-						assert.GreaterOrEqual(s.T(), now.Add(60*time.Minute).UnixMilli(), txn.Notification.ScheduledSTime)
-						assert.LessOrEqual(s.T(), now.Add(59*time.Minute).UnixMilli(), txn.Notification.ScheduledSTime)
-						assert.LessOrEqual(s.T(), now.Add(60*time.Second).UnixMilli(), txn.Notification.ScheduledETime)
-						txn.Notification.ScheduledETime = 0
-						txn.Notification.ScheduledSTime = 0
+						assert.GreaterOrEqual(s.T(), now.Add(60*time.Minute).UnixMilli(), txn.ScheduledSTime)
+						assert.LessOrEqual(s.T(), now.Add(59*time.Minute).UnixMilli(), txn.ScheduledSTime)
+						assert.LessOrEqual(s.T(), now.Add(60*time.Second).UnixMilli(), txn.ScheduledETime)
+						txn.ScheduledETime = 0
+						txn.ScheduledSTime = 0
 						assert.Equal(s.T(), domain{
-							BizID:    13,
-							Key:      fmt.Sprintf("test-key-scheduled-%d", timestamp),
-							Receiver: "13800138002",
-							Channel:  domain.ChannelSMS,
+							BizID:     13,
+							Key:       fmt.Sprintf("test-key-scheduled-%d", timestamp),
+							Receivers: "13800138002",
+							Channel:   domain.ChannelSMS,
 							Template: notificationsvc.Template{
 								ID: 100,
 								Params: map[string]string{
 									"code": "345678",
 								},
 							},
-							Status: notificationsvc.SendStatusPrepare,
+							Status: domain.SendStatusPrepare,
 						}, txn.Notification)
 						return 12345, nil
 					})
@@ -1038,7 +1035,7 @@ func (s *ServerTestSuite) TestPrepare() {
 			name: "时间窗口策略",
 			input: &notificationv1.Notification{
 				Key:        fmt.Sprintf("test-key-timewindow-%d", timestamp),
-				Receiver:   "13800138003",
+				Receivers:  "13800138003",
 				Channel:    notificationv1.Channel_SMS,
 				TemplateId: "100",
 				TemplateParams: map[string]string{
@@ -1053,7 +1050,7 @@ func (s *ServerTestSuite) TestPrepare() {
 					},
 				},
 			},
-			setupMock: func(mockTxSvc *txnotificationmocks.MockTxNotificationService, noti *notificationv1.Notification) {
+			setupMock: func(mockTxSvc *notificationmocks.MockTxNotificationService, noti *notificationv1.Notification) {
 				mockTxSvc.EXPECT().
 					Prepare(gomock.Any(), gomock.Any()).
 					DoAndReturn(func(ctx context.Context, txn txnotification.TxNotification) (uint64, error) {
@@ -1061,23 +1058,23 @@ func (s *ServerTestSuite) TestPrepare() {
 						now := time.Now()
 						assert.Equal(s.T(), int64(13), txn.BizID)
 						assert.Equal(s.T(), noti.Key, txn.Key)
-						assert.GreaterOrEqual(s.T(), now.UnixMilli(), txn.Notification.ScheduledSTime)
-						assert.LessOrEqual(s.T(), now.Add(-1*time.Second).UnixMilli(), txn.Notification.ScheduledSTime)
-						assert.LessOrEqual(s.T(), now.Add(179*time.Minute).UnixMilli(), txn.Notification.ScheduledETime)
-						txn.Notification.ScheduledETime = 0
-						txn.Notification.ScheduledSTime = 0
+						assert.GreaterOrEqual(s.T(), now.UnixMilli(), txn.ScheduledSTime)
+						assert.LessOrEqual(s.T(), now.Add(-1*time.Second).UnixMilli(), txn.ScheduledSTime)
+						assert.LessOrEqual(s.T(), now.Add(179*time.Minute).UnixMilli(), txn.ScheduledETime)
+						txn.ScheduledETime = 0
+						txn.ScheduledSTime = 0
 						assert.Equal(s.T(), domain{
-							BizID:    13,
-							Key:      fmt.Sprintf("test-key-timewindow-%d", timestamp),
-							Receiver: "13800138003",
-							Channel:  domain.ChannelSMS,
+							BizID:     13,
+							Key:       fmt.Sprintf("test-key-timewindow-%d", timestamp),
+							Receivers: "13800138003",
+							Channel:   domain.ChannelSMS,
 							Template: notificationsvc.Template{
 								ID: 100,
 								Params: map[string]string{
 									"code": "456789",
 								},
 							},
-							Status: notificationsvc.SendStatusPrepare,
+							Status: domain.SendStatusPrepare,
 						}, txn.Notification)
 						return 12345, nil
 					})

@@ -21,7 +21,7 @@ var (
 
 // ExecutorService 执行器
 //
-//go:generate mockgen -source=./executor.go -destination=../../mocks/executor.mock.go -package=executormocks -typed ExecutorService
+//go:generate mockgen -source=./executor.go -destination=./mocks/executor.mock.go -package=notificationmocks -typed ExecutorService
 type ExecutorService interface {
 	// SendNotification 同步单条发送
 	SendNotification(ctx context.Context, n domain.Notification) (domain.SendResponse, error)

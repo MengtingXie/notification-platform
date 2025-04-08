@@ -19,7 +19,7 @@ import (
 
 var ErrUpdateStatusFailed = errors.New("update status failed")
 
-//go:generate mockgen -source=./tx_notification.go -destination=../../mocks/tx_notification.mock.go -package=txnotificationmocks -typed TxNotificationService
+//go:generate mockgen -source=./tx_notification.go -destination=./mocks/tx_notification.mock.go -package=notificationmocks -typed TxNotificationService
 type TxNotificationService interface {
 	// Prepare 准备消息,
 	Prepare(ctx context.Context, txNotification domain.TxNotification) (uint64, error)
