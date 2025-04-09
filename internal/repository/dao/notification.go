@@ -4,17 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/errs"
 	"time"
 
 	"github.com/ego-component/egorm"
 	"github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
-)
-
-var (
-	ErrNotificationDuplicate       = errors.New("通知记录主键冲突")
-	ErrNotificationNotFound        = errors.New("通知记录不存在")
-	ErrNotificationVersionMismatch = errors.New("通知记录版本不匹配")
 )
 
 const (
@@ -48,6 +43,8 @@ type NotificationDAO interface {
 
 	// GetByKeys 根据业务ID和业务内唯一标识获取通知列表
 	GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]Notification, error)
+	// GetByKey 根据业务ID和业务内唯一标识获取通知列表
+	GetByKey(ctx context.Context, bizID int64, key string) (Notification, error)
 
 	// ListByStatus 根据状态查询通知列表
 	ListByStatus(ctx context.Context, status string, limit int) ([]Notification, error)
@@ -97,7 +94,7 @@ func (d *notificationDAO) Create(ctx context.Context, data Notification) (Notifi
 
 	err := d.db.WithContext(ctx).Create(&data).Error
 	if isUniqueConstraintError(err) {
-		return Notification{}, fmt.Errorf("%w", ErrNotificationDuplicate)
+		return Notification{}, fmt.Errorf("%w", errs.ErrNotificationDuplicate)
 	}
 	return data, err
 }
@@ -132,7 +129,7 @@ func (d *notificationDAO) BatchCreate(ctx context.Context, datas []Notification)
 		for i := range datas {
 			err := tx.Create(&datas[i]).Error
 			if isUniqueConstraintError(err) {
-				return fmt.Errorf("%w", ErrNotificationDuplicate)
+				return fmt.Errorf("%w", errs.ErrNotificationDuplicate)
 			}
 			if err != nil {
 				return err
@@ -165,20 +162,7 @@ func (d *notificationDAO) UpdateStatus(ctx context.Context, notification Notific
 	}
 
 	if result.RowsAffected < 1 {
-		// 没有更新任何行，可能是ID不存在或版本不匹配
-		// 先查询记录是否存在
-		var count int64
-		if err := d.db.WithContext(ctx).Model(&Notification{}).
-			Where("id = ?", notification.ID).
-			Count(&count).Error; err != nil {
-			return err
-		}
-
-		if count == 0 {
-			return fmt.Errorf("%w", ErrNotificationNotFound)
-		}
-
-		return fmt.Errorf("%w", ErrNotificationVersionMismatch)
+		return fmt.Errorf("并发竞争失败 %w, id %d", errs.ErrNotificationVersionMismatch, notification.ID)
 	}
 	return nil
 }
@@ -189,7 +173,7 @@ func (d *notificationDAO) GetByID(ctx context.Context, id uint64) (Notification,
 	err := d.db.WithContext(ctx).First(&notification, id).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return Notification{}, fmt.Errorf("%w: id=%d", ErrNotificationNotFound, id)
+			return Notification{}, fmt.Errorf("%w: id=%d", errs.ErrNotificationNotFound, id)
 		}
 		return Notification{}, err
 	}
@@ -217,6 +201,15 @@ func (d *notificationDAO) GetByBizID(ctx context.Context, bizID int64) ([]Notifi
 		return nil, err
 	}
 	return notifications, nil
+}
+
+func (d *notificationDAO) GetByKey(ctx context.Context, bizID int64, key string) (Notification, error) {
+	var not Notification
+	err := d.db.WithContext(ctx).Where("biz_id = ? AND `key` = ?", bizID, key).First(not).Error
+	if err != nil {
+		return Notification{}, fmt.Errorf("查询通知列表失败:bizID: %d, key %s %w", bizID, key, err)
+	}
+	return not, nil
 }
 
 // GetByKeys 根据业务ID和业务内唯一标识获取通知列表

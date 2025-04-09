@@ -10,11 +10,6 @@ import (
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 )
 
-var (
-	ErrNotificationNotFound  = dao.ErrNotificationNotFound
-	ErrNotificationDuplicate = dao.ErrNotificationDuplicate
-)
-
 // NotificationRepository 通知仓储接口
 type NotificationRepository interface {
 	// Create 创建一条通知
@@ -34,6 +29,7 @@ type NotificationRepository interface {
 
 	// GetByKeys 根据业务ID和业务内唯一标识获取通知列表
 	GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]domain.Notification, error)
+	GetByKey(ctx context.Context, bizID int64, key string) (domain.Notification, error)
 
 	// UpdateStatus 更新通知状态
 	UpdateStatus(ctx context.Context, notification domain.Notification) error
@@ -176,6 +172,11 @@ func (r *notificationRepository) GetByBizID(ctx context.Context, bizID int64) ([
 		result[i] = r.toDomain(ns[i])
 	}
 	return result, nil
+}
+
+func (r *notificationRepository) GetByKey(ctx context.Context, bizID int64, key string) (domain.Notification, error) {
+	not, err := r.dao.GetByKey(ctx, bizID, key)
+	return r.toDomain(not), err
 }
 
 // GetByKeys 根据业务ID和业务内唯一标识获取通知列表
