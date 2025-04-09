@@ -17,5 +17,6 @@ func InitRedis() redis.Cmdable {
 	cmd := redis.NewClient(&redis.Options{
 		Addr: cfg.Addr,
 	})
+
 	return cmd
 }

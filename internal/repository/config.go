@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"gitee.com/flycash/notification-platform/internal/repository/cache"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
@@ -18,6 +19,8 @@ type BusinessConfigRepository interface {
 
 type businessConfigRepository struct {
 	dao dao.BusinessConfigDAO
+	localCache cache.ConfigCache
+	redisCache cache.ConfigCache
 }
 
 // NewBusinessConfigRepository 创建业务配置仓库实例

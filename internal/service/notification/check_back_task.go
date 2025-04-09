@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -180,7 +179,6 @@ func (task *TxCheckTask) oneBackCheck(ctx context.Context, configMap map[int64]d
 		}
 		// 进行重试
 		nextTime, ok := retryStrategy.NextWithRetries(int32(txNotification.CheckCount))
-		log.Printf("事务%d ，重试 %v\n", txNotification.TxID, ok)
 		// 可以重试
 		if ok {
 			txNotification.NextCheckTime = time.Now().Add(nextTime).UnixMilli()
