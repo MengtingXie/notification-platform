@@ -33,7 +33,6 @@ func NewScheduler(
 	notificationSvc notificationsvc.Service,
 	dispatcher sender.NotificationSender,
 	batchSize int,
-	intervalSeconds int,
 	dclient dlock.Client,
 ) NotificationScheduler {
 	return &staticScheduler{
