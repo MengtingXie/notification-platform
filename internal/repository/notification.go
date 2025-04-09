@@ -31,7 +31,8 @@ type NotificationRepository interface {
 	GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]domain.Notification, error)
 	GetByKey(ctx context.Context, bizID int64, key string) (domain.Notification, error)
 
-	// UpdateStatus 更新通知状态
+	// CASStatus 更新通知状态
+	CASStatus(ctx context.Context, notification domain.Notification) error
 	UpdateStatus(ctx context.Context, notification domain.Notification) error
 
 	// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
@@ -95,7 +96,6 @@ func (r *notificationRepository) toEntity(notification domain.Notification) dao.
 		TemplateVersionID: notification.Template.VersionID,
 		TemplateParams:    templateParams,
 		Status:            string(notification.Status),
-		RetryCount:        notification.RetryCount,
 		ScheduledSTime:    notification.ScheduledSTime.UnixMilli(),
 		ScheduledETime:    notification.ScheduledETime.UnixMilli(),
 		Version:           notification.Version,
@@ -153,7 +153,6 @@ func (r *notificationRepository) toDomain(n dao.Notification) domain.Notificatio
 			Params:    templateParams,
 		},
 		Status:         domain.SendStatus(n.Status),
-		RetryCount:     n.RetryCount,
 		ScheduledSTime: time.UnixMilli(n.ScheduledSTime),
 		ScheduledETime: time.UnixMilli(n.ScheduledETime),
 		Version:        n.Version,
@@ -192,7 +191,11 @@ func (r *notificationRepository) GetByKeys(ctx context.Context, bizID int64, key
 	return result, nil
 }
 
-// UpdateStatus 更新通知状态
+// CASStatus 更新通知状态
+func (r *notificationRepository) CASStatus(ctx context.Context, notification domain.Notification) error {
+	return r.dao.CASStatus(ctx, r.toEntity(notification))
+}
+
 func (r *notificationRepository) UpdateStatus(ctx context.Context, notification domain.Notification) error {
 	return r.dao.UpdateStatus(ctx, r.toEntity(notification))
 }

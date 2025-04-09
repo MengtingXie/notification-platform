@@ -22,9 +22,9 @@ type NotificationDAO interface {
 	// Create 创建单条通知记录
 	Create(ctx context.Context, data Notification) (Notification, error)
 
-	// UpdateStatus 更新通知状态
+	// CASStatus 更新通知状态
+	CASStatus(ctx context.Context, notification Notification) error
 	UpdateStatus(ctx context.Context, notification Notification) error
-
 	// BatchCreate 批量创建通知记录
 	BatchCreate(ctx context.Context, dataList []Notification) ([]Notification, error)
 
@@ -67,7 +67,6 @@ type Notification struct {
 	TemplateVersionID int64  `gorm:"type:BIGINT;NOT NULL;comment:'模板版本ID'"`
 	TemplateParams    string `gorm:"NOT NULL;comment:'模版参数'"`
 	Status            string `gorm:"type:ENUM('PREPARE','CANCELED','PENDING','SUCCEEDED','FAILED');DEFAULT:'PENDING';index:idx_biz_id_status,priority:2;comment:'发送状态'"`
-	RetryCount        int8   `gorm:"type:TINYINT;DEFAULT:0;comment:'当前重试次数'"`
 	ScheduledSTime    int64  `gorm:"index:idx_scheduled,priority:1;comment:'计划发送开始时间'"`
 	ScheduledETime    int64  `gorm:"index:idx_scheduled,priority:2;comment:'计划发送结束时间'"`
 	Version           int    `gorm:"type:INT;NOT NULL;DEFAULT:1;comment:'版本号，用于CAS操作'"`
@@ -140,17 +139,21 @@ func (d *notificationDAO) BatchCreate(ctx context.Context, datas []Notification)
 	return datas, err
 }
 
-// UpdateStatus 更新通知状态
 func (d *notificationDAO) UpdateStatus(ctx context.Context, notification Notification) error {
+	return d.db.WithContext(ctx).Model(&Notification{}).
+		Where("id = ?", notification.ID).
+		Updates(map[string]any{
+			"status": notification.Status,
+			"utime":  time.Now().Unix(),
+		}).Error
+}
+
+// CASStatus 更新通知状态
+func (d *notificationDAO) CASStatus(ctx context.Context, notification Notification) error {
 	updates := map[string]any{
 		"status":  notification.Status,
 		"version": gorm.Expr("version + 1"),
 		"utime":   time.Now().Unix(),
-	}
-
-	// 如果设置了重试次数，也需要更新
-	if notification.RetryCount > 0 {
-		updates["retry_count"] = notification.RetryCount
 	}
 
 	result := d.db.WithContext(ctx).Model(&Notification{}).
@@ -293,11 +296,6 @@ func (d *notificationDAO) updateNotificationStatus(tx *gorm.DB, notification Not
 		"status":  status,
 		"utime":   now,
 		"version": gorm.Expr("version + 1"),
-	}
-
-	// 如果设置了重试次数，也需要更新
-	if notification.RetryCount > 0 {
-		updates["retry_count"] = notification.RetryCount
 	}
 
 	result := tx.Model(&Notification{}).

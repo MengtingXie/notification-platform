@@ -33,24 +33,20 @@ func (s *baseChannel) Send(ctx context.Context, notification domain.Notification
 		return domain.SendResponse{}, fmt.Errorf("%w: %w", errs.ErrSendNotificationFailed, err)
 	}
 
-	var retryCount int8
 	for {
 		// 获取供应商
 		p, err1 := selector.Next(ctx, notification)
 		if err1 != nil {
 			// 没有可用的供应商
-			return domain.SendResponse{RetryCount: retryCount}, err1
+			return domain.SendResponse{}, err1
 		}
 
 		// 使用当前供应商发送
 		resp, err2 := p.Send(ctx, notification)
 		if err2 == nil {
 			// 发送成功，填写重试次数
-			resp.RetryCount += retryCount
 			return resp, nil
 		}
-
-		retryCount += resp.RetryCount
 	}
 }
 

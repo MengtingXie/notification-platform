@@ -45,35 +45,20 @@ func NewSender(
 
 // Send 单条发送通知
 func (d *sender) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
-	var resp domain.SendResponse
 
-	response, err1 := d.channel.Send(ctx, notification)
+	resp := domain.SendResponse{
+		NotificationID: notification.ID,
+	}
+
+	_, err1 := d.channel.Send(ctx, notification)
 	if err1 != nil {
-		resp = domain.SendResponse{
-			NotificationID: notification.ID,
-			Status:         domain.SendStatusFailed,
-			RetryCount:     response.RetryCount,
-		}
+		resp.Status = domain.SendStatusFailed
 	} else {
-		resp = domain.SendResponse{
-			NotificationID: notification.ID,
-			Status:         domain.SendStatusSucceeded,
-			RetryCount:     response.RetryCount,
-		}
+		resp.Status = domain.SendStatusSucceeded
 	}
-
-	// 获取所有通知的详细信息，包括版本号
-	n, err := d.repo.GetByID(ctx, notification.ID)
-	if err != nil {
-		d.logger.Warn("获取通知失败",
-			elog.Any("Error", err),
-			elog.Any("notification", notification),
-		)
-		return domain.SendResponse{}, fmt.Errorf("获取通知失败: %w", err)
-	}
-
+	notification.Status = resp.Status
 	// 更新发送状态
-	err = d.repo.UpdateStatus(ctx, n)
+	err := d.repo.UpdateStatus(ctx, notification)
 	if err != nil {
 		return domain.SendResponse{}, err
 	}
@@ -99,12 +84,11 @@ func (d *sender) BatchSend(ctx context.Context, notifications []domain.Notificat
 		go func() {
 			defer wg.Done()
 
-			response, err1 := d.channel.Send(ctx, n)
+			_, err1 := d.channel.Send(ctx, n)
 			if err1 != nil {
 				resp := domain.SendResponse{
 					NotificationID: n.ID,
 					Status:         domain.SendStatusFailed,
-					RetryCount:     response.RetryCount,
 				}
 				failedMu.Lock()
 				failed = append(failed, resp)
@@ -113,7 +97,6 @@ func (d *sender) BatchSend(ctx context.Context, notifications []domain.Notificat
 				resp := domain.SendResponse{
 					NotificationID: n.ID,
 					Status:         domain.SendStatusSucceeded,
-					RetryCount:     response.RetryCount,
 				}
 				succeedMu.Lock()
 				succeed = append(succeed, resp)
@@ -161,7 +144,6 @@ func (d *sender) getUpdatedNotifications(responses []domain.SendResponse, notifi
 	for i := range responses {
 		if notification, ok := notificationsMap[responses[i].NotificationID]; ok {
 			notification.Status = responses[i].Status
-			notification.RetryCount = responses[i].RetryCount
 			notifications = append(notifications, notification)
 		}
 	}

@@ -60,8 +60,7 @@ func (s *ImmediateSendStrategy) Send(ctx context.Context, notification domain.No
 
 	// 更新通知状态为SENDING同时获取乐观锁（版本号）
 	found.Status = domain.SendStatusSending
-	found.RetryCount++
-	err = s.repo.UpdateStatus(ctx, found)
+	err = s.repo.CASStatus(ctx, found)
 	if err != nil {
 		return domain.SendResponse{}, fmt.Errorf("并发竞争失败: %w", err)
 

@@ -125,7 +125,7 @@ func (s *notificationService) BatchCreate(ctx context.Context, notifications []d
 func (s *notificationService) GetByID(ctx context.Context, id uint64) (domain.Notification, error) {
 	notification, err := s.repo.GetByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, repository.ErrNotificationNotFound) {
+		if errors.Is(err, errs.ErrNotificationNotFound) {
 			return domain.Notification{}, fmt.Errorf("%w: id=%d", errs.ErrNotificationNotFound, id)
 		}
 		return domain.Notification{}, fmt.Errorf("获取通知失败: %w", err)
@@ -161,7 +161,7 @@ func (s *notificationService) GetByKeys(ctx context.Context, bizID int64, keys .
 
 // UpdateStatus 更新通知状态
 func (s *notificationService) UpdateStatus(ctx context.Context, notification domain.Notification) error {
-	err := s.repo.UpdateStatus(ctx, notification)
+	err := s.repo.CASStatus(ctx, notification)
 	if err != nil {
 		return fmt.Errorf("更新通知状态失败: %w", err)
 	}
