@@ -56,6 +56,7 @@ type NotificationDAO interface {
 	// BatchUpdateStatus 批量更新通知状态
 	BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error
 	FindReadyNotifications(ctx context.Context, offset, limit int) ([]Notification, error)
+	MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error)
 }
 
 // Notification 通知记录表
@@ -68,7 +69,7 @@ type Notification struct {
 	TemplateID        int64  `gorm:"type:BIGINT;NOT NULL;comment:'模板ID'"`
 	TemplateVersionID int64  `gorm:"type:BIGINT;NOT NULL;comment:'模板版本ID'"`
 	TemplateParams    string `gorm:"NOT NULL;comment:'模版参数'"`
-	Status            string `gorm:"type:ENUM('PREPARE','CANCELED','PENDING','SUCCEEDED','FAILED');DEFAULT:'PENDING';index:idx_biz_id_status,priority:2;comment:'发送状态'"`
+	Status            string `gorm:"type:ENUM('PREPARE','CANCELED','PENDING','SUCCEEDED','FAILED');DEFAULT:'PENDING';index:idx_biz_id_status,priority:2;index:idx_scheduled,priority:3;comment:'发送状态'"`
 	ScheduledSTime    int64  `gorm:"column:scheduled_stime;index:idx_scheduled,priority:1;comment:'计划发送开始时间'"`
 	ScheduledETime    int64  `gorm:"column:scheduled_etime;index:idx_scheduled,priority:2;comment:'计划发送结束时间'"`
 	Version           int    `gorm:"type:INT;NOT NULL;DEFAULT:1;comment:'版本号，用于CAS操作'"`
@@ -87,11 +88,24 @@ func NewNotificationDAO(db *egorm.Component) NotificationDAO {
 	}
 }
 
+func (d *notificationDAO) MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error) {
+	now := time.Now()
+	ddl := now.Add(-time.Minute).UnixMilli()
+	sub := d.db.Model(&Notification{}).
+		Limit(batchSize).
+		Where("status = ? AND utime <=?", string(domain.SendStatusSending), ddl)
+	res := d.db.WithContext(ctx).Where("IN ?", sub).Updates(map[string]any{
+		"status": string(domain.SendStatusFailed),
+		"utime":  now,
+	})
+	return res.RowsAffected, res.Error
+}
+
 func (d *notificationDAO) FindReadyNotifications(ctx context.Context, offset int, limit int) ([]Notification, error) {
 	var res []Notification
 	now := time.Now().UnixMilli()
 	err := d.db.WithContext(ctx).
-		Where("scheduled_stime >=? AND scheduled_etime <= ? AND status=?", now, now, domain.SendStatusPending).
+		Where("scheduled_stime >=? AND scheduled_etime <= ? AND status=?", now, now, string(domain.SendStatusPending)).
 		Limit(limit).Offset(offset).
 		Find(&res).Error
 	return res, err

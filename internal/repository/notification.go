@@ -13,6 +13,10 @@ import (
 
 // NotificationRepository 通知仓储接口
 type NotificationRepository interface {
+
+	// MarkTimeoutSendingAsFailed 将超时的 SENDING 状态的通知都标记为失败
+	MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error)
+
 	// Create 创建一条通知
 	Create(ctx context.Context, notification domain.Notification) (domain.Notification, error)
 
@@ -53,6 +57,10 @@ type NotificationRepository interface {
 // notificationRepository 通知仓储实现
 type notificationRepository struct {
 	dao dao.NotificationDAO
+}
+
+func (r *notificationRepository) MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error) {
+	return r.dao.MarkTimeoutSendingAsFailed(ctx, batchSize)
 }
 
 // NewNotificationRepository 创建通知仓储实例
