@@ -1,11 +1,11 @@
 package ioc
 
 import (
-	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
+	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
 	"github.com/gotomicro/ego/core/econf"
 )
 
-func InitAliyunSms() sms.Client {
+func InitAliyunSms() client.Client {
 	type Config struct {
 		RegionID        string `yaml:"regionId"`
 		AccessKeyID     string `yaml:"accessKeyId"`
@@ -16,14 +16,14 @@ func InitAliyunSms() sms.Client {
 	if err != nil {
 		panic(err)
 	}
-	cli, err := sms.NewAliyunSMS(cfg.RegionID, cfg.AccessKeyID, cfg.AccessKeySecret)
+	cli, err := client.NewAliyunSMS(cfg.RegionID, cfg.AccessKeyID, cfg.AccessKeySecret)
 	if err != nil {
 		panic(err)
 	}
 	return cli
 }
 
-func InitTxSms() sms.Client {
+func InitTxSms() client.Client {
 	type Config struct {
 		RegionID        string `yaml:"regionId"`
 		AccessKeyID     string `yaml:"accessKeyId"`
@@ -35,15 +35,15 @@ func InitTxSms() sms.Client {
 	if err != nil {
 		panic(err)
 	}
-	cli, err := sms.NewTencentCloudSMS(cfg.RegionID, cfg.AccessKeyID, cfg.AccessKeySecret, cfg.AppID)
+	cli, err := client.NewTencentCloudSMS(cfg.RegionID, cfg.AccessKeyID, cfg.AccessKeySecret, cfg.AppID)
 	if err != nil {
 		panic(err)
 	}
 	return cli
 }
 
-func InitSmsClients() map[string]sms.Client {
-	return map[string]sms.Client{
+func InitSmsClients() map[string]client.Client {
+	return map[string]client.Client{
 		"aliyun":       InitAliyunSms(),
 		"tencentcloud": InitTxSms(),
 	}

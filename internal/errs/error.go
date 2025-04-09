@@ -27,10 +27,8 @@ var (
 	ErrNotificationNotFound         = errors.New("通知记录不存在")
 	ErrCreateNotificationFailed     = errors.New("创建通知失败")
 	ErrNotificationDuplicate        = errors.New("通知记录主键冲突")
-	ErrNotificationNotFound         = errors.New("通知记录不存在")
 	ErrNotificationVersionMismatch  = errors.New("通知记录版本不匹配")
 
-	ErrNoAvailableProvider   = errors.New("无可用供应商")
-	ErrNoAvailableChannel    = errors.New("无可用渠道")
-	ErrNotificationDuplicate = errors.New("通知记录主键冲突")
+	ErrNoAvailableProvider = errors.New("无可用供应商")
+	ErrNoAvailableChannel  = errors.New("无可用渠道")
 )

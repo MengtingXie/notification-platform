@@ -5,15 +5,13 @@
 //
 //	mockgen -source=./types.go -destination=./mocks/sms.mock.go -package=smsmocks -typed Client
 //
-
 // Package smsmocks is a generated GoMock package.
 package smsmocks
 
 import (
 	reflect "reflect"
 
-	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
-
+	client "gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -21,7 +19,6 @@ import (
 type MockClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockClientMockRecorder
-	isgomock struct{}
 }
 
 // MockClientMockRecorder is the mock recorder for MockClient.
@@ -42,118 +39,118 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 }
 
 // CreateTemplate mocks base method.
-func (m *MockClient) CreateTemplate(req sms.CreateTemplateReq) (sms.CreateTemplateResp, error) {
+func (m *MockClient) CreateTemplate(req client.CreateTemplateReq) (client.CreateTemplateResp, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateTemplate", req)
-	ret0, _ := ret[0].(sms.CreateTemplateResp)
+	ret0, _ := ret[0].(client.CreateTemplateResp)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateTemplate indicates an expected call of CreateTemplate.
-func (mr *MockClientMockRecorder) CreateTemplate(req any) *MockClientCreateTemplateCall {
+func (mr *MockClientMockRecorder) CreateTemplate(req any) *ClientCreateTemplateCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTemplate", reflect.TypeOf((*MockClient)(nil).CreateTemplate), req)
-	return &MockClientCreateTemplateCall{Call: call}
+	return &ClientCreateTemplateCall{Call: call}
 }
 
-// MockClientCreateTemplateCall wrap *gomock.Call
-type MockClientCreateTemplateCall struct {
+// ClientCreateTemplateCall wrap *gomock.Call
+type ClientCreateTemplateCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockClientCreateTemplateCall) Return(arg0 sms.CreateTemplateResp, arg1 error) *MockClientCreateTemplateCall {
+func (c *ClientCreateTemplateCall) Return(arg0 client.CreateTemplateResp, arg1 error) *ClientCreateTemplateCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockClientCreateTemplateCall) Do(f func(sms.CreateTemplateReq) (sms.CreateTemplateResp, error)) *MockClientCreateTemplateCall {
+func (c *ClientCreateTemplateCall) Do(f func(client.CreateTemplateReq) (client.CreateTemplateResp, error)) *ClientCreateTemplateCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockClientCreateTemplateCall) DoAndReturn(f func(sms.CreateTemplateReq) (sms.CreateTemplateResp, error)) *MockClientCreateTemplateCall {
+func (c *ClientCreateTemplateCall) DoAndReturn(f func(client.CreateTemplateReq) (client.CreateTemplateResp, error)) *ClientCreateTemplateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // QueryTemplateStatus mocks base method.
-func (m *MockClient) QueryTemplateStatus(req sms.QueryTemplateStatusReq) (sms.QueryTemplateStatusResp, error) {
+func (m *MockClient) QueryTemplateStatus(req client.QueryTemplateStatusReq) (client.QueryTemplateStatusResp, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "QueryTemplateStatus", req)
-	ret0, _ := ret[0].(sms.QueryTemplateStatusResp)
+	ret0, _ := ret[0].(client.QueryTemplateStatusResp)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // QueryTemplateStatus indicates an expected call of QueryTemplateStatus.
-func (mr *MockClientMockRecorder) QueryTemplateStatus(req any) *MockClientQueryTemplateStatusCall {
+func (mr *MockClientMockRecorder) QueryTemplateStatus(req any) *ClientQueryTemplateStatusCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryTemplateStatus", reflect.TypeOf((*MockClient)(nil).QueryTemplateStatus), req)
-	return &MockClientQueryTemplateStatusCall{Call: call}
+	return &ClientQueryTemplateStatusCall{Call: call}
 }
 
-// MockClientQueryTemplateStatusCall wrap *gomock.Call
-type MockClientQueryTemplateStatusCall struct {
+// ClientQueryTemplateStatusCall wrap *gomock.Call
+type ClientQueryTemplateStatusCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockClientQueryTemplateStatusCall) Return(arg0 sms.QueryTemplateStatusResp, arg1 error) *MockClientQueryTemplateStatusCall {
+func (c *ClientQueryTemplateStatusCall) Return(arg0 client.QueryTemplateStatusResp, arg1 error) *ClientQueryTemplateStatusCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockClientQueryTemplateStatusCall) Do(f func(sms.QueryTemplateStatusReq) (sms.QueryTemplateStatusResp, error)) *MockClientQueryTemplateStatusCall {
+func (c *ClientQueryTemplateStatusCall) Do(f func(client.QueryTemplateStatusReq) (client.QueryTemplateStatusResp, error)) *ClientQueryTemplateStatusCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockClientQueryTemplateStatusCall) DoAndReturn(f func(sms.QueryTemplateStatusReq) (sms.QueryTemplateStatusResp, error)) *MockClientQueryTemplateStatusCall {
+func (c *ClientQueryTemplateStatusCall) DoAndReturn(f func(client.QueryTemplateStatusReq) (client.QueryTemplateStatusResp, error)) *ClientQueryTemplateStatusCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Send mocks base method.
-func (m *MockClient) Send(req sms.SendReq) (sms.SendResp, error) {
+func (m *MockClient) Send(req client.SendReq) (client.SendResp, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BatchSend", req)
-	ret0, _ := ret[0].(sms.SendResp)
+	ret := m.ctrl.Call(m, "Send", req)
+	ret0, _ := ret[0].(client.SendResp)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Send indicates an expected call of Send.
-func (mr *MockClientMockRecorder) Send(req any) *MockClientSendCall {
+func (mr *MockClientMockRecorder) Send(req any) *ClientSendCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchSend", reflect.TypeOf((*MockClient)(nil).Send), req)
-	return &MockClientSendCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Send", reflect.TypeOf((*MockClient)(nil).Send), req)
+	return &ClientSendCall{Call: call}
 }
 
-// MockClientSendCall wrap *gomock.Call
-type MockClientSendCall struct {
+// ClientSendCall wrap *gomock.Call
+type ClientSendCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockClientSendCall) Return(arg0 sms.SendResp, arg1 error) *MockClientSendCall {
+func (c *ClientSendCall) Return(arg0 client.SendResp, arg1 error) *ClientSendCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockClientSendCall) Do(f func(sms.SendReq) (sms.SendResp, error)) *MockClientSendCall {
+func (c *ClientSendCall) Do(f func(client.SendReq) (client.SendResp, error)) *ClientSendCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockClientSendCall) DoAndReturn(f func(sms.SendReq) (sms.SendResp, error)) *MockClientSendCall {
+func (c *ClientSendCall) DoAndReturn(f func(client.SendReq) (client.SendResp, error)) *ClientSendCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

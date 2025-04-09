@@ -1,30 +1,25 @@
-package provider
+package sms
 
 import (
 	"context"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/service/provider"
+	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/errs"
-	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
 	"gitee.com/flycash/notification-platform/internal/service/template/manage"
 )
-
-// Provider 供应商接口
-type Provider interface {
-	// Send 发送消息
-	Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error)
-}
 
 // smsProvider SMS供应商
 type smsProvider struct {
 	name        string
 	templateSvc manage.ChannelTemplateService
-	client      sms.Client
+	client      client.Client
 }
 
 // NewSMSProvider SMS供应商
-func NewSMSProvider(name string, templateSvc manage.ChannelTemplateService, client sms.Client) Provider {
+func NewSMSProvider(name string, templateSvc manage.ChannelTemplateService, client client.Client) provider.Provider {
 	return &smsProvider{
 		name:        name,
 		templateSvc: templateSvc,
@@ -43,7 +38,7 @@ func (p *smsProvider) Send(ctx context.Context, notification domain.Notification
 	version := tmpl.Versions[0]
 	provider := version.Providers[0]
 
-	resp, err := p.client.Send(sms.SendReq{
+	resp, err := p.client.Send(client.SendReq{
 		PhoneNumbers:  notification.Receivers,
 		SignName:      version.Signature,
 		TemplateID:    provider.ProviderTemplateID,

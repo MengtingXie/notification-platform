@@ -2,12 +2,13 @@ package main
 
 import (
 	"context"
+	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
+	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider/manage"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sequential"
-	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
 	templatesvc "gitee.com/flycash/notification-platform/internal/service/template/manage"
 )
 
@@ -45,20 +46,20 @@ func initSMSProviders(
 	providers := make([]provider.Provider, 0, len(entities))
 
 	for i := range entities {
-		var client sms.Client
+		var client client.Client
 		var err1 error
 		if entities[i].Name == "ali" {
-			client, err1 = sms.NewAliyunSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret)
+			client, err1 = client.NewAliyunSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret)
 			if err1 != nil {
 				return nil, err
 			}
 		} else if entities[i].Name == "tencent" {
-			client, err1 = sms.NewTencentCloudSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret, entities[i].APPID)
+			client, err1 = client.NewTencentCloudSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret, entities[i].APPID)
 			if err1 != nil {
 				return nil, err
 			}
 		}
-		providers = append(providers, provider.NewSMSProvider(
+		providers = append(providers, sms.NewSMSProvider(
 			entities[i].Name,
 			templateSvc,
 			client,

@@ -30,10 +30,6 @@ func (r *selector) Next(_ context.Context, _ domain.Notification) (provider.Prov
 	return p, nil
 }
 
-func (r *selector) Reset() {
-	r.idx = 0
-}
-
 type SelectorBuilder struct {
 	providers []provider.Provider
 }
