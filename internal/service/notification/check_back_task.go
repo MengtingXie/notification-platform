@@ -2,16 +2,16 @@ package notification
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 	"gitee.com/flycash/notification-platform/internal/repository"
-	"gitee.com/flycash/notification-platform/internal/service/notification/retry"
 
 	"github.com/ecodeclub/ekit/syncx"
 
@@ -25,14 +25,13 @@ import (
 )
 
 type TxCheckTask struct {
-	repo                 repository.TxNotificationRepository
-	notificationSvc      Service
-	configSvc            config.BusinessConfigService
-	retryStrategyBuilder retry.Builder
-	logger               *elog.Component
-	lock                 dlock.Client
-	batchSize            int
-	clientMap            syncx.Map[string, *egrpc.Component]
+	repo            repository.TxNotificationRepository
+	notificationSvc Service
+	configSvc       config.BusinessConfigService
+	logger          *elog.Component
+	lock            dlock.Client
+	batchSize       int
+	clientMap       syncx.Map[string, *egrpc.Component]
 }
 
 const (
@@ -164,33 +163,27 @@ func (task *TxCheckTask) loop(ctx context.Context) error {
 // 校验完了
 func (task *TxCheckTask) oneBackCheck(ctx context.Context, configMap map[int64]domain.BusinessConfig, txNotification domain.TxNotification) domain.TxNotification {
 	conf, ok := configMap[txNotification.BizID]
-	if !ok || conf.TxnConfig == "" {
+	if !ok || conf.TxnConfig == nil {
 		// 没设置，所以不需要回查
 		txNotification.NextCheckTime = 0
 		return txNotification
 	}
-	backConfig, err := task.getConfigFromStr(conf.TxnConfig)
-	if err != nil {
-		// 配置解析失败也不需要回查了,等他自己取消，提交
-		txNotification.NextCheckTime = 0
-		return txNotification
-	}
-	res, err := task.getCheckBackRes(ctx, backConfig, txNotification)
+
+	res, err := task.getCheckBackRes(ctx, conf.TxnConfig, txNotification)
 	// 都检查了一次无论成功与否
 	txNotification.CheckCount++
 	if err != nil || res == unknownStatus {
-		builder, verr := task.retryStrategyBuilder.Build(conf.TxnConfig)
+		retryStrategy, verr := retry.NewRetry(*conf.RetryPolicy)
 		if verr != nil {
 			txNotification.NextCheckTime = 0
 			return txNotification
 		}
 		// 进行重试
-		nextTime, ok := builder.NextTime(retry.Req{
-			CheckTimes: txNotification.CheckCount,
-		})
+		nextTime, ok := retryStrategy.NextWithRetries(int32(txNotification.CheckCount))
+		log.Printf("事务%d ，重试 %v\n", txNotification.TxID, ok)
 		// 可以重试
 		if ok {
-			txNotification.NextCheckTime = nextTime
+			txNotification.NextCheckTime = time.Now().Add(nextTime).UnixMilli()
 			return txNotification
 		}
 		// 不能重试将状态变成fail
@@ -211,20 +204,7 @@ func (task *TxCheckTask) oneBackCheck(ctx context.Context, configMap map[int64]d
 	return txNotification
 }
 
-type CheckBackConfig struct {
-	ServiceName string `json:"serviceName"`
-}
-
-func (task *TxCheckTask) getConfigFromStr(conf string) (CheckBackConfig, error) {
-	var cfg CheckBackConfig
-	err := json.Unmarshal([]byte(conf), &cfg)
-	if err != nil {
-		return CheckBackConfig{}, err
-	}
-	return cfg, nil
-}
-
-func (task *TxCheckTask) getCheckBackRes(ctx context.Context, conf CheckBackConfig, txn domain.TxNotification) (status int, err error) {
+func (task *TxCheckTask) getCheckBackRes(ctx context.Context, conf *domain.TxnConfig, txn domain.TxNotification) (status int, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if str, ok := r.(string); ok {
@@ -258,38 +238,21 @@ func (task *TxCheckTask) getCheckBackRes(ctx context.Context, conf CheckBackConf
 }
 
 func (task *TxCheckTask) commit(ctx context.Context, txns []domain.TxNotification) {
-	// 更新远程
-	ids := slice.Map(txns, func(_ int, src domain.TxNotification) uint64 {
-		return src.Notification.ID
-	})
-	err := task.notificationSvc.BatchUpdateStatus(ctx, ids, domain.SendStatusPending)
-	if err != nil {
-		task.logger.Error("更新通知服务中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))
-		return
-	}
-	err = task.repo.UpdateCheckStatus(ctx, txns)
+	err := task.repo.UpdateCheckStatus(ctx, txns, string(domain.SendStatusPending))
 	if err != nil {
 		task.logger.Error("更新事务表中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))
 	}
 }
 
 func (task *TxCheckTask) fail(ctx context.Context, txns []domain.TxNotification) {
-	ids := slice.Map(txns, func(_ int, src domain.TxNotification) uint64 {
-		return src.Notification.ID
-	})
-	err := task.notificationSvc.BatchUpdateStatus(ctx, ids, domain.SendStatusCanceled)
-	if err != nil {
-		task.logger.Error("更新通知服务中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))
-		return
-	}
-	err = task.repo.UpdateCheckStatus(ctx, txns)
+	err := task.repo.UpdateCheckStatus(ctx, txns, string(domain.SendStatusCanceled))
 	if err != nil {
 		task.logger.Error("更新事务表中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))
 	}
 }
 
 func (task *TxCheckTask) retry(ctx context.Context, txns []domain.TxNotification) {
-	err := task.repo.UpdateCheckStatus(ctx, txns)
+	err := task.repo.UpdateCheckStatus(ctx, txns, string(domain.SendStatusPrepare))
 	if err != nil {
 		task.logger.Error("更新事务表中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))
 	}

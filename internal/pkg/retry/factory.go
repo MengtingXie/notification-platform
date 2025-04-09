@@ -18,17 +18,18 @@ import (
 	"fmt"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/pkg/retry/strategy"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
-	"github.com/ecodeclub/ekit/retry"
 )
 
-func NewRetry(cfg domain.RetryConfig) (retry.Strategy, error) {
+func NewRetry(cfg domain.RetryConfig) (strategy.Strategy, error) {
 	// 根据 config 中的字段来检测
 	switch cfg.Type {
 	case "fixed":
-		return retry.NewFixedIntervalRetryStrategy(msToDuration(cfg.FixedInterval.Interval), cfg.FixedInterval.MaxRetries)
+		return strategy.NewFixedIntervalRetryStrategy(msToDuration(cfg.FixedInterval.Interval), cfg.FixedInterval.MaxRetries)
 	case "exponential":
-		return retry.NewExponentialBackoffRetryStrategy(msToDuration(cfg.ExponentialBackoff.InitialInterval), msToDuration(cfg.ExponentialBackoff.MaxInterval), cfg.ExponentialBackoff.MaxRetries)
+		return strategy.NewExponentialBackoffRetryStrategy(msToDuration(cfg.ExponentialBackoff.InitialInterval), msToDuration(cfg.ExponentialBackoff.MaxInterval), cfg.ExponentialBackoff.MaxRetries)
 	default:
 		return nil, fmt.Errorf("unknown retry type: %s", cfg.Type)
 	}
