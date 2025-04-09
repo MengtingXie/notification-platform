@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
@@ -81,7 +82,7 @@ func (b *businessConfigRepository) toDomain(daoConfig dao.BusinessConfig) domain
 		domainCfg.Quota = unmarsal[domain.QuotaConfig](daoConfig.Quota.String)
 	}
 	if daoConfig.RetryPolicy.Valid {
-		domainCfg.RetryPolicy = unmarsal[domain.RetryConfig](daoConfig.RetryPolicy.String)
+		domainCfg.RetryPolicy = unmarsal[retry.Config](daoConfig.RetryPolicy.String)
 	}
 	return domainCfg
 }

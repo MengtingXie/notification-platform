@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/errs"
 	"time"
 
@@ -54,6 +55,7 @@ type NotificationDAO interface {
 
 	// BatchUpdateStatus 批量更新通知状态
 	BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error
+	FindReadyNotifications(ctx context.Context, offset, limit int) ([]Notification, error)
 }
 
 // Notification 通知记录表
@@ -67,8 +69,8 @@ type Notification struct {
 	TemplateVersionID int64  `gorm:"type:BIGINT;NOT NULL;comment:'模板版本ID'"`
 	TemplateParams    string `gorm:"NOT NULL;comment:'模版参数'"`
 	Status            string `gorm:"type:ENUM('PREPARE','CANCELED','PENDING','SUCCEEDED','FAILED');DEFAULT:'PENDING';index:idx_biz_id_status,priority:2;comment:'发送状态'"`
-	ScheduledSTime    int64  `gorm:"index:idx_scheduled,priority:1;comment:'计划发送开始时间'"`
-	ScheduledETime    int64  `gorm:"index:idx_scheduled,priority:2;comment:'计划发送结束时间'"`
+	ScheduledSTime    int64  `gorm:"column:scheduled_stime;index:idx_scheduled,priority:1;comment:'计划发送开始时间'"`
+	ScheduledETime    int64  `gorm:"column:scheduled_etime;index:idx_scheduled,priority:2;comment:'计划发送结束时间'"`
 	Version           int    `gorm:"type:INT;NOT NULL;DEFAULT:1;comment:'版本号，用于CAS操作'"`
 	Ctime             int64
 	Utime             int64
@@ -83,6 +85,16 @@ func NewNotificationDAO(db *egorm.Component) NotificationDAO {
 	return &notificationDAO{
 		db: db,
 	}
+}
+
+func (d *notificationDAO) FindReadyNotifications(ctx context.Context, offset int, limit int) ([]Notification, error) {
+	var res []Notification
+	now := time.Now().UnixMilli()
+	err := d.db.WithContext(ctx).
+		Where("scheduled_stime >=? AND scheduled_etime <= ? AND status=?", now, now, domain.SendStatusPending).
+		Limit(limit).Offset(offset).
+		Find(&res).Error
+	return res, err
 }
 
 // Create 创建单条通知记录

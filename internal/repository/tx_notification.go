@@ -2,17 +2,13 @@ package repository
 
 import (
 	"context"
-	"errors"
-
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 )
 
-var ErrUpdateStatusFailed = errors.New("没有更新")
-
 type TxNotificationRepository interface {
 	Create(ctx context.Context, notification domain.TxNotification) (uint64, error)
-	Find(ctx context.Context, offset, limit int) ([]domain.TxNotification, error)
+	FindCheckBack(ctx context.Context, offset, limit int) ([]domain.TxNotification, error)
 	UpdateStatus(ctx context.Context, bizID int64, key, status, notificationStatus string) error
 	UpdateCheckStatus(ctx context.Context, txNotifications []domain.TxNotification, notificationStatus string) error
 }
@@ -58,16 +54,15 @@ func (t *txNotificationRepo) toEntity(notification domain.Notification) dao.Noti
 		TemplateVersionID: notification.Template.VersionID,
 		TemplateParams:    templateParams,
 		Status:            string(notification.Status),
-		RetryCount:        notification.RetryCount,
 		ScheduledSTime:    notification.ScheduledSTime.UnixMilli(),
 		ScheduledETime:    notification.ScheduledETime.UnixMilli(),
 		Version:           notification.Version,
 	}
 }
 
-func (t *txNotificationRepo) Find(ctx context.Context, offset, limit int) ([]domain.TxNotification, error) {
+func (t *txNotificationRepo) FindCheckBack(ctx context.Context, offset, limit int) ([]domain.TxNotification, error) {
 	// 调用DAO层查询记录
-	daoNotifications, err := t.txdao.Find(ctx, offset, limit)
+	daoNotifications, err := t.txdao.FindCheckBack(ctx, offset, limit)
 	if err != nil {
 		return nil, err
 	}

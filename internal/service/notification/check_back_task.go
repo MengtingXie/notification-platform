@@ -4,13 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
 	"strings"
 	"sync"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 	"gitee.com/flycash/notification-platform/internal/repository"
 
 	"github.com/ecodeclub/ekit/syncx"
@@ -43,64 +42,24 @@ const (
 )
 
 func (task *TxCheckTask) Start(ctx context.Context) {
-	task.logger = task.logger.With(elog.String("key", TxCheckTaskKey))
-	interval := time.Minute
-	for {
-		// 每个循环过程就是一次尝试拿到分布式锁之后，不断调度的过程
-		lock, err := task.lock.NewLock(ctx, TxCheckTaskKey, interval)
-		if err != nil {
-			task.logger.Error("初始化分布式锁失败，重试",
-				elog.Any("err", err))
-			// 暂停一会
-			time.Sleep(interval)
-			continue
-		}
-
-		lockCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
-		// 没有拿到锁，不管是系统错误，还是锁被人持有，都没有关系
-		// 暂停一段时间之后继续
-		err = lock.Lock(lockCtx)
-		cancel()
-
-		if err != nil {
-			if errors.Is(err, dlock.ErrLocked) {
-				task.logger.Info("没有抢到分布式锁，此刻正有人持有锁")
-			} else {
-				task.logger.Error("没有抢到分布式锁，系统出现问题", elog.Any("err", err))
-			}
-			// 10 秒钟是一个比较合适的
-			time.Sleep(interval)
-			continue
-		}
-
-		err = task.loop(ctx)
-		if err != nil {
-			task.logger.Error("回查失败", elog.Any("err", err))
-		}
-		if unErr := lock.Unlock(ctx); unErr != nil {
-			task.logger.Error("释放分布式锁失败", elog.Any("err", unErr))
-		}
-		// 从这里退出的时候，要检测一下是不是需要结束了
-		ctxErr := ctx.Err()
-		switch {
-		case errors.Is(ctxErr, context.Canceled), errors.Is(ctxErr, context.DeadlineExceeded):
-			// 被取消，那么就要跳出循环
-			task.logger.Info("任务被取消，退出任务循环")
-			return
-		default:
-			task.logger.Error("执行回查任务失败，将执行重试")
-			time.Sleep(interval)
-		}
-	}
+	job := loopjob.NewInfiniteLoop(task.lock, task.oneLoop, TxCheckTaskKey)
+	job.Run(ctx)
 }
 
-func (task *TxCheckTask) loop(ctx context.Context) error {
+func (task *TxCheckTask) oneLoop(ctx context.Context) error {
 	loopCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
-	txNotifications, err := task.repo.Find(loopCtx, 0, task.batchSize)
+	txNotifications, err := task.repo.FindCheckBack(loopCtx, 0, task.batchSize)
 	if err != nil {
 		return err
 	}
+
+	if len(txNotifications) == 0 {
+		// 避免立刻又调度
+		time.Sleep(time.Second)
+		return nil
+	}
+
 	bizIDs := slice.Map(txNotifications, func(_ int, src domain.TxNotification) int64 {
 		return src.BizID
 	})
@@ -163,34 +122,19 @@ func (task *TxCheckTask) loop(ctx context.Context) error {
 // 校验完了
 func (task *TxCheckTask) oneBackCheck(ctx context.Context, configMap map[int64]domain.BusinessConfig, txNotification domain.TxNotification) domain.TxNotification {
 	conf, ok := configMap[txNotification.BizID]
-	if !ok || conf.TxnConfig == nil {
-		// 没设置，所以不需要回查
-		txNotification.NextCheckTime = 0
-		return txNotification
-	}
-
-	res, err := task.getCheckBackRes(ctx, conf.TxnConfig, txNotification)
-	// 都检查了一次无论成功与否
-	txNotification.CheckCount++
-	if err != nil || res == unknownStatus {
-		retryStrategy, verr := retry.NewRetry(*conf.RetryPolicy)
-		if verr != nil {
-			txNotification.NextCheckTime = 0
-			return txNotification
-		}
-		// 进行重试
-		nextTime, ok := retryStrategy.NextWithRetries(int32(txNotification.CheckCount))
-		log.Printf("事务%d ，重试 %v\n", txNotification.TxID, ok)
-		// 可以重试
-		if ok {
-			txNotification.NextCheckTime = time.Now().Add(nextTime).UnixMilli()
-			return txNotification
-		}
-		// 不能重试将状态变成fail
+	if !ok {
+		// 没设置，所以不需要回查，在不需要回查的情况下，事务又很久没有提交，标记为失败
 		txNotification.NextCheckTime = 0
 		txNotification.Status = domain.TxNotificationStatusFail
 		return txNotification
-
+	}
+	res, err := task.getCheckBackRes(ctx, *conf.TxnConfig, txNotification)
+	// 都检查了一次无论成功与否
+	txNotification.CheckCount++
+	if err != nil || res == unknownStatus {
+		// 进行重试
+		txNotification.SetNextCheckBackTimeAndStatus(conf.TxnConfig)
+		return txNotification
 	}
 
 	if res == cancelStatus {
@@ -204,7 +148,7 @@ func (task *TxCheckTask) oneBackCheck(ctx context.Context, configMap map[int64]d
 	return txNotification
 }
 
-func (task *TxCheckTask) getCheckBackRes(ctx context.Context, conf *domain.TxnConfig, txn domain.TxNotification) (status int, err error) {
+func (task *TxCheckTask) getCheckBackRes(ctx context.Context, conf domain.TxnConfig, txn domain.TxNotification) (status int, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if str, ok := r.(string); ok {

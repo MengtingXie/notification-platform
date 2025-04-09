@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 	"testing"
 	"time"
 
@@ -62,9 +63,9 @@ func (s *BusinessConfigTestSuite) createTestConfig() domain.BusinessConfig {
 				EMAIL: 100,
 			},
 		},
-		RetryPolicy: &domain.RetryConfig{
+		RetryPolicy: &retry.Config{
 			Type: "fixed",
-			FixedInterval: &domain.FixedIntervalConfig{
+			FixedInterval: &retry.FixedIntervalConfig{
 				Interval:   10,
 				MaxRetries: 3,
 			},
@@ -104,9 +105,9 @@ func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig
 				},
 			},
 
-			RetryPolicy: &domain.RetryConfig{
+			RetryPolicy: &retry.Config{
 				Type: "fixed",
-				FixedInterval: &domain.FixedIntervalConfig{
+				FixedInterval: &retry.FixedIntervalConfig{
 					Interval:   10,
 					MaxRetries: 3,
 				},
@@ -142,9 +143,9 @@ func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig
 				},
 			},
 
-			RetryPolicy: &domain.RetryConfig{
+			RetryPolicy: &retry.Config{
 				Type: "fixed",
-				FixedInterval: &domain.FixedIntervalConfig{
+				FixedInterval: &retry.FixedIntervalConfig{
 					Interval:   10,
 					MaxRetries: 3,
 				},
@@ -180,9 +181,9 @@ func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig
 				},
 			},
 
-			RetryPolicy: &domain.RetryConfig{
+			RetryPolicy: &retry.Config{
 				Type: "fixed",
-				FixedInterval: &domain.FixedIntervalConfig{
+				FixedInterval: &retry.FixedIntervalConfig{
 					Interval:   10,
 					MaxRetries: 3,
 				},
@@ -218,9 +219,9 @@ func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig
 				},
 			},
 
-			RetryPolicy: &domain.RetryConfig{
+			RetryPolicy: &retry.Config{
 				Type: "fixed",
-				FixedInterval: &domain.FixedIntervalConfig{
+				FixedInterval: &retry.FixedIntervalConfig{
 					Interval:   10,
 					MaxRetries: 3,
 				},
@@ -301,9 +302,9 @@ func (s *BusinessConfigTestSuite) TestServiceSaveConfig() {
 						EMAIL: 100,
 					},
 				},
-				RetryPolicy: &domain.RetryConfig{
+				RetryPolicy: &retry.Config{
 					Type: "fixed",
-					FixedInterval: &domain.FixedIntervalConfig{
+					FixedInterval: &retry.FixedIntervalConfig{
 						Interval:   10,
 						MaxRetries: 3,
 					},
@@ -341,9 +342,9 @@ func (s *BusinessConfigTestSuite) TestServiceSaveConfig() {
 							EMAIL: 100,
 						},
 					},
-					RetryPolicy: &domain.RetryConfig{
+					RetryPolicy: &retry.Config{
 						Type: "fixed",
-						FixedInterval: &domain.FixedIntervalConfig{
+						FixedInterval: &retry.FixedIntervalConfig{
 							Interval:   10,
 							MaxRetries: 3,
 						},

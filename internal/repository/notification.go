@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ecodeclub/ekit/slice"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -46,6 +47,7 @@ type NotificationRepository interface {
 
 	// ListByScheduleTime 根据计划发送时间范围获取通知列表
 	ListByScheduleTime(ctx context.Context, startTime, endTime time.Time, limit int) ([]domain.Notification, error)
+	FindReadyNotifications(ctx context.Context, offset int, limit int) ([]domain.Notification, error)
 }
 
 // notificationRepository 通知仓储实现
@@ -58,6 +60,13 @@ func NewNotificationRepository(d dao.NotificationDAO) NotificationRepository {
 	return &notificationRepository{
 		dao: d,
 	}
+}
+
+func (r *notificationRepository) FindReadyNotifications(ctx context.Context, offset, limit int) ([]domain.Notification, error) {
+	nos, err := r.dao.FindReadyNotifications(ctx, offset, limit)
+	return slice.Map(nos, func(idx int, src dao.Notification) domain.Notification {
+		return r.toDomain(src)
+	}), err
 }
 
 func (r *notificationRepository) BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]domain.Notification, error) {

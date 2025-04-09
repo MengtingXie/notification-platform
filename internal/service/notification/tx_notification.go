@@ -2,7 +2,6 @@ package notification
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -13,8 +12,6 @@ import (
 	"github.com/gotomicro/ego/core/elog"
 	"github.com/meoying/dlock-go"
 )
-
-var ErrUpdateStatusFailed = errors.New("update status failed")
 
 //go:generate mockgen -source=./tx_notification.go -destination=./mocks/tx_notification.mock.go -package=notificationmocks -typed TxNotificationService
 type TxNotificationService interface {

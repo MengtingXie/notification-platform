@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 	"strings"
 	"testing"
 	"time"
@@ -78,9 +79,9 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 							ServiceName:  "order.notification.callback.service",
 							InitialDelay: 10,
 						},
-						RetryPolicy: &domain.RetryConfig{
+						RetryPolicy: &retry.Config{
 							Type: "fixed",
-							FixedInterval: &domain.FixedIntervalConfig{
+							FixedInterval: &retry.FixedIntervalConfig{
 								Interval:   30000,
 								MaxRetries: 3,
 							},
@@ -538,9 +539,9 @@ func (s *TxNotificationServiceTestSuite) mockConfigMap() map[int64]domain.Busine
 				ServiceName:  "order.notification.callback.service",
 				InitialDelay: 10,
 			},
-			RetryPolicy: &domain.RetryConfig{
+			RetryPolicy: &retry.Config{
 				Type: "fixed",
-				FixedInterval: &domain.FixedIntervalConfig{
+				FixedInterval: &retry.FixedIntervalConfig{
 					Interval:   30000,
 					MaxRetries: 3,
 				},
@@ -551,9 +552,9 @@ func (s *TxNotificationServiceTestSuite) mockConfigMap() map[int64]domain.Busine
 				ServiceName:  "order.notification.callback.service",
 				InitialDelay: 10,
 			},
-			RetryPolicy: &domain.RetryConfig{
+			RetryPolicy: &retry.Config{
 				Type: "fixed",
-				FixedInterval: &domain.FixedIntervalConfig{
+				FixedInterval: &retry.FixedIntervalConfig{
 					Interval:   10000,
 					MaxRetries: 2,
 				},

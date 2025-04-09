@@ -23,6 +23,9 @@ type Service interface {
 	// BatchCreate 批量创建通知记录
 	BatchCreate(ctx context.Context, notifications []domain.Notification) ([]domain.Notification, error)
 
+	// FindReadyNotifications 准备好调度发送的通知
+	FindReadyNotifications(ctx context.Context, offset, limit int) ([]domain.Notification, error)
+
 	// GetByID 根据ID获取通知记录
 	GetByID(ctx context.Context, id uint64) (domain.Notification, error)
 
@@ -55,6 +58,10 @@ func NewNotificationService(repo repository.NotificationRepository, idGenerator 
 		repo:        repo,
 		idGenerator: idGenerator,
 	}
+}
+
+func (s *notificationService) FindReadyNotifications(ctx context.Context, offset, limit int) ([]domain.Notification, error) {
+	return s.repo.FindReadyNotifications(ctx, offset, limit)
 }
 
 // Create 创建通知
