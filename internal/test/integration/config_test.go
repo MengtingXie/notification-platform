@@ -5,9 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/ecodeclub/ekit/slice"
 	"testing"
 	"time"
+
+	"github.com/ecodeclub/ekit/slice"
 
 	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
@@ -43,6 +44,7 @@ func (s *BusinessConfigTestSuite) SetupSuite() {
 	err := dao.InitTables(s.db)
 	require.NoError(s.T(), err)
 }
+
 func (s *BusinessConfigTestSuite) TearDownTest() {
 	s.db.Exec("TRUNCATE TABLE `business_configs`")
 }
@@ -549,7 +551,6 @@ func (s *BusinessConfigTestSuite) TestServiceGetByIDs() {
 			assertBusinessConfig(t, cfg, redisCfg)
 		}
 	}
-
 }
 
 // TestBusinessConfigDelete 测试删除业务配置
@@ -629,7 +630,6 @@ func (s *BusinessConfigTestSuite) checkBusinessConfig(t *testing.T, wantConfig d
 	err = json.Unmarshal([]byte(configStr), &redisConf)
 	require.NoError(t, res.Err())
 	assertBusinessConfig(t, conf, redisConf)
-
 }
 
 func (s *BusinessConfigTestSuite) toDomain(daoConfig dao.BusinessConfig) domain.BusinessConfig {
@@ -679,6 +679,7 @@ func (s *BusinessConfigTestSuite) toEntity(config domain.BusinessConfig) dao.Bus
 	}
 	return daoConfig
 }
+
 func marshal(v any) sql.NullString {
 	byteV, _ := json.Marshal(v)
 	return sql.NullString{

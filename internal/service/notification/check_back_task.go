@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gotomicro/ego/client/egrpc"
 	"time"
+
+	"github.com/gotomicro/ego/client/egrpc"
 
 	"gitee.com/flycash/notification-platform/internal/pkg/grpc"
 	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
@@ -24,12 +25,12 @@ import (
 )
 
 type TxCheckTask struct {
-	repo            repository.TxNotificationRepository
-	configSvc       config.BusinessConfigService
-	logger          *elog.Component
-	lock            dlock.Client
-	batchSize       int
-	clients         *grpc.Clients[clientv1.TransactionCheckServiceClient]
+	repo      repository.TxNotificationRepository
+	configSvc config.BusinessConfigService
+	logger    *elog.Component
+	lock      dlock.Client
+	batchSize int
+	clients   *grpc.Clients[clientv1.TransactionCheckServiceClient]
 }
 
 const (
@@ -47,7 +48,8 @@ func (task *TxCheckTask) Start(ctx context.Context) {
 
 func NewTask(repo repository.TxNotificationRepository,
 	configSvc config.BusinessConfigService,
-	lock dlock.Client) *TxCheckTask {
+	lock dlock.Client,
+) *TxCheckTask {
 	return &TxCheckTask{
 		repo:      repo,
 		configSvc: configSvc,

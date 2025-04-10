@@ -31,7 +31,8 @@ type businessConfigRepository struct {
 func NewBusinessConfigRepository(
 	configDao dao.BusinessConfigDAO,
 	localCache *local.Cache,
-	redisCache *redis.Cache) BusinessConfigRepository {
+	redisCache *redis.Cache,
+) BusinessConfigRepository {
 	return &businessConfigRepository{
 		dao:        configDao,
 		localCache: localCache,

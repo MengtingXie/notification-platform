@@ -3,9 +3,10 @@ package local
 import (
 	"context"
 	"encoding/json"
-	"github.com/gotomicro/ego/core/elog"
 	"strings"
 	"time"
+
+	"github.com/gotomicro/ego/core/elog"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/cache"
@@ -26,7 +27,7 @@ type Cache struct {
 func (l *Cache) GetConfigs(ctx context.Context, bizIDs []int64) (map[int64]domain.BusinessConfig, error) {
 	configMap := make(map[int64]domain.BusinessConfig)
 	for _, bizID := range bizIDs {
-		v,ok := l.c.Get(cache.ConfigKey(bizID))
+		v, ok := l.c.Get(cache.ConfigKey(bizID))
 		if ok {
 			configMap[bizID] = v.(domain.BusinessConfig)
 		}
@@ -62,7 +63,6 @@ func (l *Cache) Set(ctx context.Context, cfg domain.BusinessConfig) error {
 }
 
 func NewLocalCache(rdb *redis.Client, c *ca.Cache) *Cache {
-
 	localCache := &Cache{
 		rdb:    rdb,
 		logger: elog.DefaultLogger,

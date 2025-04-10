@@ -3,9 +3,9 @@ package redis
 import (
 	"context"
 	"encoding/json"
-	"github.com/gotomicro/ego/core/elog"
-
 	"fmt"
+
+	"github.com/gotomicro/ego/core/elog"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/cache"
@@ -23,6 +23,7 @@ func NewCache(rdb *redis.Client) *Cache {
 		rdb: rdb,
 	}
 }
+
 func (c *Cache) Del(ctx context.Context, bizID int64) error {
 	return c.rdb.Del(ctx, cache.ConfigKey(bizID)).Err()
 }

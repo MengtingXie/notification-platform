@@ -13,13 +13,13 @@ import (
 	dlockRedis "github.com/meoying/dlock-go/redis"
 	"github.com/redis/go-redis/v9"
 )
+
 type App struct {
-	Svc notification.TxNotificationService
+	Svc  notification.TxNotificationService
 	Task *notification.TxCheckTask
 }
 
-
-func InitTxNotificationService( configSvc config.BusinessConfigService)*App {
+func InitTxNotificationService(configSvc config.BusinessConfigService) *App {
 	wire.Build(
 		testioc.BaseSet,
 		dao.NewTxNotificationDAO,
@@ -34,9 +34,6 @@ func InitTxNotificationService( configSvc config.BusinessConfigService)*App {
 	return new(App)
 }
 
-
 func initRedisClient(rdb redis.Cmdable) dlock.Client {
 	return dlockRedis.NewClient(rdb)
 }
-
-
