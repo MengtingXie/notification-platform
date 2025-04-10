@@ -8,6 +8,7 @@ package notificationv1
 
 import (
 	context "context"
+
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -85,6 +86,7 @@ type UnimplementedNotificationQueryServiceServer struct{}
 func (UnimplementedNotificationQueryServiceServer) QueryNotification(context.Context, *QueryNotificationRequest) (*QueryNotificationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QueryNotification not implemented")
 }
+
 func (UnimplementedNotificationQueryServiceServer) BatchQueryNotifications(context.Context, *BatchQueryNotificationsRequest) (*BatchQueryNotificationsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BatchQueryNotifications not implemented")
 }

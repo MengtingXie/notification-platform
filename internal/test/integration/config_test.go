@@ -2,9 +2,10 @@ package integration
 
 import (
 	"context"
-	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 	"testing"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"

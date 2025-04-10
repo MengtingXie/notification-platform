@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+
 	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 
 	"gitee.com/flycash/notification-platform/internal/domain"

@@ -16,10 +16,11 @@ package notification
 
 import (
 	"context"
+	"time"
+
 	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"github.com/meoying/dlock-go"
-	"time"
 )
 
 type SendingTimeoutTask struct {

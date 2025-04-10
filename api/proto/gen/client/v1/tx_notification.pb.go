@@ -7,11 +7,12 @@
 package clientv1
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -191,13 +192,16 @@ func file_client_v1_tx_notification_proto_rawDescGZIP() []byte {
 	return file_client_v1_tx_notification_proto_rawDescData
 }
 
-var file_client_v1_tx_notification_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_client_v1_tx_notification_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_client_v1_tx_notification_proto_goTypes = []any{
-	(TransactionCheckServiceCheckResponse_ResponseStatus)(0), // 0: client.v1.TransactionCheckServiceCheckResponse.ResponseStatus
-	(*TransactionCheckServiceCheckRequest)(nil),              // 1: client.v1.TransactionCheckServiceCheckRequest
-	(*TransactionCheckServiceCheckResponse)(nil),             // 2: client.v1.TransactionCheckServiceCheckResponse
-}
+var (
+	file_client_v1_tx_notification_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+	file_client_v1_tx_notification_proto_msgTypes  = make([]protoimpl.MessageInfo, 2)
+	file_client_v1_tx_notification_proto_goTypes   = []any{
+		(TransactionCheckServiceCheckResponse_ResponseStatus)(0), // 0: client.v1.TransactionCheckServiceCheckResponse.ResponseStatus
+		(*TransactionCheckServiceCheckRequest)(nil),              // 1: client.v1.TransactionCheckServiceCheckRequest
+		(*TransactionCheckServiceCheckResponse)(nil),             // 2: client.v1.TransactionCheckServiceCheckResponse
+	}
+)
+
 var file_client_v1_tx_notification_proto_depIdxs = []int32{
 	0, // 0: client.v1.TransactionCheckServiceCheckResponse.status:type_name -> client.v1.TransactionCheckServiceCheckResponse.ResponseStatus
 	1, // 1: client.v1.TransactionCheckService.Check:input_type -> client.v1.TransactionCheckServiceCheckRequest

@@ -3,10 +3,11 @@ package integration
 import (
 	"context"
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 	"strings"
 	"testing"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 
 	clientv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -32,11 +33,9 @@ type TxNotificationServiceTestSuite struct {
 	db *egorm.Component
 }
 
-const bufSize = 1024 * 1024
-
 func (s *TxNotificationServiceTestSuite) SetupSuite() {
 	s.db = testioc.InitDB()
-	dao.InitTables(s.db)
+	s.NoError(dao.InitTables(s.db))
 }
 
 func (s *TxNotificationServiceTestSuite) TearDownTest() {
@@ -65,7 +64,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 						"key": "value",
 					},
 				},
-				RetryCount:     9,
 				ScheduledETime: time.UnixMilli(1754118663000),
 				ScheduledSTime: time.UnixMilli(1744118663000),
 			},
@@ -131,7 +129,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 					TemplateParams:    `{"key":"value"}`,
 					ScheduledSTime:    1744118663000,
 					ScheduledETime:    1754118663000,
-					RetryCount:        9,
 					Version:           1,
 				}, actualNotification)
 			},
@@ -150,7 +147,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 						"key": "value",
 					},
 				},
-				RetryCount:     9,
 				ScheduledETime: time.UnixMilli(1754118663000),
 				ScheduledSTime: time.UnixMilli(1744118663000),
 			},
@@ -200,7 +196,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 					TemplateParams:    `{"key":"value"}`,
 					ScheduledSTime:    1744118663000,
 					ScheduledETime:    1754118663000,
-					RetryCount:        9,
 					Version:           1,
 				}, actualNotification)
 			},

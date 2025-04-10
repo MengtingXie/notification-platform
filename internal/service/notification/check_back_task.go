@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"gitee.com/flycash/notification-platform/internal/pkg/grpc"
 	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
 	"github.com/ecodeclub/ekit/list"
 	"github.com/hashicorp/go-multierror"
-	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
@@ -66,14 +67,17 @@ func (task *TxCheckTask) oneLoop(ctx context.Context) error {
 	length := len(txNotifications)
 	// 这一次回查没拿到明确结果的
 	retryTxns := &list.ConcurrentList[domain.TxNotification]{
-		List: list.NewArrayList[domain.TxNotification](length)}
+		List: list.NewArrayList[domain.TxNotification](length),
+	}
 
 	// 要回滚的
 	failTxns := &list.ConcurrentList[domain.TxNotification]{
-		List: list.NewArrayList[domain.TxNotification](length)}
+		List: list.NewArrayList[domain.TxNotification](length),
+	}
 	// 要提交的
 	commitTxns := &list.ConcurrentList[domain.TxNotification]{
-		List: list.NewArrayList[domain.TxNotification](length)}
+		List: list.NewArrayList[domain.TxNotification](length),
+	}
 	// 挨个处理呀
 	var eg errgroup.Group
 	for idx := range txNotifications {
@@ -165,7 +169,8 @@ func (task *TxCheckTask) getCheckBackRes(ctx context.Context, conf domain.TxnCon
 }
 
 func (task *TxCheckTask) updateStatus(ctx context.Context,
-	list *list.ConcurrentList[domain.TxNotification], status domain.SendStatus) error {
+	list *list.ConcurrentList[domain.TxNotification], status domain.SendStatus,
+) error {
 	if list.Len() == 0 {
 		return nil
 	}
