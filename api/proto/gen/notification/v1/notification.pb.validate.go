@@ -2244,7 +2244,7 @@ func (m *SendStrategy_DelayedStrategy) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for Delay
+	// no validation rules for DelaySeconds
 
 	if len(errors) > 0 {
 		return SendStrategy_DelayedStrategyMultiError(errors)

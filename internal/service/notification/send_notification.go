@@ -2,11 +2,7 @@ package notification
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
-	"time"
-
 	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/service/template/manage"
 
@@ -78,193 +74,84 @@ func (e *sendService) SendNotification(ctx context.Context, n domain.Notificatio
 
 // SendNotificationAsync 异步单条发送
 func (e *sendService) SendNotificationAsync(ctx context.Context, n domain.Notification) (domain.SendResponse, error) {
-	resp := domain.SendResponse{
-		Status: domain.SendStatusFailed,
-	}
-
 	// 参数校验
 	if err := n.Validate(); err != nil {
-		return resp, err
+		return domain.SendResponse{}, err
 	}
-
-	tmpl, err := e.templateSvc.GetTemplateByID(ctx, n.Template.ID)
-	if err != nil {
-		e.logger.Warn("异步单条发送通知失败", elog.Any("获取模版失败", err))
-		return resp, fmt.Errorf("%w", errs.ErrSendNotificationFailed)
-	}
-	if !tmpl.HasPublished() {
-		return resp, fmt.Errorf("%w: 模板ID=%d未发布", errs.ErrInvalidParameter, n.Template.ID)
-	}
-
 	// 生成通知ID
 	id, err := e.idGenerator.NextID()
 	if err != nil {
-		e.logger.Warn("异步单条发送通知失败", elog.Any("通知ID生成失败", err))
-		return resp, fmt.Errorf("%w", errs.ErrSendNotificationFailed)
+		return domain.SendResponse{}, fmt.Errorf("%w", errs.ErrSendNotificationFailed)
 	}
 	n.ID = id
 
 	// 使用异步接口但要立即发送，修改为延时发送
-	if n.SendStrategyConfig.Type == domain.SendStrategyImmediate {
-		n.SendStrategyConfig.DeadlineTime = time.Now().Add(time.Minute)
-	}
-
-	// 发送通知
-	response, err := e.sendStrategy.Send(ctx, n)
-	// 处理策略错误
-	if err != nil {
-		e.logger.Warn("异步单条发送通知失败", elog.Any("Error", err))
-		if errors.Is(err, errs.ErrInvalidParameter) {
-			return resp, err
-		}
-		return resp, fmt.Errorf("%w", errs.ErrSendNotificationFailed)
-	}
-
-	return response, nil
+	// 本质上这是一个不怎好的用法，但是业务方可能不清楚，所以我们兼容一下
+	n.ReplaceAsyncImmediate()
+	return e.sendStrategy.Send(ctx, n)
 }
 
 // BatchSendNotifications 同步批量发送
 func (e *sendService) BatchSendNotifications(ctx context.Context, notifications ...domain.Notification) (domain.BatchSendResponse, error) {
-	response := domain.BatchSendResponse{
-		TotalCount: len(notifications),
-		Results:    make([]domain.SendResponse, 0, len(notifications)),
-	}
+	response := domain.BatchSendResponse{}
 
 	// 参数校验
 	if len(notifications) == 0 {
 		return response, fmt.Errorf("%w: 通知列表不能为空", errs.ErrInvalidParameter)
 	}
 
-	resp := domain.SendResponse{Status: domain.SendStatusFailed}
-	errMessages := make([]string, 0, len(notifications))
+	// 校验并且生成 ID
 	for i := range notifications {
-
 		if err := notifications[i].Validate(); err != nil {
-			response.Results = append(response.Results, resp)
-			errMessages = append(errMessages, err.Error())
+			return domain.BatchSendResponse{}, fmt.Errorf("参数非法 %w", err)
 		}
-
-		tmpl, err := e.templateSvc.GetTemplateByID(ctx, notifications[i].Template.ID)
-		if err != nil {
-			e.logger.Warn("同步批量发送通知失败", elog.Any("获取模版失败", err))
-			response.Results = append(response.Results, resp)
-		}
-
-		if !tmpl.HasPublished() {
-			response.Results = append(response.Results, resp)
-			errMessages = append(errMessages, fmt.Errorf("%w: key = %s, 模板ID=%d未发布", errs.ErrInvalidParameter, notifications[i].Key, tmpl.ID).Error())
-		}
-
 		// 生成通知ID
 		id, err := e.idGenerator.NextID()
 		if err != nil {
-			e.logger.Warn("同步批量发送通知失败", elog.Any("通知ID生成失败", err))
-			response.Results = append(response.Results, resp)
+			return domain.BatchSendResponse{}, fmt.Errorf("生成 ID 失败: %w", err)
 		}
 		notifications[i].ID = id
-
-		// todo: 检查发送策略类型，必须相同
 	}
 
-	if len(response.Results) != 0 {
-		// 参数错误
-		if len(errMessages) != 0 {
-			return response, fmt.Errorf("%w: 通知列表中有非法通知: %s", errs.ErrInvalidParameter, strings.Join(errMessages, "; "))
-		}
-		// 其他错误
-		return response, fmt.Errorf("%w", errs.ErrSendNotificationFailed)
-	}
-
-	// 发送通知
+	// 发送通知，这里有一个隐含的假设，就是发送策略必须是相同的。
 	results, err := e.sendStrategy.BatchSend(ctx, notifications)
+	response.Results = results
 	if err != nil {
-
-		e.logger.Warn("同步批量发送通知失败", elog.Any("Error", err))
-
-		// 部分失败
-		response.Results = results
-		for i := range results {
-			if results[i].Status == domain.SendStatusSucceeded {
-				response.SuccessCount++
-			}
-		}
-
-		if errors.Is(err, errs.ErrInvalidParameter) {
-			return response, err
-		}
 		return response, fmt.Errorf("%w", errs.ErrSendNotificationFailed)
 	}
-
 	// 从响应获取结果
-	response.Results = results
-	response.SuccessCount = len(response.Results)
 	return response, nil
 }
 
 // BatchSendNotificationsAsync 异步批量发送
 func (e *sendService) BatchSendNotificationsAsync(ctx context.Context, notifications ...domain.Notification) (domain.BatchSendAsyncResponse, error) {
-	response := domain.BatchSendAsyncResponse{
-		NotificationIDs: make([]uint64, 0, len(notifications)),
-	}
-
 	// 参数校验
 	if len(notifications) == 0 {
-		return response, fmt.Errorf("%w: 通知列表不能为空", errs.ErrInvalidParameter)
+		return domain.BatchSendAsyncResponse{}, fmt.Errorf("%w: 通知列表不能为空", errs.ErrInvalidParameter)
 	}
 
-	systemErrCounter := 0
-	errMessages := make([]string, 0, len(notifications))
+	ids := make([]uint64, 0, len(notifications))
+	// 生成 ID，并且进行校验
 	for i := range notifications {
-
 		if err := notifications[i].Validate(); err != nil {
-			errMessages = append(errMessages, err.Error())
+			return domain.BatchSendAsyncResponse{}, fmt.Errorf("参数非法 %w", err)
 		}
-
-		tmpl, err := e.templateSvc.GetTemplateByID(ctx, notifications[i].Template.ID)
-		if err != nil {
-			e.logger.Warn("异步批量发送通知失败", elog.Any("获取模版失败", err))
-			systemErrCounter++
-		}
-
-		if !tmpl.HasPublished() {
-			errMessages = append(errMessages, fmt.Errorf("%w: key = %s, 模板ID=%d未发布",
-				errs.ErrInvalidParameter, notifications[i].Key, tmpl.ID).Error())
-		}
-
 		// 生成通知ID
 		id, err := e.idGenerator.NextID()
 		if err != nil {
-			e.logger.Warn("异步批量发送通知失败", elog.Any("通知ID生成失败", err))
-			systemErrCounter++
+			return domain.BatchSendAsyncResponse{}, fmt.Errorf("生成 ID 失败: %w", err)
 		}
-
 		notifications[i].ID = id
-
-		// todo: 检查发送策略类型，必须相同
+		ids = append(ids, id)
+		notifications[i].ReplaceAsyncImmediate()
 	}
 
-	// 参数错误
-	if len(errMessages) != 0 {
-		return response, fmt.Errorf("%w: 通知列表中有非法通知: %s", errs.ErrInvalidParameter, strings.Join(errMessages, "; "))
-	}
-
-	if systemErrCounter != 0 {
-		return response, fmt.Errorf("%w", errs.ErrSendNotificationFailed)
-	}
-
-	// 发送通知
-	results, err := e.sendStrategy.BatchSend(ctx, notifications)
+	// 发送通知，隐含假设这一批的发送策略是一样的。
+	_, err := e.sendStrategy.BatchSend(ctx, notifications)
 	if err != nil {
-		e.logger.Warn("异步批量发送通知失败", elog.Any("Error", err))
-		if errors.Is(err, errs.ErrInvalidParameter) {
-			return response, err
-		}
-		return response, fmt.Errorf("%w", errs.ErrSendNotificationFailed)
+		return domain.BatchSendAsyncResponse{}, fmt.Errorf("发送失败 %w", errs.ErrSendNotificationFailed)
 	}
-
-	// 从响应获取结果
-	for i := range results {
-		response.NotificationIDs[i] = results[i].NotificationID
-	}
-	return response, nil
+	return domain.BatchSendAsyncResponse{
+		NotificationIDs: ids,
+	}, nil
 }

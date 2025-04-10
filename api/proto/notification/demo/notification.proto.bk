@@ -193,7 +193,7 @@ message CancelResponse {
 
 service QueryService {
   rpc GetNotificationStatus(GetRequest) returns (GetResponse);
-  rpc BatchQueryStatuses(BatchStatusRequest) returns (BatchStatusResponse);
+  rpc BatchQueryStatuses(BatchGetRequest) returns (BatchGetResponse);
 }
 
 message GetRequest {
@@ -361,7 +361,8 @@ message BatchSendRequest {
   //  AuthHeader auth = 1;
 
   // 批量条目（最大100条）
-  repeated Notification notification = 2 [(validate.rules).repeated = {max_items: 100}];
+  //  repeated Notification notification = 2 [(validate.rules).repeated = {max_items: 100}];
+  repeated Notification notification = 1;
 
   // 批量级控制参数
   //  message BatchControl {
@@ -421,7 +422,8 @@ message BatchItemResult {
 // 异步批量请求
 message AsyncBatchSendRequest {
   //  AuthHeader auth = 1;
-  repeated Notification items = 2 [(validate.rules).repeated = {max_items: 1000}]; // 扩展至1000条
+  //  repeated Notification items = 2 [(validate.rules).repeated = {max_items: 1000}]; // 扩展至1000条
+  repeated Notification items = 1; // 扩展至1000条
 
   // 异步专属控制参数
   //  message AsyncControl {

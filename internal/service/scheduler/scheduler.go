@@ -33,7 +33,6 @@ func NewScheduler(
 	notificationSvc notificationsvc.Service,
 	dispatcher sender.NotificationSender,
 	batchSize int,
-	intervalSeconds int,
 	dclient dlock.Client,
 ) NotificationScheduler {
 	return &staticScheduler{
@@ -60,6 +59,10 @@ func (s *staticScheduler) processPendingNotifications(ctx context.Context) error
 	notifications, err := s.notificationSvc.FindReadyNotifications(ctx, offset, s.batchSize)
 	if err != nil {
 		return err
+	}
+	if len(notifications) == 0 {
+		time.Sleep(time.Second)
+		return nil
 	}
 	_, err = s.sender.BatchSend(ctx, notifications)
 	return err
