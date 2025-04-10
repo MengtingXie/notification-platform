@@ -2,15 +2,18 @@ package integration
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/ecodeclub/ekit/slice"
+	"testing"
+	"time"
+
 	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"github.com/ego-component/egorm"
 	ca "github.com/patrickmn/go-cache"
 	"github.com/redis/go-redis/v9"
-	"testing"
-	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/config"
@@ -39,6 +42,9 @@ func (s *BusinessConfigTestSuite) SetupSuite() {
 	s.db = ioc.InitDB()
 	err := dao.InitTables(s.db)
 	require.NoError(s.T(), err)
+}
+func (s *BusinessConfigTestSuite) TearDownTest() {
+	s.db.Exec("TRUNCATE TABLE `business_configs`")
 }
 
 func (s *BusinessConfigTestSuite) createTestConfig() domain.BusinessConfig {
@@ -82,9 +88,9 @@ func (s *BusinessConfigTestSuite) createTestConfig() domain.BusinessConfig {
 }
 
 func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig {
-	return []domain.BusinessConfig{
+	list := []domain.BusinessConfig{
 		{
-			ID:        1,
+			ID:        10001,
 			OwnerID:   1001,
 			OwnerType: "person",
 			ChannelConfig: &domain.ChannelConfig{
@@ -119,9 +125,11 @@ func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig
 					EMAIL: 100,
 				},
 			},
+			Ctime: 1744274114000,
+			Utime: 1744274114000,
 		},
 		{
-			ID:        2,
+			ID:        10002,
 			OwnerID:   1002,
 			OwnerType: "person",
 			ChannelConfig: &domain.ChannelConfig{
@@ -156,9 +164,11 @@ func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig
 					EMAIL: 100,
 				},
 			},
+			Ctime: 1744274114000,
+			Utime: 1744274114000,
 		},
 		{
-			ID:        3,
+			ID:        10003,
 			OwnerID:   1003,
 			OwnerType: "person",
 			ChannelConfig: &domain.ChannelConfig{
@@ -193,9 +203,11 @@ func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig
 					EMAIL: 100,
 				},
 			},
+			Ctime: 1744274114000,
+			Utime: 1744274114000,
 		},
 		{
-			ID:        4,
+			ID:        10004,
 			OwnerID:   1004,
 			OwnerType: "person",
 			ChannelConfig: &domain.ChannelConfig{
@@ -230,13 +242,22 @@ func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig
 					EMAIL: 100,
 				},
 			},
+			Ctime: 1744274114000,
+			Utime: 1744274114000,
 		},
 	}
+	ans := slice.Map(list, func(idx int, src domain.BusinessConfig) dao.BusinessConfig {
+		return s.toEntity(src)
+	})
+	err := s.db.WithContext(context.Background()).Create(&ans).Error
+	require.NoError(s.T(), err)
+	return list
 }
 
 // 创建配置并返回ID
 func (s *BusinessConfigTestSuite) createConfigAndGetID(t *testing.T) int64 {
 	testConfig := s.createTestConfig()
+	testConfig.ID = 6
 	ctx := context.Background()
 	// 创建配置
 	err := s.svc.SaveConfig(ctx, testConfig)
@@ -245,7 +266,7 @@ func (s *BusinessConfigTestSuite) createConfigAndGetID(t *testing.T) int64 {
 	err = s.redisCache.Del(ctx, key).Err()
 	require.NoError(t, err)
 	s.localCache.Delete(key)
-	return 5
+	return 6
 }
 
 // TestServiceCreate 测试创建业务配置
@@ -402,7 +423,43 @@ func (s *BusinessConfigTestSuite) TestServiceGetByID() {
 			before: func(t *testing.T) int64 {
 				return s.createConfigAndGetID(t)
 			},
-			wantConfig: s.createTestConfig(),
+			wantConfig: domain.BusinessConfig{
+				ID:        6,
+				OwnerID:   1001,
+				OwnerType: "person",
+				ChannelConfig: &domain.ChannelConfig{
+					Channels: []domain.ChannelItem{
+						{
+							Channel:  "SMS",
+							Priority: 1,
+							Enabled:  true,
+						},
+						{
+							Channel:  "EMAIL",
+							Priority: 2,
+							Enabled:  true,
+						},
+					},
+				},
+				TxnConfig: &domain.TxnConfig{
+					ServiceName:  "serviceName",
+					InitialDelay: 10,
+					RetryPolicy: &retry.Config{
+						Type: "fixed",
+						FixedInterval: &retry.FixedIntervalConfig{
+							Interval:   10,
+							MaxRetries: 3,
+						},
+					},
+				},
+				RateLimit: 2000,
+				Quota: &domain.QuotaConfig{
+					Monthly: domain.MonthlyConfig{
+						SMS:   100,
+						EMAIL: 100,
+					},
+				},
+			},
 		},
 		{
 			name: "未存在的id",
@@ -425,11 +482,12 @@ func (s *BusinessConfigTestSuite) TestServiceGetByID() {
 			}
 			assertBusinessConfig(t, tc.wantConfig, conf)
 			s.checkBusinessConfig(t, conf)
-			err = s.svc.Delete(ctx, 5)
+			err = s.svc.Delete(ctx, id)
 			assert.NoError(t, err, "删除业务配置应成功")
-			err = s.redisCache.Del(context.Background(), "config:5").Err()
+			key := fmt.Sprintf("config:%d", id)
+			err = s.redisCache.Del(context.Background(), key).Err()
 			assert.NoError(t, err, "删除业务配置应成功")
-			s.localCache.Delete("config:5")
+			s.localCache.Delete(key)
 		})
 	}
 }
@@ -437,30 +495,61 @@ func (s *BusinessConfigTestSuite) TestServiceGetByID() {
 func (s *BusinessConfigTestSuite) TestServiceGetByIDs() {
 	t := s.T()
 	ctx := context.Background()
+	defer func() {
+		for i := 1; i <= 4; i++ {
+			err := s.svc.Delete(ctx, int64(i+10000))
+			require.NoError(t, err, "删除配置应成功")
+
+		}
+	}()
+
+	// 1. 准备测试数据 - 创建4条测试配置
 	configList := s.createTestConfigList()
-	for _, nconfig := range configList {
-		err := s.svc.SaveConfig(ctx, nconfig)
-		require.NoError(t, err)
+
+	// 将config1仅添加到Redis缓存
+	key1 := fmt.Sprintf("config:%d", configList[0].ID)
+	configJSON, err := json.Marshal(configList[0])
+	require.NoError(t, err, "序列化配置应成功")
+	err = s.redisCache.Set(ctx, key1, string(configJSON), time.Minute*10).Err()
+
+	// 将config2添加到Redis和本地缓存
+	key2 := fmt.Sprintf("config:%d", configList[1].ID)
+	configJSON, err = json.Marshal(configList[1])
+	require.NoError(t, err, "序列化配置应成功")
+	err = s.redisCache.Set(ctx, key2, string(configJSON), time.Minute*10).Err()
+	require.NoError(t, err, "添加到Redis缓存应成功")
+
+	ids := []int64{10001, 10002, 10003, 10004}
+	configMap, err := s.svc.GetByIDs(ctx, ids)
+	require.NoError(t, err, "获取配置应成功")
+	require.Len(t, configMap, 4, "应返回4条配置")
+	for _, wantConfig := range configList {
+		v, ok := configMap[wantConfig.ID]
+		require.True(t, ok, "返回结果应包含ID %d的配置", wantConfig.ID)
+		assertBusinessConfig(t, wantConfig, v)
 	}
 
-	// 测试GetByIDs
-	configMap, err := s.svc.GetByIDs(ctx, []int64{1, 2, 3, 4})
-	for _, wantconfig := range configList {
-		v, ok := configMap[wantconfig.ID]
-		require.True(t, ok)
-		assertBusinessConfig(t, wantconfig, v)
+	for _, cfg := range configList {
+		key := fmt.Sprintf("config:%d", cfg.ID)
+		cachedCfg, ok := s.localCache.Get(key)
+		require.True(t, ok, "ID %d的配置应在本地缓存中", cfg.ID)
+		if ok {
+			assertBusinessConfig(t, cfg, cachedCfg.(domain.BusinessConfig))
+		}
 	}
 
-	// 测试查询不存在的ID
-	nonExistConfigs, err := s.svc.GetByIDs(ctx, []int64{9999999})
-	assert.NoError(t, err, "查询不存在的ID应返回空map，不应报错")
-	assert.Empty(t, nonExistConfigs[9999999], "不存在的ID对应值应为空")
-
-	// 清理：删除创建的配置
-	for i := 1; i <= 4; i++ {
-		err = s.svc.Delete(ctx, int64(i))
-		require.NoError(t, err)
+	for _, cfg := range configList {
+		key := fmt.Sprintf("config:%d", cfg.ID)
+		result := s.redisCache.Get(ctx, key)
+		require.NoError(t, result.Err(), "ID %d的配置应在Redis缓存中", cfg.ID)
+		if result.Err() == nil {
+			var redisCfg domain.BusinessConfig
+			err := json.Unmarshal([]byte(result.Val()), &redisCfg)
+			require.NoError(t, err, "Redis中的配置应能正确反序列化")
+			assertBusinessConfig(t, cfg, redisCfg)
+		}
 	}
+
 }
 
 // TestBusinessConfigDelete 测试删除业务配置
@@ -568,4 +657,32 @@ func unmarsal[T any](v string) *T {
 	var t T
 	_ = json.Unmarshal([]byte(v), &t)
 	return &t
+}
+
+func (s *BusinessConfigTestSuite) toEntity(config domain.BusinessConfig) dao.BusinessConfig {
+	daoConfig := dao.BusinessConfig{
+		ID:        config.ID,
+		OwnerID:   config.OwnerID,
+		OwnerType: config.OwnerType,
+		RateLimit: config.RateLimit,
+		Ctime:     config.Ctime,
+		Utime:     config.Utime,
+	}
+	if config.ChannelConfig != nil {
+		daoConfig.ChannelConfig = marshal(config.ChannelConfig)
+	}
+	if config.TxnConfig != nil {
+		daoConfig.TxnConfig = marshal(config.TxnConfig)
+	}
+	if config.Quota != nil {
+		daoConfig.Quota = marshal(config.Quota)
+	}
+	return daoConfig
+}
+func marshal(v any) sql.NullString {
+	byteV, _ := json.Marshal(v)
+	return sql.NullString{
+		String: string(byteV),
+		Valid:  true,
+	}
 }

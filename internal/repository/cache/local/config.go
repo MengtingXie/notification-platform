@@ -23,6 +23,24 @@ type Cache struct {
 	c      *ca.Cache
 }
 
+func (l *Cache) GetConfigs(ctx context.Context, bizIDs []int64) (map[int64]domain.BusinessConfig, error) {
+	configMap := make(map[int64]domain.BusinessConfig)
+	for _, bizID := range bizIDs {
+		v,ok := l.c.Get(cache.ConfigKey(bizID))
+		if ok {
+			configMap[bizID] = v.(domain.BusinessConfig)
+		}
+	}
+	return configMap, nil
+}
+
+func (l *Cache) SetConfigs(ctx context.Context, configs []domain.BusinessConfig) error {
+	for _, config := range configs {
+		l.c.Set(cache.ConfigKey(config.ID), config, cache.DefaultExpiredTime)
+	}
+	return nil
+}
+
 func (l *Cache) Del(ctx context.Context, bizID int64) error {
 	l.c.Delete(cache.ConfigKey(bizID))
 	return nil
@@ -39,7 +57,7 @@ func (l *Cache) Get(ctx context.Context, bizID int64) (domain.BusinessConfig, er
 
 func (l *Cache) Set(ctx context.Context, cfg domain.BusinessConfig) error {
 	key := cache.ConfigKey(cfg.ID)
-	l.c.Set(key, cfg, cache.DefaultExpiredTime )
+	l.c.Set(key, cfg, cache.DefaultExpiredTime)
 	return nil
 }
 
@@ -66,7 +84,7 @@ func (l *Cache) loop(ctx context.Context) {
 		channel := msg.Channel
 		eventType := msg.Payload
 		l.logger.Info("监控到redis更新消息", elog.String("key", msg.Channel), elog.String("payload", string(msg.Payload)))
-		channelStrList := strings.SplitN(channel, ":",2)
+		channelStrList := strings.SplitN(channel, ":", 2)
 		if len(channelStrList) < 2 {
 			l.logger.Error("监听redis键不正确", elog.String("channel", channel))
 			continue
@@ -91,7 +109,7 @@ func (l *Cache) handleConfigChange(ctx context.Context, key string, event string
 		if err != nil {
 			l.logger.Error("序列化失败", elog.String("key", key), elog.String("val", res.Val()))
 		}
-		l.c.Set(key, config,cache.DefaultExpiredTime )
+		l.c.Set(key, config, cache.DefaultExpiredTime)
 	case "del":
 		l.c.Delete(key)
 	}

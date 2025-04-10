@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/cache"
 	"gitee.com/flycash/notification-platform/internal/repository/cache/local"
@@ -40,15 +41,92 @@ func NewBusinessConfigRepository(
 
 // GetByIDs 根据多个ID批量获取业务配置
 func (b *businessConfigRepository) GetByIDs(ctx context.Context, ids []int64) (map[int64]domain.BusinessConfig, error) {
-	configMap, err := b.dao.GetByIDs(ctx, ids)
+	// 1. 先从本地缓存批量获取
+	result, err := b.localCache.GetConfigs(ctx, ids)
+	if err != nil {
+		b.logger.Error("从本地缓存批量获取失败", elog.Any("err", err))
+		// 如果本地缓存出错，初始化空结果集继续处理
+		result = make(map[int64]domain.BusinessConfig)
+	}
+
+	// 找出本地缓存中未命中的IDs
+	var missedIDs []int64
+	for _, id := range ids {
+		if _, ok := result[id]; !ok {
+			missedIDs = append(missedIDs, id)
+		}
+	}
+
+	// 如果所有数据都在本地缓存中找到，直接返回
+	if len(missedIDs) == 0 {
+		return result, nil
+	}
+
+	// 2. 从Redis缓存批量获取本地缓存中未找到的配置
+	redisConfigs, err := b.redisCache.GetConfigs(ctx, missedIDs)
+	if err != nil {
+		b.logger.Error("从Redis缓存批量获取失败", elog.Any("err", err))
+		// 即使Redis出错，我们也继续处理
+	} else {
+		// 将Redis中找到的配置添加到结果集
+		var configsToLocalCache []domain.BusinessConfig
+		for id, config := range redisConfigs {
+			result[id] = config
+			configsToLocalCache = append(configsToLocalCache, config)
+		}
+
+		// 批量更新本地缓存
+		if len(configsToLocalCache) > 0 {
+			lerr := b.localCache.SetConfigs(ctx, configsToLocalCache)
+			if lerr != nil {
+				b.logger.Error("批量更新本地缓存失败", elog.Any("err", lerr))
+			}
+		}
+	}
+
+	// 找出Redis缓存中也未命中的IDs
+	var notFoundIDs []int64
+	for _, id := range missedIDs {
+		if _, ok := redisConfigs[id]; !ok {
+			notFoundIDs = append(notFoundIDs, id)
+		}
+	}
+
+	// 如果所有数据都在本地缓存或Redis中找到，直接返回
+	if len(notFoundIDs) == 0 {
+		return result, nil
+	}
+
+	// 3. 从数据库获取缓存中未找到的配置
+	configMap, err := b.dao.GetByIDs(ctx, notFoundIDs)
 	if err != nil {
 		return nil, err
 	}
-	domainConfigMap := make(map[int64]domain.BusinessConfig, len(configMap))
+
+	// 4. 处理从数据库获取的结果，批量更新缓存并添加到结果集
+	var configsToCache []domain.BusinessConfig
 	for id, config := range configMap {
-		domainConfigMap[id] = b.toDomain(config)
+		domainConfig := b.toDomain(config)
+		result[id] = domainConfig
+		configsToCache = append(configsToCache, domainConfig)
 	}
-	return domainConfigMap, nil
+
+	// 批量更新缓存
+	if len(configsToCache) > 0 {
+		// 更新本地缓存
+		lerr := b.localCache.SetConfigs(ctx, configsToCache)
+		if lerr != nil {
+			b.logger.Error("批量更新本地缓存失败", elog.Any("err", lerr))
+		}
+
+		// 更新Redis缓存
+		rerr := b.redisCache.SetConfigs(ctx, configsToCache)
+		if rerr != nil {
+			b.logger.Error("批量更新Redis缓存失败", elog.Any("err", rerr))
+		}
+	}
+
+	return result, nil
 }
 
 // GetByID 根据ID获取业务配置
@@ -102,7 +180,7 @@ func (b *businessConfigRepository) Delete(ctx context.Context, id int64) error {
 
 // SaveConfig 保存业务配置
 func (b *businessConfigRepository) SaveConfig(ctx context.Context, config domain.BusinessConfig) error {
-	cfg,err := b.dao.SaveConfig(ctx, b.toEntity(config))
+	cfg, err := b.dao.SaveConfig(ctx, b.toEntity(config))
 	if err != nil {
 		return err
 	}
