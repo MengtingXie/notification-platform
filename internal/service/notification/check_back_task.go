@@ -4,20 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/pkg/grpc"
 	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
-	"strings"
-	"sync"
+	"github.com/ecodeclub/ekit/list"
+	"github.com/hashicorp/go-multierror"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
 
-	"github.com/ecodeclub/ekit/syncx"
-
 	clientv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"github.com/ecodeclub/ekit/slice"
-	"github.com/gotomicro/ego/client/egrpc"
 	"github.com/gotomicro/ego/core/elog"
 	"github.com/meoying/dlock-go"
 	"golang.org/x/sync/errgroup"
@@ -30,7 +28,7 @@ type TxCheckTask struct {
 	logger          *elog.Component
 	lock            dlock.Client
 	batchSize       int
-	clientMap       syncx.Map[string, *egrpc.Component]
+	clients         grpc.Clients[clientv1.TransactionCheckServiceClient]
 }
 
 const (
@@ -46,6 +44,7 @@ func (task *TxCheckTask) Start(ctx context.Context) {
 	job.Run(ctx)
 }
 
+// 为了性能，使用了批量操作，针对的是数据库的批量操作
 func (task *TxCheckTask) oneLoop(ctx context.Context) error {
 	loopCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
@@ -63,85 +62,81 @@ func (task *TxCheckTask) oneLoop(ctx context.Context) error {
 	bizIDs := slice.Map(txNotifications, func(_ int, src domain.TxNotification) int64 {
 		return src.BizID
 	})
-	configMap, err := task.configSvc.GetByIDs(loopCtx, bizIDs)
-	if err != nil {
-		return err
-	}
-	var eg errgroup.Group
-	mu := &sync.Mutex{}
-	// 需要继续重试的事务通知,
-	retryTxns := make([]domain.TxNotification, 0, len(txNotifications))
-	// 需要提交的事务通知
-	commitTxns := make([]domain.TxNotification, 0, len(txNotifications))
-	// 失败和取消的事务通知
-	failedTxns := make([]domain.TxNotification, 0, len(txNotifications))
+	configMap, err := task.configSvc.GetByIDs(ctx, bizIDs)
+	length := len(txNotifications)
+	// 这一次回查没拿到明确结果的
+	retryTxns := &list.ConcurrentList[domain.TxNotification]{
+		List: list.NewArrayList[domain.TxNotification](length)}
 
+	// 要回滚的
+	failTxns := &list.ConcurrentList[domain.TxNotification]{
+		List: list.NewArrayList[domain.TxNotification](length)}
+	// 要提交的
+	commitTxns := &list.ConcurrentList[domain.TxNotification]{
+		List: list.NewArrayList[domain.TxNotification](length)}
+	// 挨个处理呀
+	var eg errgroup.Group
 	for idx := range txNotifications {
+		idx := idx
 		eg.Go(func() error {
+			// 并发去回查
 			txNotification := txNotifications[idx]
+			// 我在这里发起了回查，而后拿到了结果
 			txn := task.oneBackCheck(ctx, configMap, txNotification)
 			switch txn.Status {
-			case domain.TxNotificationStatusCommit:
-				mu.Lock()
-				commitTxns = append(commitTxns, txn)
-				mu.Unlock()
-			case domain.TxNotificationStatusFail:
-				mu.Lock()
-				failedTxns = append(failedTxns, txn)
-				mu.Unlock()
 			case domain.TxNotificationStatusPrepare:
-				mu.Lock()
-				retryTxns = append(retryTxns, txn)
-				mu.Unlock()
-			case domain.TxNotificationStatusCancel:
-				mu.Lock()
-				failedTxns = append(failedTxns, txn)
-				mu.Unlock()
+				// 查到还是 Prepare 状态
+				_ = retryTxns.Append(txn)
+			case domain.TxNotificationStatusFail, domain.TxNotificationStatusCancel:
+				_ = failTxns.Append(txn)
+			case domain.TxNotificationStatusCommit:
+				_ = commitTxns.Append(txn)
 			default:
-				return errors.New("unexpected status")
+				return errors.New("不合法的回查状态")
 			}
 			return nil
 		})
 	}
+
 	err = eg.Wait()
 	if err != nil {
 		return err
 	}
-	if len(retryTxns) > 0 {
-		task.retry(ctx, retryTxns)
-	}
-	if len(commitTxns) > 0 {
-		task.commit(ctx, commitTxns)
-	}
-	if len(failedTxns) > 0 {
-		task.fail(ctx, failedTxns)
-	}
-	return nil
+	// 挨个处理，更新数据库状态
+	// 数据库就可以一次性执行完，规避频繁更新数据库
+	err = task.updateStatus(ctx, retryTxns, domain.SendStatusPrepare)
+	err = multierror.Append(err, task.updateStatus(ctx, failTxns, domain.SendStatusFailed))
+	// 转 PENDING，后续 Scheduler 会调度执行
+	err = multierror.Append(err, task.updateStatus(ctx, commitTxns, domain.SendStatusPending))
+	return err
 }
 
 // 校验完了
 func (task *TxCheckTask) oneBackCheck(ctx context.Context, configMap map[int64]domain.BusinessConfig, txNotification domain.TxNotification) domain.TxNotification {
-	conf, ok := configMap[txNotification.BizID]
-	if !ok {
-		// 没设置，所以不需要回查，在不需要回查的情况下，事务又很久没有提交，标记为失败
+	bizConfig, ok := configMap[txNotification.BizID]
+	if !ok || bizConfig.TxnConfig == nil {
+		// 没设置，不需要回查
 		txNotification.NextCheckTime = 0
 		txNotification.Status = domain.TxNotificationStatusFail
 		return txNotification
 	}
-	res, err := task.getCheckBackRes(ctx, *conf.TxnConfig, txNotification)
-	// 都检查了一次无论成功与否
+
+	txConfig := bizConfig.TxnConfig
+	// 发起回查
+	res, err := task.getCheckBackRes(ctx, *txConfig, txNotification)
+	// 执行了一次回查，要 +1
 	txNotification.CheckCount++
+	// 回查失败了
 	if err != nil || res == unknownStatus {
-		// 进行重试
-		txNotification.SetNextCheckBackTimeAndStatus(conf.TxnConfig)
+		// 重新计算下一次的回查时间
+		txNotification.SetNextCheckBackTimeAndStatus(txConfig)
 		return txNotification
 	}
-
-	if res == cancelStatus {
-		txNotification.Status = domain.TxNotificationStatusCancel
+	switch res {
+	case cancelStatus:
 		txNotification.NextCheckTime = 0
-	}
-	if res == committedStatus {
+		txNotification.Status = domain.TxNotificationStatusCancel
+	case committedStatus:
 		txNotification.NextCheckTime = 0
 		txNotification.Status = domain.TxNotificationStatusCommit
 	}
@@ -158,53 +153,22 @@ func (task *TxCheckTask) getCheckBackRes(ctx context.Context, conf domain.TxnCon
 			}
 		}
 	}()
+	// 借助服务发现来回查
+	client := task.clients.Get(conf.ServiceName)
 
-	// 使用ego的服务发现，根据conf的servicename 来访问对应的服务使用notification-platform/api/proto/gen/tx_notification/v1下的服务
-	grpcConn, ok := task.clientMap.Load(conf.ServiceName)
-	if !ok {
-		grpcConn = egrpc.Load("").Build(egrpc.WithAddr(fmt.Sprintf("etcd:///%s", conf.ServiceName)))
-		task.clientMap.Store(conf.ServiceName, grpcConn)
-	}
-	// 创建BackCheckService的客户端
-	client := clientv1.NewTransactionCheckServiceClient(grpcConn)
-	// 准备请求参数
-	req := &clientv1.TransactionCheckServiceCheckRequest{
-		Key: txn.Key,
-	}
-
-	// 发起远程调用
+	req := &clientv1.TransactionCheckServiceCheckRequest{Key: txn.Key}
 	resp, err := client.Check(ctx, req)
 	if err != nil {
-		return 0, err
+		return unknownStatus, err
 	}
-
 	return int(resp.Status), nil
 }
 
-func (task *TxCheckTask) commit(ctx context.Context, txns []domain.TxNotification) {
-	err := task.repo.UpdateCheckStatus(ctx, txns, string(domain.SendStatusPending))
-	if err != nil {
-		task.logger.Error("更新事务表中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))
+func (task *TxCheckTask) updateStatus(ctx context.Context,
+	list *list.ConcurrentList[domain.TxNotification], status domain.SendStatus) error {
+	if list.Len() == 0 {
+		return nil
 	}
-}
-
-func (task *TxCheckTask) fail(ctx context.Context, txns []domain.TxNotification) {
-	err := task.repo.UpdateCheckStatus(ctx, txns, string(domain.SendStatusCanceled))
-	if err != nil {
-		task.logger.Error("更新事务表中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))
-	}
-}
-
-func (task *TxCheckTask) retry(ctx context.Context, txns []domain.TxNotification) {
-	err := task.repo.UpdateCheckStatus(ctx, txns, string(domain.SendStatusPrepare))
-	if err != nil {
-		task.logger.Error("更新事务表中数据失败", elog.String("tx_ids", task.taskIDs(txns)), elog.FieldErr(err))
-	}
-}
-
-func (task *TxCheckTask) taskIDs(txns []domain.TxNotification) string {
-	txids := slice.Map(txns, func(_ int, src domain.TxNotification) string {
-		return fmt.Sprintf("%d", src.TxID)
-	})
-	return strings.Join(txids, ",")
+	txns := list.AsSlice()
+	return task.repo.UpdateCheckStatus(ctx, txns, status)
 }

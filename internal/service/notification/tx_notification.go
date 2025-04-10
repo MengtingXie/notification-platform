@@ -2,13 +2,14 @@ package notification
 
 import (
 	"context"
+	clientv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
+	"gitee.com/flycash/notification-platform/internal/service/sender"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"github.com/ecodeclub/ekit/syncx"
-	"github.com/gotomicro/ego/client/egrpc"
 	"github.com/gotomicro/ego/core/elog"
 	"github.com/meoying/dlock-go"
 )
@@ -23,20 +24,22 @@ type TxNotificationService interface {
 	Cancel(ctx context.Context, bizID int64, key string) error
 }
 
-type TxNotificationServiceV1 struct {
-	repo            repository.TxNotificationRepository
-	notificationSvc Service
-	configSvc       config.BusinessConfigService
-	logger          *elog.Component
-	lock            dlock.Client
+type txNotificationService struct {
+	repo      repository.TxNotificationRepository
+	notiRepo  repository.NotificationRepository
+	configSvc config.BusinessConfigService
+	logger    *elog.Component
+	lock      dlock.Client
+	sender    sender.NotificationSender
 }
 
 func NewTxNotificationService(
 	repo repository.TxNotificationRepository,
+	notiRepo repository.NotificationRepository,
 	configSvc config.BusinessConfigService,
 	lock dlock.Client,
-) *TxNotificationServiceV1 {
-	return &TxNotificationServiceV1{
+) TxNotificationService {
+	return &txNotificationService{
 		repo:      repo,
 		configSvc: configSvc,
 		logger:    elog.DefaultLogger,
@@ -46,21 +49,21 @@ func NewTxNotificationService(
 
 const defaultBatchSize = 10
 
-func (t *TxNotificationServiceV1) StartTask(ctx context.Context) {
+func (t *txNotificationService) StartTask(ctx context.Context) {
 	task := &TxCheckTask{
-		repo:            t.repo,
-		notificationSvc: t.notificationSvc,
-		configSvc:       t.configSvc,
-		logger:          t.logger,
-		lock:            t.lock,
-		batchSize:       defaultBatchSize,
-		clientMap:       syncx.Map[string, *egrpc.Component]{},
+		repo:      t.repo,
+		configSvc: t.configSvc,
+		logger:    t.logger,
+		lock:      t.lock,
+		batchSize: defaultBatchSize,
+		clientMap: syncx.Map[string, clientv1.TransactionCheckServiceClient]{},
 	}
 	go task.Start(ctx)
 }
 
-func (t *TxNotificationServiceV1) Prepare(ctx context.Context, notification domain.Notification) (uint64, error) {
+func (t *txNotificationService) Prepare(ctx context.Context, notification domain.Notification) (uint64, error) {
 	notification.Status = domain.SendStatusPrepare
+	notification.SetSendTime()
 	txn := domain.TxNotification{
 		Notification: notification,
 		Key:          notification.Key,
@@ -78,10 +81,21 @@ func (t *TxNotificationServiceV1) Prepare(ctx context.Context, notification doma
 	return t.repo.Create(ctx, txn)
 }
 
-func (t *TxNotificationServiceV1) Commit(ctx context.Context, bizID int64, key string) error {
-	return t.repo.UpdateStatus(ctx, bizID, key, domain.TxNotificationStatusCommit.String(), string(domain.SendStatusPending))
+func (t *txNotificationService) Commit(ctx context.Context, bizID int64, key string) error {
+	err := t.repo.UpdateStatus(ctx, bizID, key, domain.TxNotificationStatusCommit, domain.SendStatusPending)
+	if err != nil {
+		return err
+	}
+	notification, err := t.notiRepo.GetByKey(ctx, bizID, key)
+	if err != nil {
+		return err
+	}
+	if notification.IsImmediate() {
+		_, err = t.sender.Send(ctx, notification)
+	}
+	return err
 }
 
-func (t *TxNotificationServiceV1) Cancel(ctx context.Context, bizID int64, key string) error {
-	return t.repo.UpdateStatus(ctx, bizID, key, domain.TxNotificationStatusCancel.String(), string(domain.SendStatusCanceled))
+func (t *txNotificationService) Cancel(ctx context.Context, bizID int64, key string) error {
+	return t.repo.UpdateStatus(ctx, bizID, key, domain.TxNotificationStatusCancel, domain.SendStatusCanceled)
 }

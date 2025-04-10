@@ -14,7 +14,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func InitTxNotificationService(configSvc config.BusinessConfigService) *notification.TxNotificationServiceV1 {
+func InitTxNotificationService(configSvc config.BusinessConfigService) *notification.txNotificationService {
 	wire.Build(
 		testioc.BaseSet,
 		dao.NewTxNotificationDAO,
@@ -22,7 +22,7 @@ func InitTxNotificationService(configSvc config.BusinessConfigService) *notifica
 		repository.NewTxNotificationRepository,
 		notification.NewTxNotificationService,
 	)
-	return &notification.TxNotificationServiceV1{}
+	return &notification.txNotificationService{}
 }
 
 func initRedisClient(rdb redis.Cmdable) dlock.Client {
