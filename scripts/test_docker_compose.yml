@@ -13,6 +13,7 @@ services:
       default:
   redis:
     image: 'redis:7.2.4-alpine'
+    command: redis-server --notify-keyspace-events AKE
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
     ports:

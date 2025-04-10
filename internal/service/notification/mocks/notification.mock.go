@@ -360,7 +360,7 @@ func (c *MockNotificationServiceGetByKeysCall) DoAndReturn(f func(context.Contex
 // UpdateStatus mocks base method.
 func (m *MockNotificationService) UpdateStatus(ctx context.Context, id uint64, status domain.SendStatus, version int) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateStatus", ctx, id, status, version)
+	ret := m.ctrl.Call(m, "CASStatus", ctx, id, status, version)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -368,7 +368,7 @@ func (m *MockNotificationService) UpdateStatus(ctx context.Context, id uint64, s
 // UpdateStatus indicates an expected call of UpdateStatus.
 func (mr *MockNotificationServiceMockRecorder) UpdateStatus(ctx, id, status, version any) *MockNotificationServiceUpdateStatusCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateStatus", reflect.TypeOf((*MockNotificationService)(nil).UpdateStatus), ctx, id, status, version)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CASStatus", reflect.TypeOf((*MockNotificationService)(nil).UpdateStatus), ctx, id, status, version)
 	return &MockNotificationServiceUpdateStatusCall{Call: call}
 }
 

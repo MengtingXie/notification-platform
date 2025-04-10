@@ -83,7 +83,6 @@ func (e SendStrategyConfig) Validate() error {
 type SendResponse struct {
 	NotificationID uint64     // 通知ID
 	Status         SendStatus // 发送状态
-	RetryCount     int8       // 重试次数
 }
 
 // BatchSendResponse 批量发送响应

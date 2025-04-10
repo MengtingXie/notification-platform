@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"gitee.com/flycash/notification-platform/internal/repository/cache"
-
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/repository/cache"
+	"gitee.com/flycash/notification-platform/internal/repository/cache/local"
+	"gitee.com/flycash/notification-platform/internal/repository/cache/redis"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
+	"github.com/gotomicro/ego/core/elog"
 )
 
 type BusinessConfigRepository interface {
@@ -18,15 +20,21 @@ type BusinessConfigRepository interface {
 }
 
 type businessConfigRepository struct {
-	dao dao.BusinessConfigDAO
+	dao        dao.BusinessConfigDAO
 	localCache cache.ConfigCache
 	redisCache cache.ConfigCache
+	logger     *elog.Component
 }
 
 // NewBusinessConfigRepository 创建业务配置仓库实例
-func NewBusinessConfigRepository(configDao dao.BusinessConfigDAO) BusinessConfigRepository {
+func NewBusinessConfigRepository(
+	configDao dao.BusinessConfigDAO,
+	localCache *local.Cache,
+	redisCache *redis.Cache) BusinessConfigRepository {
 	return &businessConfigRepository{
-		dao: configDao,
+		dao:        configDao,
+		localCache: localCache,
+		redisCache: redisCache,
 	}
 }
 
@@ -46,23 +54,63 @@ func (b *businessConfigRepository) GetByIDs(ctx context.Context, ids []int64) (m
 // GetByID 根据ID获取业务配置
 func (b *businessConfigRepository) GetByID(ctx context.Context, id int64) (domain.BusinessConfig, error) {
 	// 从数据库获取配置
+
+	cfg, localErr := b.localCache.Get(ctx, id)
+	if localErr == nil {
+		return cfg, nil
+	}
+	cfg, redisErr := b.redisCache.Get(ctx, id)
+	if redisErr == nil {
+		// 刷新本地缓存
+		lerr := b.localCache.Set(ctx, cfg)
+		if lerr != nil {
+			b.logger.Error("刷新本地缓存失败", elog.Any("err", lerr), elog.Int("bizId", int(id)))
+		}
+		return cfg, nil
+	}
+
 	c, err := b.dao.GetByID(ctx, id)
 	if err != nil {
 		return domain.BusinessConfig{}, err
 	}
+	domainConfig := b.toDomain(c)
+	// 刷新本地缓存+redis
+	lerr := b.localCache.Set(ctx, domainConfig)
+	if lerr != nil {
+		b.logger.Error("刷新本地缓存失败", elog.Any("err", lerr), elog.Int("bizId", int(id)))
+	}
+	rerr := b.redisCache.Set(ctx, domainConfig)
+	if rerr != nil {
+		b.logger.Error("刷新redis缓存失败", elog.Any("err", rerr), elog.Int("bizId", int(id)))
+	}
 	// 将DAO对象转换为领域对象
-	return b.toDomain(c), nil
+	return domainConfig, nil
 }
 
 // Delete 删除业务配置
 func (b *businessConfigRepository) Delete(ctx context.Context, id int64) error {
-	// 直接调用DAO层删除方法
-	return b.dao.Delete(ctx, id)
+	err := b.dao.Delete(ctx, id)
+	if err != nil {
+		return err
+	}
+	rerr := b.redisCache.Del(ctx, id)
+	if rerr != nil {
+		b.logger.Error("删除redis缓存失败", elog.Any("err", rerr), elog.Int("bizId", int(id)))
+	}
+	return nil
 }
 
-// SaveConfig 保存业务配置（
+// SaveConfig 保存业务配置
 func (b *businessConfigRepository) SaveConfig(ctx context.Context, config domain.BusinessConfig) error {
-	return b.dao.SaveConfig(ctx, b.toEntity(config))
+	cfg,err := b.dao.SaveConfig(ctx, b.toEntity(config))
+	if err != nil {
+		return err
+	}
+	rerr := b.redisCache.Set(ctx, b.toDomain(cfg))
+	if rerr != nil {
+		b.logger.Error("更新redis缓存失败", elog.Any("err", rerr), elog.Int("bizId", int(config.ID)))
+	}
+	return nil
 }
 
 func (b *businessConfigRepository) toDomain(daoConfig dao.BusinessConfig) domain.BusinessConfig {
@@ -83,9 +131,6 @@ func (b *businessConfigRepository) toDomain(daoConfig dao.BusinessConfig) domain
 	if daoConfig.Quota.Valid {
 		domainCfg.Quota = unmarsal[domain.QuotaConfig](daoConfig.Quota.String)
 	}
-	if daoConfig.RetryPolicy.Valid {
-		domainCfg.RetryPolicy = unmarsal[domain.RetryConfig](daoConfig.RetryPolicy.String)
-	}
 	return domainCfg
 }
 
@@ -100,9 +145,6 @@ func (b *businessConfigRepository) toEntity(config domain.BusinessConfig) dao.Bu
 	}
 	if config.ChannelConfig != nil {
 		daoConfig.ChannelConfig = marshal(config.ChannelConfig)
-	}
-	if config.RetryPolicy != nil {
-		daoConfig.RetryPolicy = marshal(config.RetryPolicy)
 	}
 	if config.TxnConfig != nil {
 		daoConfig.TxnConfig = marshal(config.TxnConfig)

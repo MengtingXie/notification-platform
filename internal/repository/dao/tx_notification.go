@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/domain"
 	"strings"
 	"time"
 
-	"gitee.com/flycash/notification-platform/internal/domain"
 	"gorm.io/gorm/clause"
 
 	"gorm.io/gorm"
@@ -48,8 +48,10 @@ func (t *TxNotification) TableName() string {
 type TxNotificationDAO interface {
 	// Create 直接保存即可
 	Create(ctx context.Context, notification TxNotification) (int64, error)
-	// Find 查找需要回查的事务通知，筛选条件是status为PREPARE，并且下一次回查时间小于当前时间
-	Find(ctx context.Context, offset, limit int) ([]TxNotification, error)
+	// FindCheckBack 查找需要回查的事务通知，筛选条件是status为PREPARE，并且下一次回查时间小于当前时间
+	FindCheckBack(ctx context.Context, offset, limit int) ([]TxNotification, error)
+	// CASStatus 变更状态 用于用户提交/取消
+	// CASStatus(ctx context.Context, txID int64, status string) error
 
 	// UpdateCheckStatus 更新回查状态用于回查任务，回查次数+1 更新下一次的回查时间戳，通知状态，utime 要求都是同一状态的
 	UpdateCheckStatus(ctx context.Context, txNotifications []TxNotification, status string) error
@@ -173,7 +175,7 @@ func (t *txNotificationDAO) Create(ctx context.Context, notification TxNotificat
 	return notification.TxID, err
 }
 
-func (t *txNotificationDAO) Find(ctx context.Context, offset, limit int) ([]TxNotification, error) {
+func (t *txNotificationDAO) FindCheckBack(ctx context.Context, offset, limit int) ([]TxNotification, error) {
 	var notifications []TxNotification
 	currentTime := time.Now().UnixMilli()
 

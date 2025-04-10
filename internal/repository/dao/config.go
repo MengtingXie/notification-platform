@@ -33,7 +33,7 @@ type BusinessConfigDAO interface {
 	GetByID(ctx context.Context, id int64) (BusinessConfig, error)
 	Delete(ctx context.Context, id int64) error
 	// SaveConfig
-	SaveConfig(ctx context.Context, config BusinessConfig) error
+	SaveConfig(ctx context.Context, config BusinessConfig) (BusinessConfig, error)
 }
 
 // Implementation of the BusinessConfigDAO interface
@@ -88,7 +88,7 @@ func (b *businessConfigDAO) Delete(ctx context.Context, id int64) error {
 }
 
 // SaveConfig 保存业务配置
-func (b *businessConfigDAO) SaveConfig(ctx context.Context, config BusinessConfig) error {
+func (b *businessConfigDAO) SaveConfig(ctx context.Context, config BusinessConfig) (BusinessConfig, error) {
 	now := time.Now().UnixMilli()
 	config.Ctime = now
 	config.Utime = now
@@ -98,11 +98,10 @@ func (b *businessConfigDAO) SaveConfig(ctx context.Context, config BusinessConfi
 		Columns:   []clause.Column{{Name: "id"}},           // 根据ID判断冲突
 		DoUpdates: clause.AssignmentColumns(updateColumns), // 只更新指定的非空列
 	}).Create(&config)
-
 	if result.Error != nil {
-		return result.Error
+		return BusinessConfig{}, result.Error
 	}
-	return nil
+	return config, nil
 }
 
 var updateColumns = []string{

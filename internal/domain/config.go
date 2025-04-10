@@ -1,5 +1,9 @@
 package domain
 
+import (
+	"gitee.com/flycash/notification-platform/internal/pkg/retry"
+)
+
 // BusinessConfig 业务配置领域对象
 type BusinessConfig struct {
 	ID            int64          // 业务标识
@@ -9,7 +13,6 @@ type BusinessConfig struct {
 	TxnConfig     *TxnConfig     // 事务配置，JSON格式
 	RateLimit     int            // 每秒最大请求数
 	Quota         *QuotaConfig   // 配额设置，JSON格式
-	RetryPolicy   *RetryConfig   // 重试策略，JSON格式
 	Ctime         int64          // 创建时间
 	Utime         int64          // 更新时间
 }
@@ -30,28 +33,10 @@ type ChannelItem struct {
 }
 
 type TxnConfig struct {
-	// 方法名
+	// 回查方法名
 	ServiceName string `json:"serviceName"`
 	// 期望事务在 initialDelay秒后完成
 	InitialDelay int `json:"initialDelay"`
-}
-
-type RetryConfig struct {
-	Type               string                    `json:"type"` // 重试策略
-	FixedInterval      *FixedIntervalConfig      `json:"fixedInterval"`
-	ExponentialBackoff *ExponentialBackoffConfig `json:"exponentialBackoff"`
-}
-
-type ExponentialBackoffConfig struct {
-	// 初始重试间隔 单位ms
-	InitialInterval int `json:"initialInterval"`
-	// 最大重试间隔 单位ms
-	MaxInterval int `json:"maxInterval"`
-	// 最大重试次数
-	MaxRetries int32 `json:"maxRetries"`
-}
-
-type FixedIntervalConfig struct {
-	MaxRetries int32 `json:"maxRetries"`
-	Interval   int   `json:"interval"`
+	// 回查的重试策略
+	RetryPolicy *retry.Config `json:"retryPolicy"`
 }

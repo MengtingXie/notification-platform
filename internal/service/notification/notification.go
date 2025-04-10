@@ -23,6 +23,9 @@ type Service interface {
 	// BatchCreate 批量创建通知记录
 	BatchCreate(ctx context.Context, notifications []domain.Notification) ([]domain.Notification, error)
 
+	// FindReadyNotifications 准备好调度发送的通知
+	FindReadyNotifications(ctx context.Context, offset, limit int) ([]domain.Notification, error)
+
 	// GetByID 根据ID获取通知记录
 	GetByID(ctx context.Context, id uint64) (domain.Notification, error)
 
@@ -35,7 +38,7 @@ type Service interface {
 	GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]domain.Notification, error)
 
 	// UpdateStatus 更新通知状态
-	UpdateStatus(ctx context.Context, id uint64, status domain.SendStatus, version int) error
+	UpdateStatus(ctx context.Context, notification domain.Notification) error
 
 	// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
 	BatchUpdateStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error
@@ -55,6 +58,10 @@ func NewNotificationService(repo repository.NotificationRepository, idGenerator 
 		repo:        repo,
 		idGenerator: idGenerator,
 	}
+}
+
+func (s *notificationService) FindReadyNotifications(ctx context.Context, offset, limit int) ([]domain.Notification, error) {
+	return s.repo.FindReadyNotifications(ctx, offset, limit)
 }
 
 // Create 创建通知
@@ -125,7 +132,7 @@ func (s *notificationService) BatchCreate(ctx context.Context, notifications []d
 func (s *notificationService) GetByID(ctx context.Context, id uint64) (domain.Notification, error) {
 	notification, err := s.repo.GetByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, repository.ErrNotificationNotFound) {
+		if errors.Is(err, errs.ErrNotificationNotFound) {
 			return domain.Notification{}, fmt.Errorf("%w: id=%d", errs.ErrNotificationNotFound, id)
 		}
 		return domain.Notification{}, fmt.Errorf("获取通知失败: %w", err)
@@ -160,8 +167,8 @@ func (s *notificationService) GetByKeys(ctx context.Context, bizID int64, keys .
 }
 
 // UpdateStatus 更新通知状态
-func (s *notificationService) UpdateStatus(ctx context.Context, id uint64, status domain.SendStatus, version int) error {
-	err := s.repo.UpdateStatus(ctx, id, status, version)
+func (s *notificationService) UpdateStatus(ctx context.Context, notification domain.Notification) error {
+	err := s.repo.CASStatus(ctx, notification)
 	if err != nil {
 		return fmt.Errorf("更新通知状态失败: %w", err)
 	}

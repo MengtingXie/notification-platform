@@ -36,12 +36,12 @@ type ExponentialBackoffRetryStrategy struct {
 	maxIntervalReached atomic.Value
 }
 
-func NewExponentialBackoffRetryStrategy(initialInterval, maxInterval time.Duration, maxRetries int32) (*ExponentialBackoffRetryStrategy, error) {
+func NewExponentialBackoffRetryStrategy(initialInterval, maxInterval time.Duration, maxRetries int32) *ExponentialBackoffRetryStrategy {
 	return &ExponentialBackoffRetryStrategy{
 		initialInterval: initialInterval,
 		maxInterval:     maxInterval,
 		maxRetries:      maxRetries,
-	}, nil
+	}
 }
 
 func (s *ExponentialBackoffRetryStrategy) Report(err error) Strategy {

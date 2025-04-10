@@ -2,13 +2,19 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"gitee.com/flycash/notification-platform/internal/pkg/retry"
+	"gitee.com/flycash/notification-platform/internal/repository/dao"
+	"github.com/ego-component/egorm"
+	ca "github.com/patrickmn/go-cache"
+	"github.com/redis/go-redis/v9"
 	"testing"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/repository"
-	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/config"
+	configIoc "gitee.com/flycash/notification-platform/internal/test/integration/ioc/config"
 	"gitee.com/flycash/notification-platform/internal/test/ioc"
 
 	"github.com/stretchr/testify/require"
@@ -19,17 +25,20 @@ import (
 
 type BusinessConfigTestSuite struct {
 	suite.Suite
-	svc config.BusinessConfigService
+	localCache *ca.Cache
+	redisCache *redis.Client
+	db         *egorm.Component
+	svc        config.BusinessConfigService
 }
 
 func (s *BusinessConfigTestSuite) SetupSuite() {
-	db := ioc.InitDB()
-	err := dao.InitTables(db)
+	localCache := ca.New(10*time.Minute, 10*time.Minute)
+	s.svc = configIoc.InitConfigService(localCache)
+	s.localCache = localCache
+	s.redisCache = ioc.InitRedisClient()
+	s.db = ioc.InitDB()
+	err := dao.InitTables(s.db)
 	require.NoError(s.T(), err)
-	configDao := dao.NewBusinessConfigDAO(db)
-	repo := repository.NewBusinessConfigRepository(configDao)
-	svc := config.NewBusinessConfigService(repo)
-	s.svc = svc
 }
 
 func (s *BusinessConfigTestSuite) createTestConfig() domain.BusinessConfig {
@@ -54,19 +63,19 @@ func (s *BusinessConfigTestSuite) createTestConfig() domain.BusinessConfig {
 		TxnConfig: &domain.TxnConfig{
 			ServiceName:  "serviceName",
 			InitialDelay: 10,
+			RetryPolicy: &retry.Config{
+				Type: "fixed",
+				FixedInterval: &retry.FixedIntervalConfig{
+					Interval:   10,
+					MaxRetries: 3,
+				},
+			},
 		},
 		RateLimit: 2000,
 		Quota: &domain.QuotaConfig{
 			Monthly: domain.MonthlyConfig{
 				SMS:   100,
 				EMAIL: 100,
-			},
-		},
-		RetryPolicy: &domain.RetryConfig{
-			Type: "fixed",
-			FixedInterval: &domain.FixedIntervalConfig{
-				Interval:   10,
-				MaxRetries: 3,
 			},
 		},
 	}
@@ -95,20 +104,19 @@ func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig
 			TxnConfig: &domain.TxnConfig{
 				ServiceName:  "serviceName",
 				InitialDelay: 10,
+				RetryPolicy: &retry.Config{
+					Type: "fixed",
+					FixedInterval: &retry.FixedIntervalConfig{
+						Interval:   10,
+						MaxRetries: 3,
+					},
+				},
 			},
 			RateLimit: 2000,
 			Quota: &domain.QuotaConfig{
 				Monthly: domain.MonthlyConfig{
 					SMS:   100,
 					EMAIL: 100,
-				},
-			},
-
-			RetryPolicy: &domain.RetryConfig{
-				Type: "fixed",
-				FixedInterval: &domain.FixedIntervalConfig{
-					Interval:   10,
-					MaxRetries: 3,
 				},
 			},
 		},
@@ -133,20 +141,19 @@ func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig
 			TxnConfig: &domain.TxnConfig{
 				ServiceName:  "serviceName",
 				InitialDelay: 10,
+				RetryPolicy: &retry.Config{
+					Type: "fixed",
+					FixedInterval: &retry.FixedIntervalConfig{
+						Interval:   10,
+						MaxRetries: 3,
+					},
+				},
 			},
 			RateLimit: 2000,
 			Quota: &domain.QuotaConfig{
 				Monthly: domain.MonthlyConfig{
 					SMS:   100,
 					EMAIL: 100,
-				},
-			},
-
-			RetryPolicy: &domain.RetryConfig{
-				Type: "fixed",
-				FixedInterval: &domain.FixedIntervalConfig{
-					Interval:   10,
-					MaxRetries: 3,
 				},
 			},
 		},
@@ -171,20 +178,19 @@ func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig
 			TxnConfig: &domain.TxnConfig{
 				ServiceName:  "serviceName",
 				InitialDelay: 10,
+				RetryPolicy: &retry.Config{
+					Type: "fixed",
+					FixedInterval: &retry.FixedIntervalConfig{
+						Interval:   10,
+						MaxRetries: 3,
+					},
+				},
 			},
 			RateLimit: 2000,
 			Quota: &domain.QuotaConfig{
 				Monthly: domain.MonthlyConfig{
 					SMS:   100,
 					EMAIL: 100,
-				},
-			},
-
-			RetryPolicy: &domain.RetryConfig{
-				Type: "fixed",
-				FixedInterval: &domain.FixedIntervalConfig{
-					Interval:   10,
-					MaxRetries: 3,
 				},
 			},
 		},
@@ -209,20 +215,19 @@ func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig
 			TxnConfig: &domain.TxnConfig{
 				ServiceName:  "serviceName",
 				InitialDelay: 10,
+				RetryPolicy: &retry.Config{
+					Type: "fixed",
+					FixedInterval: &retry.FixedIntervalConfig{
+						Interval:   10,
+						MaxRetries: 3,
+					},
+				},
 			},
 			RateLimit: 2000,
 			Quota: &domain.QuotaConfig{
 				Monthly: domain.MonthlyConfig{
 					SMS:   100,
 					EMAIL: 100,
-				},
-			},
-
-			RetryPolicy: &domain.RetryConfig{
-				Type: "fixed",
-				FixedInterval: &domain.FixedIntervalConfig{
-					Interval:   10,
-					MaxRetries: 3,
 				},
 			},
 		},
@@ -236,6 +241,10 @@ func (s *BusinessConfigTestSuite) createConfigAndGetID(t *testing.T) int64 {
 	// 创建配置
 	err := s.svc.SaveConfig(ctx, testConfig)
 	assert.NoError(t, err, "创建业务配置应成功")
+	key := fmt.Sprintf("config:%d", testConfig.ID)
+	err = s.redisCache.Del(ctx, key).Err()
+	require.NoError(t, err)
+	s.localCache.Delete(key)
 	return 5
 }
 
@@ -255,14 +264,13 @@ func (s *BusinessConfigTestSuite) TestServiceSaveConfig() {
 			before: func(t *testing.T) {},
 			req:    s.createTestConfig(),
 			after: func(t *testing.T) {
-				// 验证创建结果
-				config, err := s.svc.GetByID(ctx, 5)
-				assert.NoError(t, err, "查询单个业务配置应成功")
-				assertBusinessConfig(t, s.createTestConfig(), config)
-
+				s.checkBusinessConfig(t, s.createTestConfig())
 				// 清理：删除创建的配置
-				err = s.svc.Delete(ctx, 5)
+				err := s.svc.Delete(ctx, 5)
 				assert.NoError(t, err, "删除业务配置应成功")
+				err = s.redisCache.Del(context.Background(), "config:5").Err()
+				assert.NoError(t, err, "删除业务配置应成功")
+				s.localCache.Delete("config:5")
 			},
 		},
 		{
@@ -274,84 +282,86 @@ func (s *BusinessConfigTestSuite) TestServiceSaveConfig() {
 			},
 			req: domain.BusinessConfig{
 				ID:        5,
-				OwnerID:   1002,
+				OwnerID:   1003,
 				OwnerType: "person",
 				ChannelConfig: &domain.ChannelConfig{
 					Channels: []domain.ChannelItem{
 						{
 							Channel:  "SMS",
-							Priority: 1,
+							Priority: 2,
 							Enabled:  true,
 						},
 						{
 							Channel:  "EMAIL",
-							Priority: 2,
+							Priority: 3,
 							Enabled:  true,
 						},
 					},
 				},
 				TxnConfig: &domain.TxnConfig{
-					ServiceName:  "serviceName",
-					InitialDelay: 10,
-				},
-				RateLimit: 3000,
-				Quota: &domain.QuotaConfig{
-					Monthly: domain.MonthlyConfig{
-						SMS:   100,
-						EMAIL: 100,
+					ServiceName:  "newServiceName",
+					InitialDelay: 20,
+					RetryPolicy: &retry.Config{
+						Type: "fixed",
+						FixedInterval: &retry.FixedIntervalConfig{
+							Interval:   40,
+							MaxRetries: 4,
+						},
 					},
 				},
-				RetryPolicy: &domain.RetryConfig{
-					Type: "fixed",
-					FixedInterval: &domain.FixedIntervalConfig{
-						Interval:   10,
-						MaxRetries: 3,
+				RateLimit: 6000,
+				Quota: &domain.QuotaConfig{
+					Monthly: domain.MonthlyConfig{
+						SMS:   200,
+						EMAIL: 200,
 					},
 				},
 			},
 			after: func(t *testing.T) {
-				config, err := s.svc.GetByID(ctx, 5)
-				assert.NoError(t, err)
-				assertBusinessConfig(t, domain.BusinessConfig{
+				s.checkBusinessConfig(t, domain.BusinessConfig{
 					ID:        5,
-					OwnerID:   1002,
+					OwnerID:   1003,
 					OwnerType: "person",
 					ChannelConfig: &domain.ChannelConfig{
 						Channels: []domain.ChannelItem{
 							{
 								Channel:  "SMS",
-								Priority: 1,
+								Priority: 2,
 								Enabled:  true,
 							},
 							{
 								Channel:  "EMAIL",
-								Priority: 2,
+								Priority: 3,
 								Enabled:  true,
 							},
 						},
 					},
 					TxnConfig: &domain.TxnConfig{
-						ServiceName:  "serviceName",
-						InitialDelay: 10,
+						ServiceName:  "newServiceName",
+						InitialDelay: 20,
+						RetryPolicy: &retry.Config{
+							Type: "fixed",
+							FixedInterval: &retry.FixedIntervalConfig{
+								Interval:   40,
+								MaxRetries: 4,
+							},
+						},
 					},
-					RateLimit: 3000,
+					RateLimit: 6000,
 					Quota: &domain.QuotaConfig{
 						Monthly: domain.MonthlyConfig{
-							SMS:   100,
-							EMAIL: 100,
+							SMS:   200,
+							EMAIL: 200,
 						},
 					},
-					RetryPolicy: &domain.RetryConfig{
-						Type: "fixed",
-						FixedInterval: &domain.FixedIntervalConfig{
-							Interval:   10,
-							MaxRetries: 3,
-						},
-					},
-				}, config)
+				})
+
 				// 清理：删除创建的配置
-				err = s.svc.Delete(ctx, 5)
+				err := s.svc.Delete(ctx, 5)
 				assert.NoError(t, err, "删除业务配置应成功")
+				err = s.redisCache.Del(context.Background(), "config:5").Err()
+				assert.NoError(t, err, "删除业务配置应成功")
+				s.localCache.Delete("config:5")
 			},
 		},
 		{
@@ -373,6 +383,7 @@ func (s *BusinessConfigTestSuite) TestServiceSaveConfig() {
 			if err != nil {
 				return
 			}
+			time.Sleep(100 * time.Millisecond)
 			tc.after(t)
 		})
 	}
@@ -407,14 +418,18 @@ func (s *BusinessConfigTestSuite) TestServiceGetByID() {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			id := tc.before(t)
-			config, err := s.svc.GetByID(ctx, id)
+			conf, err := s.svc.GetByID(ctx, id)
 			require.Equal(t, tc.wantErr, err)
 			if err != nil {
 				return
 			}
-			assertBusinessConfig(t, tc.wantConfig, config)
+			assertBusinessConfig(t, tc.wantConfig, conf)
+			s.checkBusinessConfig(t, conf)
 			err = s.svc.Delete(ctx, 5)
 			assert.NoError(t, err, "删除业务配置应成功")
+			err = s.redisCache.Del(context.Background(), "config:5").Err()
+			assert.NoError(t, err, "删除业务配置应成功")
+			s.localCache.Delete("config:5")
 		})
 	}
 }
@@ -466,6 +481,11 @@ func (s *BusinessConfigTestSuite) TestServiceDelete() {
 			after: func(t *testing.T) {
 				_, err := s.svc.GetByID(context.Background(), 5)
 				assert.Equal(t, config.ErrConfigNotFound, err, "应返回配置不存在错误")
+
+				_, ok := s.localCache.Get("config:5")
+				require.False(t, ok)
+				res := s.redisCache.Get(context.Background(), "config:5")
+				assert.Equal(t, redis.Nil, res.Err())
 			},
 		},
 	}
@@ -480,6 +500,7 @@ func (s *BusinessConfigTestSuite) TestServiceDelete() {
 			if err != nil {
 				return
 			}
+			time.Sleep(100 * time.Millisecond)
 			tc.after(t)
 		})
 	}
@@ -493,6 +514,58 @@ func assertBusinessConfig(t *testing.T, wantConfig domain.BusinessConfig, actual
 	require.True(t, actualConfig.Ctime > 0)
 	require.True(t, actualConfig.Utime > 0)
 	actualConfig.Ctime = 0
+	wantConfig.Ctime = 0
 	actualConfig.Utime = 0
+	wantConfig.Utime = 0
 	assert.Equal(t, wantConfig, actualConfig)
+}
+
+func (s *BusinessConfigTestSuite) checkBusinessConfig(t *testing.T, wantConfig domain.BusinessConfig) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var cfgDao dao.BusinessConfig
+	err := s.db.WithContext(ctx).Where("id = ?", wantConfig.ID).First(&cfgDao).Error
+	assert.NoError(t, err)
+	conf := s.toDomain(cfgDao)
+
+	key := fmt.Sprintf("config:%d", wantConfig.ID)
+	v, ok := s.localCache.Get(key)
+	require.True(t, ok)
+	assertBusinessConfig(t, conf, v.(domain.BusinessConfig))
+
+	res := s.redisCache.Get(context.Background(), key)
+	require.NoError(t, res.Err())
+	var redisConf domain.BusinessConfig
+	configStr := res.Val()
+	err = json.Unmarshal([]byte(configStr), &redisConf)
+	require.NoError(t, res.Err())
+	assertBusinessConfig(t, conf, redisConf)
+
+}
+
+func (s *BusinessConfigTestSuite) toDomain(daoConfig dao.BusinessConfig) domain.BusinessConfig {
+	domainCfg := domain.BusinessConfig{
+		ID:        daoConfig.ID,
+		OwnerID:   daoConfig.OwnerID,
+		OwnerType: daoConfig.OwnerType,
+		RateLimit: daoConfig.RateLimit,
+		Ctime:     daoConfig.Ctime,
+		Utime:     daoConfig.Utime,
+	}
+	if daoConfig.ChannelConfig.Valid {
+		domainCfg.ChannelConfig = unmarsal[domain.ChannelConfig](daoConfig.ChannelConfig.String)
+	}
+	if daoConfig.TxnConfig.Valid {
+		domainCfg.TxnConfig = unmarsal[domain.TxnConfig](daoConfig.TxnConfig.String)
+	}
+	if daoConfig.Quota.Valid {
+		domainCfg.Quota = unmarsal[domain.QuotaConfig](daoConfig.Quota.String)
+	}
+	return domainCfg
+}
+
+func unmarsal[T any](v string) *T {
+	var t T
+	_ = json.Unmarshal([]byte(v), &t)
+	return &t
 }

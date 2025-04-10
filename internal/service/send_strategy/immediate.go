@@ -37,19 +37,16 @@ func (s *ImmediateSendStrategy) Send(ctx context.Context, notification domain.No
 	}
 
 	// 非唯一索引冲突直接返回错误
-	if !errors.Is(err, repository.ErrNotificationDuplicate) {
+	if !errors.Is(err, errs.ErrNotificationDuplicate) {
 		return domain.SendResponse{}, fmt.Errorf("创建通知失败: %w", err)
 	}
 
 	// 唯一索引冲突表示业务方重试
-	notifications, err := s.repo.GetByKeys(ctx, created.BizID, created.Key)
+	found, err := s.repo.GetByKey(ctx, created.BizID, created.Key)
 	if err != nil {
 		return domain.SendResponse{}, fmt.Errorf("获取通知失败: %w", err)
 	}
 
-	// 已经发送成功了
-	const first = 0
-	found := notifications[first]
 	if found.Status == domain.SendStatusSucceeded {
 		return domain.SendResponse{
 			NotificationID: found.ID,
@@ -57,20 +54,18 @@ func (s *ImmediateSendStrategy) Send(ctx context.Context, notification domain.No
 		}, nil
 	}
 
-	// 更新通知状态为PENDING同时获取乐观锁（版本号）
-	oldStatus := found.Status
-	found.Status = domain.SendStatusPending
-	err = s.repo.UpdateStatus(ctx, found.ID, found.Status, found.Version)
+	if found.Status == domain.SendStatusSending {
+		return domain.SendResponse{}, fmt.Errorf("发送失败 %w", errs.ErrSendNotificationFailed)
+	}
+
+	// 更新通知状态为SENDING同时获取乐观锁（版本号）
+	found.Status = domain.SendStatusSending
+	err = s.repo.CASStatus(ctx, found)
 	if err != nil {
-		s.logger.Warn("更新通知状态失败", elog.FieldErr(err))
-		return domain.SendResponse{
-			NotificationID: found.ID,
-			Status:         oldStatus,
-		}, nil
+		return domain.SendResponse{}, fmt.Errorf("并发竞争失败: %w", err)
 
 	}
 	found.Version++
-
 	// 再次立即发送
 	return s.sender.Send(ctx, found)
 }

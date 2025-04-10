@@ -2,17 +2,13 @@ package repository
 
 import (
 	"context"
-	"errors"
-
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 )
 
-var ErrUpdateStatusFailed = errors.New("没有更新")
-
 type TxNotificationRepository interface {
 	Create(ctx context.Context, notification domain.TxNotification) (uint64, error)
-	Find(ctx context.Context, offset, limit int) ([]domain.TxNotification, error)
+	FindCheckBack(ctx context.Context, offset, limit int) ([]domain.TxNotification, error)
 	UpdateStatus(ctx context.Context, bizID int64, key, status, notificationStatus string) error
 	UpdateCheckStatus(ctx context.Context, txNotifications []domain.TxNotification, notificationStatus string) error
 }
@@ -39,14 +35,34 @@ func (t *txNotificationRepo) First(ctx context.Context, txID int64) (domain.TxNo
 func (t *txNotificationRepo) Create(ctx context.Context, txn domain.TxNotification) (uint64, error) {
 	// 转换领域模型到DAO对象
 	txnEntity := t.toDao(txn)
-	notificationEntity := toNotificationEntity(txn.Notification)
+	notificationEntity := t.toEntity(txn.Notification)
 	// 调用DAO层创建记录
 	return t.txdao.Prepare(ctx, txnEntity, notificationEntity)
 }
 
-func (t *txNotificationRepo) Find(ctx context.Context, offset, limit int) ([]domain.TxNotification, error) {
+// toEntity 将领域对象转换为DAO实体
+func (t *txNotificationRepo) toEntity(notification domain.Notification) dao.Notification {
+	templateParams, _ := notification.MarshalTemplateParams()
+	receivers, _ := notification.MarshalReceivers()
+	return dao.Notification{
+		ID:                notification.ID,
+		BizID:             notification.BizID,
+		Key:               notification.Key,
+		Receivers:         receivers,
+		Channel:           string(notification.Channel),
+		TemplateID:        notification.Template.ID,
+		TemplateVersionID: notification.Template.VersionID,
+		TemplateParams:    templateParams,
+		Status:            string(notification.Status),
+		ScheduledSTime:    notification.ScheduledSTime.UnixMilli(),
+		ScheduledETime:    notification.ScheduledETime.UnixMilli(),
+		Version:           notification.Version,
+	}
+}
+
+func (t *txNotificationRepo) FindCheckBack(ctx context.Context, offset, limit int) ([]domain.TxNotification, error) {
 	// 调用DAO层查询记录
-	daoNotifications, err := t.txdao.Find(ctx, offset, limit)
+	daoNotifications, err := t.txdao.FindCheckBack(ctx, offset, limit)
 	if err != nil {
 		return nil, err
 	}

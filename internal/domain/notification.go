@@ -17,6 +17,7 @@ const (
 	SendStatusPrepare   SendStatus = "PREPARE"   // 准备中
 	SendStatusCanceled  SendStatus = "CANCELED"  // 已取消
 	SendStatusPending   SendStatus = "PENDING"   // 待发送
+	SendStatusSending   SendStatus = "SENDING"   // 待发送
 	SendStatusSucceeded SendStatus = "SUCCEEDED" // 发送成功
 	SendStatusFailed    SendStatus = "FAILED"    // 发送失败
 )
@@ -36,7 +37,6 @@ type Notification struct {
 	Channel            Channel    // 发送渠道
 	Template           Template   // 关联的模版
 	Status             SendStatus // 发送状态
-	RetryCount         int8       // 当前重试次数
 	ScheduledSTime     time.Time  // 计划发送开始时间
 	ScheduledETime     time.Time  // 计划发送结束时间
 	Version            int        // 版本号

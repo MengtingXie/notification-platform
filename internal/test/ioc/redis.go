@@ -27,6 +27,12 @@ func InitRedis() redis.Cmdable {
 	if rdb != nil {
 		return rdb
 	}
+	return InitRedisClient()
+}
+var redisClient *redis.Client
+
+
+func InitRedisClient()*redis.Client{
 	return redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 	})

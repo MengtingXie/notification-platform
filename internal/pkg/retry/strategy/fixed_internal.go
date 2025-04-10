@@ -17,8 +17,6 @@ package strategy
 import (
 	"sync/atomic"
 	"time"
-
-	"gitee.com/flycash/notification-platform/internal/pkg/retry/strategy/errs"
 )
 
 var _ Strategy = (*FixedIntervalRetryStrategy)(nil)
@@ -30,14 +28,11 @@ type FixedIntervalRetryStrategy struct {
 	retries    int32         // 当前重试次数
 }
 
-func NewFixedIntervalRetryStrategy(interval time.Duration, maxRetries int32) (*FixedIntervalRetryStrategy, error) {
-	if interval <= 0 {
-		return nil, errs.NewErrInvalidIntervalValue(interval)
-	}
+func NewFixedIntervalRetryStrategy(interval time.Duration, maxRetries int32) *FixedIntervalRetryStrategy {
 	return &FixedIntervalRetryStrategy{
 		maxRetries: maxRetries,
 		interval:   interval,
-	}, nil
+	}
 }
 
 func (s *FixedIntervalRetryStrategy) NextWithRetries(retries int32) (time.Duration, bool) {

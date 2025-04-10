@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 	"strings"
 	"testing"
 	"time"
@@ -64,7 +65,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 						"key": "value",
 					},
 				},
-				RetryCount:     9,
 				ScheduledETime: time.UnixMilli(1754118663000),
 				ScheduledSTime: time.UnixMilli(1744118663000),
 			},
@@ -77,12 +77,12 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 						TxnConfig: &domain.TxnConfig{
 							ServiceName:  "order.notification.callback.service",
 							InitialDelay: 10,
-						},
-						RetryPolicy: &domain.RetryConfig{
-							Type: "fixed",
-							FixedInterval: &domain.FixedIntervalConfig{
-								Interval:   30000,
-								MaxRetries: 3,
+							RetryPolicy: &retry.Config{
+								Type: "fixed",
+								FixedInterval: &retry.FixedIntervalConfig{
+									Interval:   30000,
+									MaxRetries: 3,
+								},
 							},
 						},
 					}, nil)
@@ -130,7 +130,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 					TemplateParams:    `{"key":"value"}`,
 					ScheduledSTime:    1744118663000,
 					ScheduledETime:    1754118663000,
-					RetryCount:        9,
 					Version:           1,
 				}, actualNotification)
 			},
@@ -149,7 +148,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 						"key": "value",
 					},
 				},
-				RetryCount:     9,
 				ScheduledETime: time.UnixMilli(1754118663000),
 				ScheduledSTime: time.UnixMilli(1744118663000),
 			},
@@ -199,7 +197,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 					TemplateParams:    `{"key":"value"}`,
 					ScheduledSTime:    1744118663000,
 					ScheduledETime:    1754118663000,
-					RetryCount:        9,
 					Version:           1,
 				}, actualNotification)
 			},
@@ -537,12 +534,12 @@ func (s *TxNotificationServiceTestSuite) mockConfigMap() map[int64]domain.Busine
 			TxnConfig: &domain.TxnConfig{
 				ServiceName:  "order.notification.callback.service",
 				InitialDelay: 10,
-			},
-			RetryPolicy: &domain.RetryConfig{
-				Type: "fixed",
-				FixedInterval: &domain.FixedIntervalConfig{
-					Interval:   30000,
-					MaxRetries: 3,
+				RetryPolicy: &retry.Config{
+					Type: "fixed",
+					FixedInterval: &retry.FixedIntervalConfig{
+						Interval:   30000,
+						MaxRetries: 3,
+					},
 				},
 			},
 		},
@@ -550,12 +547,12 @@ func (s *TxNotificationServiceTestSuite) mockConfigMap() map[int64]domain.Busine
 			TxnConfig: &domain.TxnConfig{
 				ServiceName:  "order.notification.callback.service",
 				InitialDelay: 10,
-			},
-			RetryPolicy: &domain.RetryConfig{
-				Type: "fixed",
-				FixedInterval: &domain.FixedIntervalConfig{
-					Interval:   10000,
-					MaxRetries: 2,
+				RetryPolicy: &retry.Config{
+					Type: "fixed",
+					FixedInterval: &retry.FixedIntervalConfig{
+						Interval:   10000,
+						MaxRetries: 2,
+					},
 				},
 			},
 		},
