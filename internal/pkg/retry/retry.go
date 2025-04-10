@@ -2,8 +2,9 @@ package retry
 
 import (
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/pkg/retry/strategy"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/pkg/retry/strategy"
 )
 
 // NewRetry 当配置不对的时候，会返回默认的重试策略

@@ -19,17 +19,29 @@ import (
 
 // Injectors from wire.go:
 
-func InitTxNotificationService(configSvc config.BusinessConfigService) *notification.TxNotificationServiceV1 {
+func InitTxNotificationService(configSvc config.BusinessConfigService) *App {
 	v := ioc.InitDB()
 	txNotificationDAO := dao.NewTxNotificationDAO(v)
 	txNotificationRepository := repository.NewTxNotificationRepository(txNotificationDAO)
+	notificationDAO := dao.NewNotificationDAO(v)
+	notificationRepository := repository.NewNotificationRepository(notificationDAO)
 	cmdable := ioc.InitRedis()
 	client := initRedisClient(cmdable)
-	txNotificationServiceV1 := notification.NewTxNotificationService(txNotificationRepository, configSvc, client)
-	return txNotificationServiceV1
+	txNotificationService := notification.NewTxNotificationService(txNotificationRepository, configSvc, notificationRepository, client)
+	txCheckTask := notification.NewTask(txNotificationRepository, configSvc, client)
+	app := &App{
+		Svc:  txNotificationService,
+		Task: txCheckTask,
+	}
+	return app
 }
 
 // wire.go:
+
+type App struct {
+	Svc  notification.TxNotificationService
+	Task *notification.TxCheckTask
+}
 
 func initRedisClient(rdb redis.Cmdable) dlock.Client {
 	return redis2.NewClient(rdb)

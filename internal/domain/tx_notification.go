@@ -1,8 +1,9 @@
 package domain
 
 import (
-	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 )
 
 type TxNotification struct {

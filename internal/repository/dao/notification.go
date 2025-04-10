@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/errs"
-	"time"
 
 	"github.com/ego-component/egorm"
 	"github.com/go-sql-driver/mysql"
@@ -235,7 +236,7 @@ func (d *notificationDAO) GetByBizID(ctx context.Context, bizID int64) ([]Notifi
 
 func (d *notificationDAO) GetByKey(ctx context.Context, bizID int64, key string) (Notification, error) {
 	var not Notification
-	err := d.db.WithContext(ctx).Where("biz_id = ? AND `key` = ?", bizID, key).First(not).Error
+	err := d.db.WithContext(ctx).Where("biz_id = ? AND `key` = ?", bizID, key).First(&not).Error
 	if err != nil {
 		return Notification{}, fmt.Errorf("查询通知列表失败:bizID: %d, key %s %w", bizID, key, err)
 	}

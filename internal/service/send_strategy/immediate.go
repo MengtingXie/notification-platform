@@ -63,7 +63,6 @@ func (s *ImmediateSendStrategy) Send(ctx context.Context, notification domain.No
 	err = s.repo.CASStatus(ctx, found)
 	if err != nil {
 		return domain.SendResponse{}, fmt.Errorf("并发竞争失败: %w", err)
-
 	}
 	found.Version++
 	// 再次立即发送

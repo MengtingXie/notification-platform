@@ -45,7 +45,6 @@ func NewSender(
 
 // Send 单条发送通知
 func (d *sender) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
-
 	resp := domain.SendResponse{
 		NotificationID: notification.ID,
 	}

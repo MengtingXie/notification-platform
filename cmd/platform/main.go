@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
 
@@ -46,15 +47,15 @@ func initSMSProviders(
 	providers := make([]provider.Provider, 0, len(entities))
 
 	for i := range entities {
-		var client client.Client
+		var c client.Client
 		var err1 error
 		if entities[i].Name == "ali" {
-			client, err1 = client.NewAliyunSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret)
+			c, err1 = client.NewAliyunSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret)
 			if err1 != nil {
 				return nil, err
 			}
 		} else if entities[i].Name == "tencent" {
-			client, err1 = client.NewTencentCloudSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret, entities[i].APPID)
+			c, err1 = client.NewTencentCloudSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret, entities[i].APPID)
 			if err1 != nil {
 				return nil, err
 			}
@@ -62,7 +63,7 @@ func initSMSProviders(
 		providers = append(providers, sms.NewSMSProvider(
 			entities[i].Name,
 			templateSvc,
-			client,
+			c,
 		))
 	}
 	return providers, nil

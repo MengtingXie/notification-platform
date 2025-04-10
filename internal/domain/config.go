@@ -15,6 +15,7 @@ type BusinessConfig struct {
 	Quota         *QuotaConfig   // 配额设置，JSON格式
 	Ctime         int64          // 创建时间
 	Utime         int64          // 更新时间
+	RetryPolicy   *retry.Config
 }
 type QuotaConfig struct {
 	Monthly MonthlyConfig `json:"monthly"`

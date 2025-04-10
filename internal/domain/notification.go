@@ -22,6 +22,10 @@ const (
 	SendStatusFailed    SendStatus = "FAILED"    // 发送失败
 )
 
+func (s SendStatus) String() string {
+	return string(s)
+}
+
 type Template struct {
 	ID        int64             // 模板ID
 	VersionID int64             // 版本ID

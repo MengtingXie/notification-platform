@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/domain"
 	"strings"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/domain"
 
 	"gorm.io/gorm/clause"
 
@@ -54,7 +55,7 @@ type TxNotificationDAO interface {
 	// CASStatus(ctx context.Context, txID int64, status string) error
 
 	// UpdateCheckStatus 更新回查状态用于回查任务，回查次数+1 更新下一次的回查时间戳，通知状态，utime 要求都是同一状态的
-	UpdateCheckStatus(ctx context.Context, txNotifications []TxNotification, status string) error
+	UpdateCheckStatus(ctx context.Context, txNotifications []TxNotification, status domain.SendStatus) error
 	// First 通过事务id查找对应的事务
 	First(ctx context.Context, txID int64) (TxNotification, error)
 	// BatchGetTxNotification 批量获取事务消息
@@ -65,19 +66,19 @@ type TxNotificationDAO interface {
 
 	Prepare(ctx context.Context, txNotification TxNotification, notification Notification) (uint64, error)
 	// UpdateStatus 提供给用户使用
-	UpdateStatus(ctx context.Context, bizID int64, key string, status string, notificationStatus string) error
+	UpdateStatus(ctx context.Context, bizID int64, key string, status domain.TxNotificationStatus, notificationStatus domain.SendStatus) error
 }
 
 type txNotificationDAO struct {
 	db *egorm.Component
 }
 
-func (t *txNotificationDAO) UpdateStatus(ctx context.Context, bizID int64, key string, status string, notificationStatus string) error {
+func (t *txNotificationDAO) UpdateStatus(ctx context.Context, bizID int64, key string, status domain.TxNotificationStatus, notificationStatus domain.SendStatus) error {
 	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		res := tx.WithContext(ctx).
 			Model(&TxNotification{}).
 			Where("biz_id = ? AND `key` = ? AND status = 'PREPARE'", bizID, key).
-			Update("status", status)
+			Update("status", status.String())
 		if res.Error != nil {
 			return res.Error
 		}
@@ -100,10 +101,6 @@ func (t *txNotificationDAO) Prepare(ctx context.Context, txn TxNotification, not
 	notification.Utime = now
 	err := t.db.Transaction(func(tx *gorm.DB) error {
 		res := tx.WithContext(ctx).Clauses(clause.OnConflict{
-			Columns: []clause.Column{
-				{Name: "key"},
-				{Name: "biz_id"},
-			},
 			DoNothing: true,
 		}).Create(&notification)
 		if res.Error != nil {
@@ -114,7 +111,9 @@ func (t *txNotificationDAO) Prepare(ctx context.Context, txn TxNotification, not
 			return nil
 		}
 		txn.NotificationID = notification.ID
-		return tx.WithContext(ctx).Create(&txn).Error
+		return tx.WithContext(ctx).Clauses(clause.OnConflict{
+			DoNothing: true,
+		}).Create(&txn).Error
 	})
 	return notificationID, err
 }
@@ -189,8 +188,7 @@ func (t *txNotificationDAO) FindCheckBack(ctx context.Context, offset, limit int
 	return notifications, err
 }
 
-// 只更新
-func (t *txNotificationDAO) UpdateCheckStatus(ctx context.Context, txNotifications []TxNotification, status string) error {
+func (t *txNotificationDAO) UpdateCheckStatus(ctx context.Context, txNotifications []TxNotification, status domain.SendStatus) error {
 	sqls := make([]string, 0, len(txNotifications))
 	now := time.Now().UnixMilli()
 	notificationIds := make([]uint64, 0, len(txNotifications))
@@ -200,6 +198,7 @@ func (t *txNotificationDAO) UpdateCheckStatus(ctx context.Context, txNotificatio
 		notificationIds = append(notificationIds, txNotification.NotificationID)
 	}
 	// 拼接所有SQL并执行
+	// UPDATE xxx; UPDATE xxx;UPDATE xxx;
 	if len(sqls) > 0 {
 		return t.db.Transaction(func(tx *gorm.DB) error {
 			combinedSQL := strings.Join(sqls, "; ")
@@ -207,7 +206,7 @@ func (t *txNotificationDAO) UpdateCheckStatus(ctx context.Context, txNotificatio
 			if err != nil {
 				return err
 			}
-			if status != string(domain.SendStatusPrepare) {
+			if status != domain.SendStatusPrepare {
 				return tx.WithContext(ctx).Model(&Notification{}).Where("id in ?", notificationIds).
 					Update("status", status).Error
 			}

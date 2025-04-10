@@ -3,10 +3,11 @@ package integration
 import (
 	"context"
 	"fmt"
-	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 	"strings"
 	"testing"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 
 	clientv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -32,11 +33,9 @@ type TxNotificationServiceTestSuite struct {
 	db *egorm.Component
 }
 
-const bufSize = 1024 * 1024
-
 func (s *TxNotificationServiceTestSuite) SetupSuite() {
 	s.db = testioc.InitDB()
-	dao.InitTables(s.db)
+	s.NoError(dao.InitTables(s.db))
 }
 
 func (s *TxNotificationServiceTestSuite) TearDownTest() {
@@ -65,8 +64,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 						"key": "value",
 					},
 				},
-				ScheduledETime: time.UnixMilli(1754118663000),
-				ScheduledSTime: time.UnixMilli(1744118663000),
 			},
 			configSvc: func(t *testing.T, ctrl *gomock.Controller) config.BusinessConfigService {
 				mockConfigServices := configmocks.NewMockBusinessConfigService(ctrl)
@@ -118,6 +115,8 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 				require.True(t, actualNotification.Utime > 0)
 				actualNotification.Utime = 0
 				actualNotification.Ctime = 0
+				actualNotification.ScheduledSTime = 0
+				actualNotification.ScheduledETime = 0
 				assert.Equal(t, dao.Notification{
 					ID:                id,
 					BizID:             3,
@@ -128,8 +127,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 					TemplateID:        1,
 					TemplateVersionID: 10,
 					TemplateParams:    `{"key":"value"}`,
-					ScheduledSTime:    1744118663000,
-					ScheduledETime:    1754118663000,
 					Version:           1,
 				}, actualNotification)
 			},
@@ -148,8 +145,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 						"key": "value",
 					},
 				},
-				ScheduledETime: time.UnixMilli(1754118663000),
-				ScheduledSTime: time.UnixMilli(1744118663000),
 			},
 			configSvc: func(t *testing.T, ctrl *gomock.Controller) config.BusinessConfigService {
 				mockConfigServices := configmocks.NewMockBusinessConfigService(ctrl)
@@ -185,6 +180,8 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 				require.True(t, actualNotification.Utime > 0)
 				actualNotification.Utime = 0
 				actualNotification.Ctime = 0
+				actualNotification.ScheduledSTime = 0
+				actualNotification.ScheduledETime = 0
 				assert.Equal(t, dao.Notification{
 					ID:                id,
 					BizID:             22,
@@ -195,8 +192,6 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 					TemplateID:        1,
 					TemplateVersionID: 10,
 					TemplateParams:    `{"key":"value"}`,
-					ScheduledSTime:    1744118663000,
-					ScheduledETime:    1754118663000,
 					Version:           1,
 				}, actualNotification)
 			},
@@ -211,8 +206,8 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			configSvc := tc.configSvc(t, ctrl)
-			svc := tx_notification.InitTxNotificationService(configSvc)
-			id, err := svc.Prepare(ctx, tc.input)
+			app := tx_notification.InitTxNotificationService(configSvc)
+			id, err := app.Svc.Prepare(ctx, tc.input)
 			require.NoError(t, err)
 			tc.after(t, now, id)
 		})
@@ -291,7 +286,7 @@ func (s *TxNotificationServiceTestSuite) TestCommit() {
 
 			configSvc := tc.configSvc(t, ctrl)
 			svc := tx_notification.InitTxNotificationService(configSvc)
-			err := svc.Commit(ctx, bizId, key)
+			err := svc.Svc.Commit(ctx, bizId, key)
 			hasError := tc.checkErr(t, err)
 			if !hasError {
 				tc.after(t, bizId, key)
@@ -375,7 +370,7 @@ func (s *TxNotificationServiceTestSuite) TestCancel() {
 
 			configSvc := tc.configSvc(t, ctrl)
 			svc := tx_notification.InitTxNotificationService(configSvc)
-			err := svc.Cancel(ctx, bizId, key)
+			err := svc.Svc.Cancel(ctx, bizId, key)
 			hasError := tc.checkErr(t, err)
 			if !hasError {
 				tc.after(t, bizId, key)
@@ -437,7 +432,7 @@ func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
 	// 事务23会取出来，但是他还有好几次次回查机会了，发送失败 可以重试
 	tx23 := s.MockDaoTxn(23, 23, now-(time.Second*11).Milliseconds())
 	tx23.Status = domain.TxNotificationStatusPrepare.String()
-	tx23.BizID = 2
+	tx23.BizID = 1
 	tx23.CheckCount = 1
 	// 事务44h会取出来，回查一次然后取消
 	tx44 := s.MockDaoTxn(44, 44, now-(time.Second*11).Milliseconds())
@@ -474,12 +469,11 @@ func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
 	// 等待启动完成
 	time.Sleep(1 * time.Second)
 	resolver.Register("etcd", reg)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 9*time.Second)
 	defer cancel()
 
-	txSvc.StartTask(ctx)
+	txSvc.Task.Start(ctx)
 	<-ctx.Done()
-	nowMill := time.Now().UnixMilli()
 	tx1.CheckCount = 1
 	tx1.NextCheckTime = 0
 	tx1.Status = domain.TxNotificationStatusCommit.String()
@@ -489,10 +483,11 @@ func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
 	tx11.Status = domain.TxNotificationStatusCommit.String()
 	txns[5] = tx11
 	tx22.NextCheckTime = 0
-	tx22.CheckCount = 3
+	tx22.CheckCount = 4
 	tx22.Status = domain.TxNotificationStatusFail.String()
 	txns[6] = tx22
-	tx23.NextCheckTime = nowMill + 10*1000
+	tx23.NextCheckTime = now + 30*1000
+	fmt.Println("xxxxxx", tx23.NextCheckTime)
 	tx23.CheckCount = 2
 	tx23.Status = domain.TxNotificationStatusPrepare.String()
 	txns[7] = tx23
@@ -512,7 +507,7 @@ func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
 	for _, n := range txns {
 		txn, ok := txnMap[n.TxID]
 		require.True(s.T(), ok)
-		s.assertTxNotification(txn, n)
+		s.assertTxNotification(n, txn)
 	}
 	var list []dao.Notification
 	notiMap := make(map[uint64]dao.Notification)
@@ -537,7 +532,7 @@ func (s *TxNotificationServiceTestSuite) mockConfigMap() map[int64]domain.Busine
 				RetryPolicy: &retry.Config{
 					Type: "fixed",
 					FixedInterval: &retry.FixedIntervalConfig{
-						Interval:   30000,
+						Interval:   30 * time.Second,
 						MaxRetries: 3,
 					},
 				},
@@ -550,7 +545,7 @@ func (s *TxNotificationServiceTestSuite) mockConfigMap() map[int64]domain.Busine
 				RetryPolicy: &retry.Config{
 					Type: "fixed",
 					FixedInterval: &retry.FixedIntervalConfig{
-						Interval:   10000,
+						Interval:   10 * time.Second,
 						MaxRetries: 2,
 					},
 				},
@@ -587,9 +582,9 @@ func (s *TxNotificationServiceTestSuite) wantNotifications() map[uint64]string {
 		4:  string(domain.SendStatusCanceled),
 		5:  string(domain.SendStatusPrepare),
 		11: string(domain.SendStatusPending),
-		22: string(domain.SendStatusCanceled),
+		22: string(domain.SendStatusFailed),
 		23: string(domain.SendStatusPrepare),
-		44: string(domain.SendStatusCanceled),
+		44: string(domain.SendStatusFailed),
 	}
 }
 

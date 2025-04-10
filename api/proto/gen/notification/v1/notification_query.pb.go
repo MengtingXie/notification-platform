@@ -7,11 +7,12 @@
 package notificationv1
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -233,14 +234,17 @@ func file_notification_v1_notification_query_proto_rawDescGZIP() []byte {
 	return file_notification_v1_notification_query_proto_rawDescData
 }
 
-var file_notification_v1_notification_query_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
-var file_notification_v1_notification_query_proto_goTypes = []any{
-	(*QueryNotificationRequest)(nil),        // 0: notification.v1.QueryNotificationRequest
-	(*QueryNotificationResponse)(nil),       // 1: notification.v1.QueryNotificationResponse
-	(*BatchQueryNotificationsRequest)(nil),  // 2: notification.v1.BatchQueryNotificationsRequest
-	(*BatchQueryNotificationsResponse)(nil), // 3: notification.v1.BatchQueryNotificationsResponse
-	(*SendNotificationResponse)(nil),        // 4: notification.v1.SendNotificationResponse
-}
+var (
+	file_notification_v1_notification_query_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+	file_notification_v1_notification_query_proto_goTypes  = []any{
+		(*QueryNotificationRequest)(nil),        // 0: notification.v1.QueryNotificationRequest
+		(*QueryNotificationResponse)(nil),       // 1: notification.v1.QueryNotificationResponse
+		(*BatchQueryNotificationsRequest)(nil),  // 2: notification.v1.BatchQueryNotificationsRequest
+		(*BatchQueryNotificationsResponse)(nil), // 3: notification.v1.BatchQueryNotificationsResponse
+		(*SendNotificationResponse)(nil),        // 4: notification.v1.SendNotificationResponse
+	}
+)
+
 var file_notification_v1_notification_query_proto_depIdxs = []int32{
 	4, // 0: notification.v1.QueryNotificationResponse.result:type_name -> notification.v1.SendNotificationResponse
 	4, // 1: notification.v1.BatchQueryNotificationsResponse.results:type_name -> notification.v1.SendNotificationResponse

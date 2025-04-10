@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/ecodeclub/ekit/slice"
 	"time"
+
+	"github.com/ecodeclub/ekit/slice"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
@@ -13,7 +14,6 @@ import (
 
 // NotificationRepository 通知仓储接口
 type NotificationRepository interface {
-
 	// MarkTimeoutSendingAsFailed 将超时的 SENDING 状态的通知都标记为失败
 	MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error)
 

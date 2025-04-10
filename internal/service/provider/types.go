@@ -16,6 +16,7 @@ package provider
 
 import (
 	"context"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 )
 

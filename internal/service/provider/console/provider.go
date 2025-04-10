@@ -16,6 +16,7 @@ package console
 
 import (
 	"context"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"github.com/gotomicro/ego/core/elog"
 )

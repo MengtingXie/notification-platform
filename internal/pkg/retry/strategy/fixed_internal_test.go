@@ -20,8 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
 )
 
@@ -120,8 +118,7 @@ func TestFixedIntervalRetryStrategy_New(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewFixedIntervalRetryStrategy(tt.interval, tt.maxRetries)
-			assert.Equal(t, tt.wantErr, err)
+			got := NewFixedIntervalRetryStrategy(tt.interval, tt.maxRetries)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -130,8 +127,7 @@ func TestFixedIntervalRetryStrategy_New(t *testing.T) {
 func testNext4InfiniteRetry(t *testing.T, maxRetries int32) {
 	n := 100
 
-	s, err := NewExponentialBackoffRetryStrategy(1*time.Second, 4*time.Second, maxRetries)
-	require.NoError(t, err)
+	s := NewExponentialBackoffRetryStrategy(1*time.Second, 4*time.Second, maxRetries)
 
 	wantIntervals := []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second}
 	length := n - len(wantIntervals)
@@ -148,11 +144,8 @@ func testNext4InfiniteRetry(t *testing.T, maxRetries int32) {
 }
 
 func ExampleFixedIntervalRetryStrategy_Next() {
-	retry, err := NewFixedIntervalRetryStrategy(time.Second, 3)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	retry := NewFixedIntervalRetryStrategy(time.Second, 3)
+
 	interval, ok := retry.Next()
 	for ok {
 		fmt.Println(interval)

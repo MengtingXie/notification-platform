@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestNewExponentialBackoffRetryStrategy_New(t *testing.T) {
@@ -39,8 +38,7 @@ func TestNewExponentialBackoffRetryStrategy_New(t *testing.T) {
 			maxInterval:     2 * time.Minute,
 			maxRetries:      5,
 			want: func() *ExponentialBackoffRetryStrategy {
-				s, err := NewExponentialBackoffRetryStrategy(2*time.Second, 2*time.Minute, 5)
-				require.NoError(t, err)
+				s := NewExponentialBackoffRetryStrategy(2*time.Second, 2*time.Minute, 5)
 				return s
 			}(),
 			wantErr: nil,
@@ -49,8 +47,7 @@ func TestNewExponentialBackoffRetryStrategy_New(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			s, err := NewExponentialBackoffRetryStrategy(tt.initialInterval, tt.maxInterval, tt.maxRetries)
-			assert.Equal(t, tt.wantErr, err)
+			s := NewExponentialBackoffRetryStrategy(tt.initialInterval, tt.maxInterval, tt.maxRetries)
 			assert.Equal(t, tt.want, s)
 		})
 	}
@@ -68,20 +65,15 @@ func TestExponentialBackoffRetryStrategy_Next(t *testing.T) {
 			name: "stop if retries reaches maxRetries",
 			ctx:  context.Background(),
 			strategy: func() *ExponentialBackoffRetryStrategy {
-				s, err := NewExponentialBackoffRetryStrategy(1*time.Second, 10*time.Second, 3)
-				require.NoError(t, err)
-				return s
+				return NewExponentialBackoffRetryStrategy(1*time.Second, 10*time.Second, 3)
 			}(),
-
 			wantIntervals: []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second},
 		},
 		{
 			name: "initialInterval over maxInterval",
 			ctx:  context.Background(),
 			strategy: func() *ExponentialBackoffRetryStrategy {
-				s, err := NewExponentialBackoffRetryStrategy(1*time.Second, 4*time.Second, 5)
-				require.NoError(t, err)
-				return s
+				return NewExponentialBackoffRetryStrategy(1*time.Second, 4*time.Second, 5)
 			}(),
 
 			wantIntervals: []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second, 4 * time.Second, 4 * time.Second},
@@ -117,11 +109,8 @@ func ExampleExponentialBackoffRetryStrategy_Next() {
 	// 注意，因为在例子里面我们设置初始的重试间隔是 1s，最大重试间隔是 5s
 	// 所以在前面四次，重试间隔都是在增长的，每次变为原来的2倍。
 	// 在触及到了最大重试间隔之后，就一直以最大重试间隔来重试。
-	retry, err := NewExponentialBackoffRetryStrategy(time.Second, time.Second*5, 10)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	retry := NewExponentialBackoffRetryStrategy(time.Second, time.Second*5, 10)
+
 	interval, ok := retry.Next()
 	for ok {
 		fmt.Println(interval)
