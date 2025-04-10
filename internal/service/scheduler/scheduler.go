@@ -60,6 +60,10 @@ func (s *staticScheduler) processPendingNotifications(ctx context.Context) error
 	if err != nil {
 		return err
 	}
+	if len(notifications) == 0 {
+		time.Sleep(time.Second)
+		return nil
+	}
 	_, err = s.sender.BatchSend(ctx, notifications)
 	return err
 }

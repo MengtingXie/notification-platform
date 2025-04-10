@@ -92,6 +92,7 @@ func (d *notificationDAO) MarkTimeoutSendingAsFailed(ctx context.Context, batchS
 	now := time.Now()
 	ddl := now.Add(-time.Minute).UnixMilli()
 	sub := d.db.Model(&Notification{}).
+		Select("id").
 		Limit(batchSize).
 		Where("status = ? AND utime <=?", string(domain.SendStatusSending), ddl)
 	res := d.db.WithContext(ctx).Where("IN ?", sub).Updates(map[string]any{
@@ -105,7 +106,7 @@ func (d *notificationDAO) FindReadyNotifications(ctx context.Context, offset int
 	var res []Notification
 	now := time.Now().UnixMilli()
 	err := d.db.WithContext(ctx).
-		Where("scheduled_stime >=? AND scheduled_etime <= ? AND status=?", now, now, string(domain.SendStatusPending)).
+		Where("scheduled_stime <=? AND scheduled_etime >= ? AND status=?", now, now, string(domain.SendStatusPending)).
 		Limit(limit).Offset(offset).
 		Find(&res).Error
 	return res, err
