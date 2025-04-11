@@ -8,8 +8,8 @@ import (
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/channel"
-
 	configsvc "gitee.com/flycash/notification-platform/internal/service/config"
+	"gitee.com/flycash/notification-platform/internal/service/notification/callback"
 	"github.com/gotomicro/ego/core/elog"
 )
 
@@ -23,23 +23,26 @@ type NotificationSender interface {
 
 // sender 通知发送器实现
 type sender struct {
-	repo      repository.NotificationRepository
-	configSvc configsvc.BusinessConfigService
-	channel   channel.Channel
-	logger    *elog.Component
+	repo        repository.NotificationRepository
+	configSvc   configsvc.BusinessConfigService
+	callbackSvc callback.Service
+	channel     channel.Channel
+	logger      *elog.Component
 }
 
 // NewSender 创建通知发送器
 func NewSender(
 	repo repository.NotificationRepository,
 	configSvc configsvc.BusinessConfigService,
+	callbackSvc callback.Service,
 	channel channel.Channel,
 ) NotificationSender {
 	return &sender{
-		configSvc: configSvc,
-		repo:      repo,
-		channel:   channel,
-		logger:    elog.DefaultLogger,
+		repo:        repo,
+		configSvc:   configSvc,
+		callbackSvc: callbackSvc,
+		channel:     channel,
+		logger:      elog.DefaultLogger,
 	}
 }
 
@@ -62,7 +65,9 @@ func (d *sender) Send(ctx context.Context, notification domain.Notification) (do
 		return domain.SendResponse{}, err
 	}
 
-	// 合并结果并返回
+	// 得到准确的发送结果，发起回调，发送成功和失败都应该回调
+	_ = d.callbackSvc.SendCallbackByNotification(ctx, notification)
+
 	return resp, nil
 }
 
@@ -133,6 +138,9 @@ func (d *sender) BatchSend(ctx context.Context, notifications []domain.Notificat
 		return nil, err
 	}
 
+	// 得到准确的发送结果，发起回调，发送成功和失败都应该回调
+	_ = d.callbackSvc.SendCallbackByNotifications(ctx, append(succeedNotifications, failedNotifications...))
+
 	// 合并结果并返回
 	return append(succeed, failed...), nil
 }
@@ -141,9 +149,9 @@ func (d *sender) BatchSend(ctx context.Context, notifications []domain.Notificat
 func (d *sender) getUpdatedNotifications(responses []domain.SendResponse, notificationsMap map[uint64]domain.Notification) []domain.Notification {
 	notifications := make([]domain.Notification, 0, len(responses))
 	for i := range responses {
-		if notification, ok := notificationsMap[responses[i].NotificationID]; ok {
-			notification.Status = responses[i].Status
-			notifications = append(notifications, notification)
+		if n, ok := notificationsMap[responses[i].NotificationID]; ok {
+			n.Status = responses[i].Status
+			notifications = append(notifications, n)
 		}
 	}
 	return notifications

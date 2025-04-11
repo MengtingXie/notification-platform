@@ -8,15 +8,17 @@ import (
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/repository"
+	configsvc "gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
 	"github.com/gotomicro/ego/core/elog"
 )
 
 // ImmediateSendStrategy 立即发送策略
 type ImmediateSendStrategy struct {
-	repo   repository.NotificationRepository
-	sender sender.NotificationSender
-	logger *elog.Component
+	repo      repository.NotificationRepository
+	sender    sender.NotificationSender
+	configSvc configsvc.BusinessConfigService
+	logger    *elog.Component
 }
 
 // NewImmediateStrategy 创建立即发送策略
@@ -30,7 +32,7 @@ func NewImmediateStrategy(repo repository.NotificationRepository, sender sender.
 // Send 单条发送通知
 func (s *ImmediateSendStrategy) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
 	notification.SetSendTime()
-	created, err := s.repo.Create(ctx, notification)
+	created, err := s.create(ctx, notification)
 	if err == nil {
 		// 立即发送
 		return s.sender.Send(ctx, created)
@@ -69,6 +71,14 @@ func (s *ImmediateSendStrategy) Send(ctx context.Context, notification domain.No
 	return s.sender.Send(ctx, found)
 }
 
+func (s *ImmediateSendStrategy) create(ctx context.Context, notification domain.Notification) (domain.Notification, error) {
+	// 只有同步立刻发送不创建Callback日志
+	if notification.SendStrategyConfig.IsSync {
+		return s.repo.Create(ctx, notification)
+	}
+	return s.repo.CreateWithCallbackLog(ctx, notification)
+}
+
 // BatchSend 批量发送通知，其中每个通知的发送策略必须相同
 func (s *ImmediateSendStrategy) BatchSend(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error) {
 	if len(notifications) == 0 {
@@ -80,11 +90,20 @@ func (s *ImmediateSendStrategy) BatchSend(ctx context.Context, notifications []d
 	}
 
 	// 创建通知记录
-	createdNotifications, err := s.repo.BatchCreate(ctx, notifications)
+	createdNotifications, err := s.batchCreate(ctx, notifications)
 	if err != nil {
 		// 只要有一个唯一索引冲突整批失败
 		return nil, fmt.Errorf("创建通知失败: %w", err)
 	}
 	// 立即发送
 	return s.sender.BatchSend(ctx, createdNotifications)
+}
+
+func (s *ImmediateSendStrategy) batchCreate(ctx context.Context, notifications []domain.Notification) ([]domain.Notification, error) {
+	// 只有同步立刻发送不创建Callback日志
+	const first = 0
+	if notifications[first].SendStrategyConfig.IsSync {
+		return s.repo.BatchCreate(ctx, notifications)
+	}
+	return s.repo.BatchCreateWithCallbackLog(ctx, notifications)
 }

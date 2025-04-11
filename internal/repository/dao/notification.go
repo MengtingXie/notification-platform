@@ -21,14 +21,18 @@ const (
 )
 
 type NotificationDAO interface {
-	// Create 创建单条通知记录
+	// Create 创建单条通知记录，但不创建对应的回调记录
 	Create(ctx context.Context, data Notification) (Notification, error)
+	// CreateWithCallbackLog 创建单条通知记录，同时创建对应的回调记录
+	CreateWithCallbackLog(ctx context.Context, data Notification) (Notification, error)
+	// BatchCreate 批量创建通知记录，但不创建对应的回调记录
+	BatchCreate(ctx context.Context, dataList []Notification) ([]Notification, error)
+	// BatchCreateWithCallbackLog 批量创建通知记录，同时创建对应的回调记录
+	BatchCreateWithCallbackLog(ctx context.Context, datas []Notification) ([]Notification, error)
 
 	// CASStatus 更新通知状态
 	CASStatus(ctx context.Context, notification Notification) error
 	UpdateStatus(ctx context.Context, notification Notification) error
-	// BatchCreate 批量创建通知记录
-	BatchCreate(ctx context.Context, dataList []Notification) ([]Notification, error)
 
 	// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败，使用乐观锁控制并发
 	// successNotifications: 更新为成功状态的通知列表，包含ID、Version和重试次数
@@ -70,7 +74,7 @@ type Notification struct {
 	TemplateID        int64  `gorm:"type:BIGINT;NOT NULL;comment:'模板ID'"`
 	TemplateVersionID int64  `gorm:"type:BIGINT;NOT NULL;comment:'模板版本ID'"`
 	TemplateParams    string `gorm:"NOT NULL;comment:'模版参数'"`
-	Status            string `gorm:"type:ENUM('PREPARE','CANCELED','PENDING','SUCCEEDED','FAILED');DEFAULT:'PENDING';index:idx_biz_id_status,priority:2;index:idx_scheduled,priority:3;comment:'发送状态'"`
+	Status            string `gorm:"type:ENUM('PREPARE','CANCELED','PENDING','SENDING','SUCCEEDED','FAILED');DEFAULT:'PENDING';index:idx_biz_id_status,priority:2;index:idx_scheduled,priority:3;comment:'发送状态'"`
 	ScheduledSTime    int64  `gorm:"column:scheduled_stime;index:idx_scheduled,priority:1;comment:'计划发送开始时间'"`
 	ScheduledETime    int64  `gorm:"column:scheduled_etime;index:idx_scheduled,priority:2;comment:'计划发送结束时间'"`
 	Version           int    `gorm:"type:INT;NOT NULL;DEFAULT:1;comment:'版本号，用于CAS操作'"`
@@ -89,45 +93,42 @@ func NewNotificationDAO(db *egorm.Component) NotificationDAO {
 	}
 }
 
-func (d *notificationDAO) MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error) {
-	now := time.Now()
-	ddl := now.Add(-time.Minute).UnixMilli()
-	sub := d.db.Model(&Notification{}).
-		Select("id").
-		Limit(batchSize).
-		Where("status = ? AND utime <=?", string(domain.SendStatusSending), ddl)
-	res := d.db.WithContext(ctx).Where("IN ?", sub).Updates(map[string]any{
-		"status": string(domain.SendStatusFailed),
-		"utime":  now,
-	})
-	return res.RowsAffected, res.Error
-}
-
-func (d *notificationDAO) FindReadyNotifications(ctx context.Context, offset int, limit int) ([]Notification, error) {
-	var res []Notification
-	now := time.Now().UnixMilli()
-	err := d.db.WithContext(ctx).
-		Where("scheduled_stime <=? AND scheduled_etime >= ? AND status=?", now, now, string(domain.SendStatusPending)).
-		Limit(limit).Offset(offset).
-		Find(&res).Error
-	return res, err
-}
-
-// Create 创建单条通知记录
+// Create 创建单条通知记录，但不创建对应的回调记录
 func (d *notificationDAO) Create(ctx context.Context, data Notification) (Notification, error) {
-	now := time.Now().Unix()
+	return d.create(ctx, d.db, data, false)
+}
+
+// CreateWithCallbackLog 创建单条通知记录，同时创建对应的回调记录
+func (d *notificationDAO) CreateWithCallbackLog(ctx context.Context, data Notification) (Notification, error) {
+	return d.create(ctx, d.db, data, true)
+}
+
+// create 创建通知记录，以及可能的对应回调记录
+func (d *notificationDAO) create(ctx context.Context, db *gorm.DB, data Notification, createCallbackLog bool) (Notification, error) {
+	now := time.Now().UnixMilli()
 	data.Ctime, data.Utime = now, now
 	data.Version = 1
 
-	err := d.db.WithContext(ctx).Create(&data).Error
-	if isUniqueConstraintError(err) {
-		return Notification{}, fmt.Errorf("%w", errs.ErrNotificationDuplicate)
-	}
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&data).Error; err != nil {
+			if d.isUniqueConstraintError(err) {
+				return fmt.Errorf("%w", errs.ErrNotificationDuplicate)
+			}
+			return err
+		}
+		if createCallbackLog {
+			if err := tx.Create(&CallbackLog{NotificationID: data.ID, NextRetryTime: now}).Error; err != nil {
+				return fmt.Errorf("%w", errs.ErrCreateCallbackLogFailed)
+			}
+		}
+		return nil
+	})
+
 	return data, err
 }
 
 // isUniqueConstraintError 检查是否是唯一索引冲突错误
-func isUniqueConstraintError(err error) bool {
+func (d *notificationDAO) isUniqueConstraintError(err error) bool {
 	if err == nil {
 		return false
 	}
@@ -139,31 +140,57 @@ func isUniqueConstraintError(err error) bool {
 	return false
 }
 
-// BatchCreate 批量创建通知记录
+// BatchCreate 批量创建通知记录，但不创建对应的回调记录
 func (d *notificationDAO) BatchCreate(ctx context.Context, datas []Notification) ([]Notification, error) {
+	return d.batchCreate(ctx, datas, false)
+}
+
+// BatchCreateWithCallbackLog 批量创建通知记录，同时创建对应的回调记录
+func (d *notificationDAO) BatchCreateWithCallbackLog(ctx context.Context, datas []Notification) ([]Notification, error) {
+	return d.batchCreate(ctx, datas, true)
+}
+
+// batchCreate 批量创建通知记录，以及可能的对应回调记录
+func (d *notificationDAO) batchCreate(ctx context.Context, datas []Notification, createCallbackLog bool) ([]Notification, error) {
 	if len(datas) == 0 {
-		return nil, nil
+		return []Notification{}, nil
 	}
 
-	now := time.Now().Unix()
+	const batchSize = 100
+	now := time.Now().UnixMilli()
 	for i := range datas {
 		datas[i].Ctime, datas[i].Utime = now, now
 		datas[i].Version = 1
 	}
 
-	// 使用事务执行批量插入，确保可以捕获并处理唯一键冲突
+	// 使用事务执行批量插入
 	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for i := range datas {
-			err := tx.Create(&datas[i]).Error
-			if isUniqueConstraintError(err) {
+		// 创建通知记录 - 真正的批量插入
+		if err := tx.CreateInBatches(datas, batchSize).Error; err != nil {
+			if d.isUniqueConstraintError(err) {
 				return fmt.Errorf("%w", errs.ErrNotificationDuplicate)
 			}
-			if err != nil {
-				return err
+			return err
+		}
+
+		if createCallbackLog {
+			// 创建回调记录
+			var callbackLogs []CallbackLog
+			for i := range datas {
+				callbackLogs = append(callbackLogs, CallbackLog{
+					NotificationID: datas[i].ID,
+					NextRetryTime:  now,
+					Ctime:          now,
+					Utime:          now,
+				})
+			}
+			if err := tx.CreateInBatches(callbackLogs, batchSize).Error; err != nil {
+				return fmt.Errorf("%w", errs.ErrCreateCallbackLogFailed)
 			}
 		}
 		return nil
 	})
+
 	return datas, err
 }
 
@@ -360,4 +387,28 @@ func (d *notificationDAO) BatchUpdateStatus(ctx context.Context, ids []uint64, s
 			"version": gorm.Expr("version + 1"),
 		})
 	return result.Error
+}
+
+func (d *notificationDAO) MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error) {
+	now := time.Now()
+	ddl := now.Add(-time.Minute).UnixMilli()
+	sub := d.db.Model(&Notification{}).
+		Select("id").
+		Limit(batchSize).
+		Where("status = ? AND utime <=?", string(domain.SendStatusSending), ddl)
+	res := d.db.WithContext(ctx).Where("IN ?", sub).Updates(map[string]any{
+		"status": string(domain.SendStatusFailed),
+		"utime":  now,
+	})
+	return res.RowsAffected, res.Error
+}
+
+func (d *notificationDAO) FindReadyNotifications(ctx context.Context, offset int, limit int) ([]Notification, error) {
+	var res []Notification
+	now := time.Now().UnixMilli()
+	err := d.db.WithContext(ctx).
+		Where("scheduled_stime <=? AND scheduled_etime >= ? AND status=?", now, now, string(domain.SendStatusPending)).
+		Limit(limit).Offset(offset).
+		Find(&res).Error
+	return res, err
 }

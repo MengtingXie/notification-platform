@@ -17,12 +17,6 @@ import (
 //
 //go:generate mockgen -source=./notification.go -destination=../../mocks/notification.mock.go -package=notificationmocks -typed Service
 type Service interface {
-	// Create 创建通知记录
-	Create(ctx context.Context, notification domain.Notification) (domain.Notification, error)
-
-	// BatchCreate 批量创建通知记录
-	BatchCreate(ctx context.Context, notifications []domain.Notification) ([]domain.Notification, error)
-
 	// FindReadyNotifications 准备好调度发送的通知
 	FindReadyNotifications(ctx context.Context, offset, limit int) ([]domain.Notification, error)
 
@@ -62,70 +56,6 @@ func NewNotificationService(repo repository.NotificationRepository, idGenerator 
 
 func (s *notificationService) FindReadyNotifications(ctx context.Context, offset, limit int) ([]domain.Notification, error) {
 	return s.repo.FindReadyNotifications(ctx, offset, limit)
-}
-
-// Create 创建通知
-func (s *notificationService) Create(ctx context.Context, notification domain.Notification) (domain.Notification, error) {
-	if err := notification.Validate(); err != nil {
-		return domain.Notification{}, fmt.Errorf("%w: %w", errs.ErrInvalidParameter, err)
-	}
-
-	// 生成ID
-	id, err := s.generateID()
-	if err != nil {
-		return domain.Notification{}, err
-	}
-	notification.ID = id
-
-	createdNotification, err := s.repo.Create(ctx, notification)
-	if err != nil {
-		if errors.Is(err, errs.ErrNotificationDuplicate) {
-			return domain.Notification{}, fmt.Errorf("%w", errs.ErrNotificationDuplicate)
-		}
-		return domain.Notification{}, fmt.Errorf("%w: %w", errs.ErrCreateNotificationFailed, err)
-	}
-
-	return createdNotification, nil
-}
-
-func (s *notificationService) generateID() (uint64, error) {
-	id, err := s.idGenerator.NextID()
-	if err != nil {
-		return 0, fmt.Errorf("%w", errs.ErrNotificationIDGenerateFailed)
-	}
-	return id, nil
-}
-
-// BatchCreate 批量创建通知记录
-func (s *notificationService) BatchCreate(ctx context.Context, notifications []domain.Notification) ([]domain.Notification, error) {
-	if len(notifications) == 0 {
-		return nil, fmt.Errorf("%w: 通知列表为空", errs.ErrInvalidParameter)
-	}
-
-	for i := range notifications {
-		if err := notifications[i].Validate(); err != nil {
-			return nil, fmt.Errorf("%w: %w", errs.ErrInvalidParameter, err)
-		}
-	}
-
-	// 生成ID
-	for i := range notifications {
-		id, err := s.generateID()
-		if err != nil {
-			return nil, err
-		}
-		notifications[i].ID = id
-	}
-
-	createdNotifications, err := s.repo.BatchCreate(ctx, notifications)
-	if err != nil {
-		if errors.Is(err, errs.ErrNotificationDuplicate) {
-			return nil, fmt.Errorf("%w", errs.ErrNotificationDuplicate)
-		}
-		return nil, fmt.Errorf("%w: %w", errs.ErrCreateNotificationFailed, err)
-	}
-
-	return createdNotifications, nil
 }
 
 // GetByID 获取通知记录

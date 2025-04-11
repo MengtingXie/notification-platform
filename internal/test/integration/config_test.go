@@ -86,6 +86,16 @@ func (s *BusinessConfigTestSuite) createTestConfig() domain.BusinessConfig {
 				EMAIL: 100,
 			},
 		},
+		CallbackConfig: &domain.CallbackConfig{
+			ServiceName: "callbackName",
+			RetryPolicy: &retry.Config{
+				Type: "fixed",
+				FixedInterval: &retry.FixedIntervalConfig{
+					Interval:   10,
+					MaxRetries: 3,
+				},
+			},
+		},
 	}
 }
 
@@ -127,6 +137,16 @@ func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig
 					EMAIL: 100,
 				},
 			},
+			CallbackConfig: &domain.CallbackConfig{
+				ServiceName: "callbackName",
+				RetryPolicy: &retry.Config{
+					Type: "fixed",
+					FixedInterval: &retry.FixedIntervalConfig{
+						Interval:   10,
+						MaxRetries: 3,
+					},
+				},
+			},
 			Ctime: 1744274114000,
 			Utime: 1744274114000,
 		},
@@ -164,6 +184,16 @@ func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig
 				Monthly: domain.MonthlyConfig{
 					SMS:   100,
 					EMAIL: 100,
+				},
+			},
+			CallbackConfig: &domain.CallbackConfig{
+				ServiceName: "callbackName",
+				RetryPolicy: &retry.Config{
+					Type: "fixed",
+					FixedInterval: &retry.FixedIntervalConfig{
+						Interval:   10,
+						MaxRetries: 3,
+					},
 				},
 			},
 			Ctime: 1744274114000,

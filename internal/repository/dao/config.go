@@ -11,16 +11,16 @@ import (
 
 // BusinessConfig 业务配置表
 type BusinessConfig struct {
-	ID            int64          `gorm:"primaryKey;type:BIGINT;comment:'业务标识'"`
-	OwnerID       int64          `gorm:"type:BIGINT;comment:'业务方'"`
-	OwnerType     string         `gorm:"type:ENUM('person', 'organization');comment:'业务方类型：person-个人,organization-组织'"`
-	ChannelConfig sql.NullString `gorm:"type:JSON;comment:'{\"channels\":[{\"channel\":\"SMS\", \"priority\":\"1\",\"enabled\":\"true\"},{\"channel\":\"EMAIL\", \"priority\":\"2\",\"enabled\":\"true\"}]}'"`
-	TxnConfig     sql.NullString `gorm:"type:JSON;comment:'事务配置'"`
-	RateLimit     int            `gorm:"type:INT;DEFAULT:1000;comment:'每秒最大请求数'"`
-	Quota         sql.NullString `gorm:"type:JSON;comment:'{\"monthly\":{\"SMS\":100000,\"EMAIL\":500000}}'"`
-	RetryPolicy   sql.NullString `gorm:"type:JSON;comment:'{\"maxRetries\":3, \"backoff\":\"EXPONENTIAL\", \"retryIntervals\":\"1000\"}'"`
-	Ctime         int64
-	Utime         int64
+	ID             int64          `gorm:"primaryKey;type:BIGINT;comment:'业务标识'"`
+	OwnerID        int64          `gorm:"type:BIGINT;comment:'业务方'"`
+	OwnerType      string         `gorm:"type:ENUM('person', 'organization');comment:'业务方类型：person-个人,organization-组织'"`
+	ChannelConfig  sql.NullString `gorm:"type:JSON;comment:'{\"channels\":[{\"channel\":\"SMS\", \"priority\":\"1\",\"enabled\":\"true\"},{\"channel\":\"EMAIL\", \"priority\":\"2\",\"enabled\":\"true\"}]}'"`
+	TxnConfig      sql.NullString `gorm:"type:JSON;comment:'事务配置'"`
+	RateLimit      int            `gorm:"type:INT;DEFAULT:1000;comment:'每秒最大请求数'"`
+	Quota          sql.NullString `gorm:"type:JSON;comment:'{\"monthly\":{\"SMS\":100000,\"EMAIL\":500000}}'"`
+	CallbackConfig sql.NullString `gorm:"type:JSON;comment:'回调配置，通知平台回调业务方通知异步请求结果'"`
+	Ctime          int64
+	Utime          int64
 }
 
 // TableName 重命名表
@@ -32,7 +32,6 @@ type BusinessConfigDAO interface {
 	GetByIDs(ctx context.Context, id []int64) (map[int64]BusinessConfig, error)
 	GetByID(ctx context.Context, id int64) (BusinessConfig, error)
 	Delete(ctx context.Context, id int64) error
-	// SaveConfig
 	SaveConfig(ctx context.Context, config BusinessConfig) (BusinessConfig, error)
 }
 

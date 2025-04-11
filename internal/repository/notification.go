@@ -17,11 +17,14 @@ type NotificationRepository interface {
 	// MarkTimeoutSendingAsFailed 将超时的 SENDING 状态的通知都标记为失败
 	MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error)
 
-	// Create 创建一条通知
+	// Create 创建单条通知记录，但不创建对应的回调记录
 	Create(ctx context.Context, notification domain.Notification) (domain.Notification, error)
-
-	// BatchCreate 批量创建通知
+	// CreateWithCallbackLog 创建单条通知记录，同时创建对应的回调记录
+	CreateWithCallbackLog(ctx context.Context, notification domain.Notification) (domain.Notification, error)
+	// BatchCreate 批量创建通知记录，但不创建对应的回调记录
 	BatchCreate(ctx context.Context, notifications []domain.Notification) ([]domain.Notification, error)
+	// BatchCreateWithCallbackLog 批量创建通知记录，同时创建对应的回调记录
+	BatchCreateWithCallbackLog(ctx context.Context, notifications []domain.Notification) ([]domain.Notification, error)
 
 	// GetByID 根据ID获取通知
 	GetByID(ctx context.Context, id uint64) (domain.Notification, error)
@@ -90,7 +93,7 @@ func (r *notificationRepository) BatchGetByIDs(ctx context.Context, ids []uint64
 	return domainNotificationMap, nil
 }
 
-// Create 创建一条通知
+// Create 创建单条通知记录，但不创建对应的回调记录
 func (r *notificationRepository) Create(ctx context.Context, notification domain.Notification) (domain.Notification, error) {
 	ds, err := r.dao.Create(ctx, r.toEntity(notification))
 	if err != nil {
@@ -119,26 +122,52 @@ func (r *notificationRepository) toEntity(notification domain.Notification) dao.
 	}
 }
 
-// BatchCreate 批量创建通知
+// CreateWithCallbackLog 创建单条通知记录，同时创建对应的回调记录
+func (r *notificationRepository) CreateWithCallbackLog(ctx context.Context, notification domain.Notification) (domain.Notification, error) {
+	ds, err := r.dao.CreateWithCallbackLog(ctx, r.toEntity(notification))
+	if err != nil {
+		return domain.Notification{}, err
+	}
+	return r.toDomain(ds), nil
+}
+
+// BatchCreate 批量创建通知记录，但不创建对应的回调记录
 func (r *notificationRepository) BatchCreate(ctx context.Context, notifications []domain.Notification) ([]domain.Notification, error) {
+	return r.batchCreate(ctx, notifications, false)
+}
+
+func (r *notificationRepository) batchCreate(ctx context.Context, notifications []domain.Notification, createCallbackLog bool) ([]domain.Notification, error) {
 	if len(notifications) == 0 {
 		return nil, nil
 	}
 
-	daoNotifications := make([]dao.Notification, len(notifications))
-	for i := range notifications {
-		daoNotifications[i] = r.toEntity(notifications[i])
+	daoNotifications := slice.Map(notifications, func(idx int, src domain.Notification) dao.Notification {
+		return r.toEntity(src)
+	})
+
+	var createdNotifications []dao.Notification
+	var err error
+
+	if createCallbackLog {
+		createdNotifications, err = r.dao.BatchCreateWithCallbackLog(ctx, daoNotifications)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		createdNotifications, err = r.dao.BatchCreate(ctx, daoNotifications)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	createdNotifications, err := r.dao.BatchCreate(ctx, daoNotifications)
-	if err != nil {
-		return nil, err
-	}
+	return slice.Map(createdNotifications, func(idx int, src dao.Notification) domain.Notification {
+		return r.toDomain(src)
+	}), nil
+}
 
-	for i := range createdNotifications {
-		notifications[i] = r.toDomain(createdNotifications[i])
-	}
-	return notifications, nil
+// BatchCreateWithCallbackLog 批量创建通知记录，同时创建对应的回调记录
+func (r *notificationRepository) BatchCreateWithCallbackLog(ctx context.Context, notifications []domain.Notification) ([]domain.Notification, error) {
+	return r.batchCreate(ctx, notifications, true)
 }
 
 // GetByID 根据ID获取通知

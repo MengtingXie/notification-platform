@@ -202,13 +202,16 @@ func (b *businessConfigRepository) toDomain(daoConfig dao.BusinessConfig) domain
 		Utime:     daoConfig.Utime,
 	}
 	if daoConfig.ChannelConfig.Valid {
-		domainCfg.ChannelConfig = unmarsal[domain.ChannelConfig](daoConfig.ChannelConfig.String)
+		domainCfg.ChannelConfig = unmarshal[domain.ChannelConfig](daoConfig.ChannelConfig.String)
 	}
 	if daoConfig.TxnConfig.Valid {
-		domainCfg.TxnConfig = unmarsal[domain.TxnConfig](daoConfig.TxnConfig.String)
+		domainCfg.TxnConfig = unmarshal[domain.TxnConfig](daoConfig.TxnConfig.String)
 	}
 	if daoConfig.Quota.Valid {
-		domainCfg.Quota = unmarsal[domain.QuotaConfig](daoConfig.Quota.String)
+		domainCfg.Quota = unmarshal[domain.QuotaConfig](daoConfig.Quota.String)
+	}
+	if daoConfig.CallbackConfig.Valid {
+		domainCfg.CallbackConfig = unmarshal[domain.CallbackConfig](daoConfig.CallbackConfig.String)
 	}
 	return domainCfg
 }
@@ -231,6 +234,9 @@ func (b *businessConfigRepository) toEntity(config domain.BusinessConfig) dao.Bu
 	if config.Quota != nil {
 		daoConfig.Quota = marshal(config.Quota)
 	}
+	if config.CallbackConfig != nil {
+		daoConfig.CallbackConfig = marshal(config.CallbackConfig)
+	}
 	return daoConfig
 }
 
@@ -242,7 +248,7 @@ func marshal(v any) sql.NullString {
 	}
 }
 
-func unmarsal[T any](v string) *T {
+func unmarshal[T any](v string) *T {
 	var t T
 	_ = json.Unmarshal([]byte(v), &t)
 	return &t

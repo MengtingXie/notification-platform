@@ -3,19 +3,16 @@ package config
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/repository"
 
 	"github.com/ego-component/egorm"
 )
 
-// 错误定义
-var (
-	ErrInvalidParameter = errors.New("无效的参数")
-	ErrConfigNotFound   = errors.New("业务配置不存在")
-	ErrIDNotSet         = errors.New("业务id没有设置")
-)
+var ErrIDNotSet = errors.New("业务id没有设置")
 
 //go:generate mockgen -source=./config.go -destination=./mocks/config.mock.go -package=configmocks -typed BusinessConfigService
 type BusinessConfigService interface {
@@ -52,14 +49,14 @@ func (b *BusinessConfigServiceV1) GetByIDs(ctx context.Context, ids []int64) (ma
 func (b *BusinessConfigServiceV1) GetByID(ctx context.Context, id int64) (domain.BusinessConfig, error) {
 	// 参数校验
 	if id <= 0 {
-		return domain.BusinessConfig{}, ErrInvalidParameter
+		return domain.BusinessConfig{}, fmt.Errorf("%w", errs.ErrInvalidParameter)
 	}
 
 	// 调用仓库层方法
 	config, err := b.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, egorm.ErrRecordNotFound) {
-			return domain.BusinessConfig{}, ErrConfigNotFound
+			return domain.BusinessConfig{}, fmt.Errorf("%w", errs.ErrConfigNotFound)
 		}
 		return domain.BusinessConfig{}, err
 	}
@@ -71,7 +68,7 @@ func (b *BusinessConfigServiceV1) GetByID(ctx context.Context, id int64) (domain
 func (b *BusinessConfigServiceV1) Delete(ctx context.Context, id int64) error {
 	// 参数校验
 	if id <= 0 {
-		return ErrInvalidParameter
+		return fmt.Errorf("%w", errs.ErrInvalidParameter)
 	}
 
 	// 调用仓库层删除方法
