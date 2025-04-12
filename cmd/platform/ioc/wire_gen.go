@@ -34,13 +34,6 @@ import (
 
 // Injectors from wire.go:
 
-func newSendStrategy(repo repository.NotificationRepository, configSvc config.BusinessConfigService, sender2 sender.NotificationSender) send_strategy.SendStrategy {
-	immediateSendStrategy := send_strategy.NewImmediateStrategy(repo, sender2)
-	defaultSendStrategy := send_strategy.NewDefaultStrategy(repo, configSvc)
-	sendStrategy := send_strategy.NewDispatcher(immediateSendStrategy, defaultSendStrategy)
-	return sendStrategy
-}
-
 func InitGrpcServer() *ioc.App {
 	db := ioc.InitDB()
 	channelTemplateDAO := dao.NewChannelTemplateDAO(db)
@@ -68,7 +61,9 @@ func InitGrpcServer() *ioc.App {
 	v := ioc.InitSmsClients()
 	channel := newChannel(service, channelTemplateService, v)
 	notificationSender := sender.NewSender(notificationRepository, businessConfigService, callbackService, channel)
-	sendStrategy := newSendStrategy(notificationRepository, businessConfigService, notificationSender)
+	immediateSendStrategy := send_strategy.NewImmediateStrategy(notificationRepository, notificationSender)
+	defaultSendStrategy := send_strategy.NewDefaultStrategy(notificationRepository, businessConfigService)
+	sendStrategy := send_strategy.NewDispatcher(immediateSendStrategy, defaultSendStrategy)
 	sendService := notification.NewSendService(channelTemplateService, notificationService, sonyflake, sendStrategy)
 	txNotificationDAO := dao.NewTxNotificationDAO(db)
 	txNotificationRepository := repository.NewTxNotificationRepository(txNotificationDAO)
@@ -93,7 +88,7 @@ var (
 	senderSvcSet         = wire.NewSet(
 		newChannel, sender.NewSender,
 	)
-	sendNotificationSvcSet = wire.NewSet(notification.NewSendService, newSendStrategy)
+	sendNotificationSvcSet = wire.NewSet(notification.NewSendService, send_strategy.NewDispatcher, send_strategy.NewImmediateStrategy, send_strategy.NewDefaultStrategy)
 	callbackSvcSet         = wire.NewSet(callback.NewService, repository.NewCallbackLogRepository, dao.NewCallbackLogDAO)
 	providerSvcSet         = wire.NewSet(manage.NewProviderService, repository.NewProviderRepository, dao.NewProviderDAO, ioc.InitProviderEncryptKey)
 	templateSvcSet         = wire.NewSet(manage2.NewChannelTemplateService, repository.NewChannelTemplateRepository, dao.NewChannelTemplateDAO)
@@ -112,16 +107,6 @@ func newSMSSelectorBuilder(
 	templateSvc manage2.ChannelTemplateService,
 	clients map[string]client.Client,
 ) *sequential.SelectorBuilder {
-	providers := initSMSProviders(providerSvc, templateSvc, clients)
-	return sequential.NewSelectorBuilder(providers)
-}
-
-func initSMSProviders(
-	providerSvc manage.Service,
-	templateSvc manage2.ChannelTemplateService,
-	clients map[string]client.Client,
-) []provider.Provider {
-
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
 
@@ -129,6 +114,7 @@ func initSMSProviders(
 	if err != nil {
 		panic(err)
 	}
+
 	providers := make([]provider.Provider, 0, len(entities))
 	for i := range entities {
 		providers = append(providers, sms.NewSMSProvider(
@@ -137,5 +123,5 @@ func initSMSProviders(
 			clients[entities[i].Name],
 		))
 	}
-	return providers
+	return sequential.NewSelectorBuilder(providers)
 }

@@ -62,7 +62,9 @@ var (
 	)
 	sendNotificationSvcSet = wire.NewSet(
 		notificationsvc.NewSendService,
-		newSendStrategy,
+		send_strategy.NewDispatcher,
+		send_strategy.NewImmediateStrategy,
+		send_strategy.NewDefaultStrategy,
 	)
 	callbackSvcSet = wire.NewSet(
 		callback.NewService,
@@ -83,17 +85,6 @@ var (
 	)
 )
 
-func newSendStrategy(repo repository.NotificationRepository,
-	configSvc configsvc.BusinessConfigService,
-	sender sender.NotificationSender) send_strategy.SendStrategy {
-	wire.Build(
-		send_strategy.NewDispatcher,
-		send_strategy.NewImmediateStrategy,
-		send_strategy.NewDefaultStrategy,
-	)
-	return nil
-}
-
 func newChannel(
 	providerSvc providersvc.Service,
 	templateSvc templatesvc.ChannelTemplateService,
@@ -109,16 +100,6 @@ func newSMSSelectorBuilder(
 	templateSvc templatesvc.ChannelTemplateService,
 	clients map[string]client.Client,
 ) *sequential.SelectorBuilder {
-	providers := initSMSProviders(providerSvc, templateSvc, clients)
-	return sequential.NewSelectorBuilder(providers)
-}
-
-func initSMSProviders(
-	providerSvc providersvc.Service,
-	templateSvc templatesvc.ChannelTemplateService,
-	clients map[string]client.Client,
-) []provider.Provider {
-
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
 
@@ -126,6 +107,7 @@ func initSMSProviders(
 	if err != nil {
 		panic(err)
 	}
+	// 构建SMS供应商
 	providers := make([]provider.Provider, 0, len(entities))
 	for i := range entities {
 		providers = append(providers, sms.NewSMSProvider(
@@ -134,7 +116,7 @@ func initSMSProviders(
 			clients[entities[i].Name],
 		))
 	}
-	return providers
+	return sequential.NewSelectorBuilder(providers)
 }
 
 func InitGrpcServer() *ioc.App {
