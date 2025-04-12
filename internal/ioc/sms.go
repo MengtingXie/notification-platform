@@ -5,7 +5,7 @@ import (
 	"github.com/gotomicro/ego/core/econf"
 )
 
-func InitAliyunSms() client.Client {
+func InitAliyunSMS() client.Client {
 	type Config struct {
 		RegionID        string `yaml:"regionId"`
 		AccessKeyID     string `yaml:"accessKeyId"`
@@ -23,7 +23,7 @@ func InitAliyunSms() client.Client {
 	return cli
 }
 
-func InitTxSms() client.Client {
+func InitTencentCloudSMS() client.Client {
 	type Config struct {
 		RegionID        string `yaml:"regionId"`
 		AccessKeyID     string `yaml:"accessKeyId"`
@@ -42,9 +42,9 @@ func InitTxSms() client.Client {
 	return cli
 }
 
-func InitSmsClients() map[string]client.Client {
+func InitSMSClients() map[string]client.Client {
 	return map[string]client.Client{
-		"aliyun":       InitAliyunSms(),
-		"tencentcloud": InitTxSms(),
+		"aliyun":       InitAliyunSMS(),
+		"tencentcloud": InitTencentCloudSMS(),
 	}
 }

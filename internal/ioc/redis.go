@@ -5,7 +5,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func InitRedis() *redis.Client {
+func InitRedisClient() *redis.Client {
 	type Config struct {
 		Addr string
 	}

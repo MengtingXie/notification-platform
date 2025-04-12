@@ -49,7 +49,7 @@ func InitGrpcServer() *ioc.App {
 	sonyflake := ioc.InitIDGenerator()
 	notificationService := notification.NewNotificationService(notificationRepository, sonyflake)
 	businessConfigDAO := dao.NewBusinessConfigDAO(db)
-	client := ioc.InitRedis()
+	client := ioc.InitRedisClient()
 	cache := ioc.InitGoCache()
 	localCache := local.NewLocalCache(client, cache)
 	redisCache := redis.NewCache(client)
@@ -58,7 +58,7 @@ func InitGrpcServer() *ioc.App {
 	callbackLogDAO := dao.NewCallbackLogDAO(db)
 	callbackLogRepository := repository.NewCallbackLogRepository(notificationRepository, callbackLogDAO)
 	callbackService := callback.NewService(businessConfigService, callbackLogRepository)
-	v := ioc.InitSmsClients()
+	v := ioc.InitSMSClients()
 	channel := newChannel(service, channelTemplateService, v)
 	notificationSender := sender.NewSender(notificationRepository, businessConfigService, callbackService, channel)
 	immediateSendStrategy := send_strategy.NewImmediateStrategy(notificationRepository, notificationSender)
@@ -67,7 +67,7 @@ func InitGrpcServer() *ioc.App {
 	sendService := notification.NewSendService(channelTemplateService, notificationService, sonyflake, sendStrategy)
 	txNotificationDAO := dao.NewTxNotificationDAO(db)
 	txNotificationRepository := repository.NewTxNotificationRepository(txNotificationDAO)
-	dlockClient := ioc.InitDLock()
+	dlockClient := ioc.InitDistributedLock(client)
 	txNotificationService := notification.NewTxNotificationService(txNotificationRepository, businessConfigService, notificationRepository, dlockClient)
 	notificationServer := grpc.NewServer(sendService, txNotificationService)
 	component := ioc.InitEtcdClient()
@@ -81,7 +81,7 @@ func InitGrpcServer() *ioc.App {
 // wire.go:
 
 var (
-	BaseSet              = wire.NewSet(ioc.InitDB, ioc.InitDLock, ioc.InitEtcdClient, ioc.InitIDGenerator, ioc.InitRedis, ioc.InitSmsClients, ioc.InitGoCache, local.NewLocalCache, redis.NewCache)
+	BaseSet              = wire.NewSet(ioc.InitDB, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitIDGenerator, ioc.InitRedisClient, ioc.InitSMSClients, ioc.InitGoCache, local.NewLocalCache, redis.NewCache)
 	configSvcSet         = wire.NewSet(config.NewBusinessConfigService, repository.NewBusinessConfigRepository, dao.NewBusinessConfigDAO)
 	notificationSvcSet   = wire.NewSet(notification.NewNotificationService, repository.NewNotificationRepository, dao.NewNotificationDAO)
 	txNotificationSvcSet = wire.NewSet(notification.NewTxNotificationService, repository.NewTxNotificationRepository, dao.NewTxNotificationDAO)

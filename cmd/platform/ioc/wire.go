@@ -32,11 +32,11 @@ import (
 var (
 	BaseSet = wire.NewSet(
 		ioc.InitDB,
-		ioc.InitDLock,
+		ioc.InitDistributedLock,
 		ioc.InitEtcdClient,
 		ioc.InitIDGenerator,
-		ioc.InitRedis,
-		ioc.InitSmsClients,
+		ioc.InitRedisClient,
+		ioc.InitSMSClients,
 		ioc.InitGoCache,
 
 		local.NewLocalCache,
