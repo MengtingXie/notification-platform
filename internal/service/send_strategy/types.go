@@ -10,6 +10,8 @@ import (
 )
 
 // SendStrategy 发送策略接口
+//
+//go:generate mockgen -source=./types.go -destination=./mocks/send_strategy.mock.go -package=sendstrategymocks -typed SendStrategy
 type SendStrategy interface {
 	// Send 单条发送通知
 	Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error)

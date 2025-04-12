@@ -111,11 +111,11 @@ func (r *notificationRepository) toEntity(notification domain.Notification) dao.
 		BizID:             notification.BizID,
 		Key:               notification.Key,
 		Receivers:         receivers,
-		Channel:           string(notification.Channel),
+		Channel:           notification.Channel.String(),
 		TemplateID:        notification.Template.ID,
 		TemplateVersionID: notification.Template.VersionID,
 		TemplateParams:    templateParams,
-		Status:            string(notification.Status),
+		Status:            notification.Status.String(),
 		ScheduledSTime:    notification.ScheduledSTime.UnixMilli(),
 		ScheduledETime:    notification.ScheduledETime.UnixMilli(),
 		Version:           notification.Version,
@@ -264,12 +264,12 @@ func (r *notificationRepository) BatchUpdateStatusSucceededOrFailed(ctx context.
 }
 
 func (r *notificationRepository) BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.SendStatus) error {
-	return r.dao.BatchUpdateStatus(ctx, ids, string(status))
+	return r.dao.BatchUpdateStatus(ctx, ids, status.String())
 }
 
 // ListByStatus 根据状态获取通知列表
 func (r *notificationRepository) ListByStatus(ctx context.Context, status domain.SendStatus, limit int) ([]domain.Notification, error) {
-	ns, err := r.dao.ListByStatus(ctx, string(status), limit)
+	ns, err := r.dao.ListByStatus(ctx, status.String(), limit)
 	if err != nil {
 		return nil, err
 	}

@@ -8,8 +8,6 @@ import (
 	"gitee.com/flycash/notification-platform/internal/errs"
 )
 
-// Channel 通知渠道
-
 // SendStatus 通知状态
 type SendStatus string
 
@@ -78,7 +76,7 @@ func (n *Notification) Validate() error {
 		return fmt.Errorf("%w: Receivers= %v", errs.ErrInvalidParameter, n.Receivers)
 	}
 
-	if n.Channel != ChannelSMS && n.Channel != ChannelEmail && n.Channel != ChannelInApp {
+	if !n.Channel.IsValid() {
 		return fmt.Errorf("%w: Channel = %q", errs.ErrInvalidParameter, n.Channel)
 	}
 

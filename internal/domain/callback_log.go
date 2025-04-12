@@ -8,6 +8,10 @@ const (
 	CallbackLogStatusFAILED  CallbackLogStatus = "FAILED"
 )
 
+func (c CallbackLogStatus) String() string {
+	return string(c)
+}
+
 type CallbackLog struct {
 	ID            int64
 	Notification  Notification

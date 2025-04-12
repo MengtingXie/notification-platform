@@ -10,6 +10,10 @@ const (
 	AuditStatusApproved AuditStatus = "APPROVED"  // 已通过
 )
 
+func (a AuditStatus) String() string {
+	return string(a)
+}
+
 // OwnerType 拥有者类型
 type OwnerType string
 
@@ -17,6 +21,10 @@ const (
 	OwnerTypePerson       OwnerType = "person"       // 个人
 	OwnerTypeOrganization OwnerType = "organization" // 组织
 )
+
+func (o OwnerType) String() string {
+	return string(o)
+}
 
 type BusinessType int64
 
@@ -28,6 +36,10 @@ const (
 	// BusinessTypeVerificationCode 验证码
 	BusinessTypeVerificationCode BusinessType = 3
 )
+
+func (b BusinessType) ToInt64() int64 {
+	return int64(b)
+}
 
 // ChannelTemplate 渠道模板
 type ChannelTemplate struct {

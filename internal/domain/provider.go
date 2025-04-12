@@ -9,13 +9,25 @@ const (
 	ChannelInApp Channel = "IN_APP" // 站内信
 )
 
-// SendStatus 供应商状态
+func (c Channel) String() string {
+	return string(c)
+}
+
+func (c Channel) IsValid() bool {
+	return c == ChannelSMS || c == ChannelEmail || c == ChannelInApp
+}
+
+// ProviderStatus 供应商状态
 type ProviderStatus string
 
 const (
-	ProviderStatusActive   SendStatus = "ACTIVE"   // 激活
-	ProviderStatusInactive SendStatus = "INACTIVE" // 未激活
+	ProviderStatusActive   ProviderStatus = "ACTIVE"   // 激活
+	ProviderStatusInactive ProviderStatus = "INACTIVE" // 未激活
 )
+
+func (p ProviderStatus) String() string {
+	return string(p)
+}
 
 // Provider 供应商领域模型
 type Provider struct {
@@ -36,5 +48,5 @@ type Provider struct {
 	DailyLimit int // 每日请求数限制
 
 	AuditCallbackURL string // 审核请求回调地址
-	Status           SendStatus
+	Status           ProviderStatus
 }

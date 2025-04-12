@@ -21,7 +21,7 @@ func NewRetry(cfg Config) (strategy.Strategy, error) {
 }
 
 type Config struct {
-	Type               string                    `json:"type"` // 重试策略
+	Type               string                    `json:"type"`
 	FixedInterval      *FixedIntervalConfig      `json:"fixedInterval"`
 	ExponentialBackoff *ExponentialBackoffConfig `json:"exponentialBackoff"`
 }

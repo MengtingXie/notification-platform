@@ -9,10 +9,7 @@ import (
 	"gitee.com/flycash/notification-platform/internal/repository"
 )
 
-var (
-	ErrProviderNotFound = repository.ErrProviderNotFound
-	ErrInvalidParameter = errors.New("参数非法")
-)
+var ErrInvalidParameter = errors.New("参数非法")
 
 // Service 供应商服务接口
 //

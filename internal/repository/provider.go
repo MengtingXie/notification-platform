@@ -53,7 +53,7 @@ func (p *providerRepository) toDomain(d dao.Provider) domain.Provider {
 		QPSLimit:         d.QPSLimit,
 		DailyLimit:       d.DailyLimit,
 		AuditCallbackURL: d.AuditCallbackURL,
-		Status:           domain.SendStatus(d.Status),
+		Status:           domain.ProviderStatus(d.Status),
 	}
 }
 
@@ -61,7 +61,7 @@ func (p *providerRepository) toEntity(provider domain.Provider) dao.Provider {
 	daoProvider := dao.Provider{
 		ID:               provider.ID,
 		Name:             provider.Name,
-		Channel:          string(provider.Channel),
+		Channel:          provider.Channel.String(),
 		Endpoint:         provider.Endpoint,
 		APIKey:           provider.APIKey,
 		APISecret:        provider.APISecret,
@@ -69,7 +69,7 @@ func (p *providerRepository) toEntity(provider domain.Provider) dao.Provider {
 		QPSLimit:         provider.QPSLimit,
 		DailyLimit:       provider.DailyLimit,
 		AuditCallbackURL: provider.AuditCallbackURL,
-		Status:           string(provider.Status),
+		Status:           provider.Status.String(),
 	}
 	return daoProvider
 }
@@ -91,7 +91,7 @@ func (p *providerRepository) FindByID(ctx context.Context, id int64) (domain.Pro
 }
 
 func (p *providerRepository) FindByChannel(ctx context.Context, channel domain.Channel) ([]domain.Provider, error) {
-	providers, err := p.dao.FindByChannel(ctx, string(channel))
+	providers, err := p.dao.FindByChannel(ctx, channel.String())
 	if err != nil {
 		return nil, err
 	}

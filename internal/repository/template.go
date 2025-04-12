@@ -59,7 +59,7 @@ func NewChannelTemplateRepository(dao dao.ChannelTemplateDAO) ChannelTemplateRep
 // GetTemplates 根据所有者获取模板列表
 func (r *channelTemplateRepository) GetTemplates(ctx context.Context, ownerID int64, ownerType domain.OwnerType) ([]domain.ChannelTemplate, error) {
 	// 获取模板列表
-	templates, err := r.dao.GetTemplatesByOwner(ctx, ownerID, string(ownerType))
+	templates, err := r.dao.GetTemplatesByOwner(ctx, ownerID, ownerType.String())
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func (r *channelTemplateRepository) GetTemplates(ctx context.Context, ownerID in
 // CreateTemplate 创建模板
 func (r *channelTemplateRepository) CreateTemplate(ctx context.Context, template domain.ChannelTemplate) (domain.ChannelTemplate, error) {
 	// 转换为数据库模型
-	daoTemplate := r.convertToTemplateDAO(template)
+	daoTemplate := r.convertToTemplateEntity(template)
 
 	// 创建模板
 	createdTemplate, err := r.dao.CreateTemplate(ctx, daoTemplate)
@@ -139,7 +139,7 @@ func (r *channelTemplateRepository) CreateTemplate(ctx context.Context, template
 // CreateTemplateVersion 创建模板版本
 func (r *channelTemplateRepository) CreateTemplateVersion(ctx context.Context, version domain.ChannelTemplateVersion) (domain.ChannelTemplateVersion, error) {
 	// 转换为数据库模型
-	daoVersion := r.convertToVersionDAO(version)
+	daoVersion := r.convertToVersionEntity(version)
 
 	// 创建模板版本
 	createdVersion, err := r.dao.CreateTemplateVersion(ctx, daoVersion)
@@ -161,7 +161,7 @@ func (r *channelTemplateRepository) BatchCreateTemplateProviders(ctx context.Con
 	// 转换为数据库模型
 	daoProviders := make([]dao.ChannelTemplateProvider, len(providers))
 	for i := range providers {
-		daoProviders[i] = r.convertToProviderDAO(providers[i])
+		daoProviders[i] = r.convertToProviderEntity(providers[i])
 	}
 
 	// 批量创建
@@ -233,20 +233,20 @@ func (r *channelTemplateRepository) convertToProviderDomain(daoProvider dao.Chan
 }
 
 // 领域模型转数据库模型
-func (r *channelTemplateRepository) convertToTemplateDAO(domainTemplate domain.ChannelTemplate) dao.ChannelTemplate {
+func (r *channelTemplateRepository) convertToTemplateEntity(domainTemplate domain.ChannelTemplate) dao.ChannelTemplate {
 	return dao.ChannelTemplate{
 		ID:              domainTemplate.ID,
 		OwnerID:         domainTemplate.OwnerID,
-		OwnerType:       string(domainTemplate.OwnerType),
+		OwnerType:       domainTemplate.OwnerType.String(),
 		Name:            domainTemplate.Name,
 		Description:     domainTemplate.Description,
-		Channel:         string(domainTemplate.Channel),
-		BusinessType:    int64(domainTemplate.BusinessType),
+		Channel:         domainTemplate.Channel.String(),
+		BusinessType:    domainTemplate.BusinessType.ToInt64(),
 		ActiveVersionID: domainTemplate.ActiveVersionID,
 	}
 }
 
-func (r *channelTemplateRepository) convertToVersionDAO(domainVersion domain.ChannelTemplateVersion) dao.ChannelTemplateVersion {
+func (r *channelTemplateRepository) convertToVersionEntity(domainVersion domain.ChannelTemplateVersion) dao.ChannelTemplateVersion {
 	return dao.ChannelTemplateVersion{
 		ID:                       domainVersion.ID,
 		ChannelTemplateID:        domainVersion.ChannelTemplateID,
@@ -257,23 +257,23 @@ func (r *channelTemplateRepository) convertToVersionDAO(domainVersion domain.Cha
 		AuditID:                  domainVersion.AuditID,
 		AuditorID:                domainVersion.AuditorID,
 		AuditTime:                domainVersion.AuditTime,
-		AuditStatus:              string(domainVersion.AuditStatus),
+		AuditStatus:              domainVersion.AuditStatus.String(),
 		RejectReason:             domainVersion.RejectReason,
 		LastReviewSubmissionTime: domainVersion.LastReviewSubmissionTime,
 	}
 }
 
-func (r *channelTemplateRepository) convertToProviderDAO(domainProvider domain.ChannelTemplateProvider) dao.ChannelTemplateProvider {
+func (r *channelTemplateRepository) convertToProviderEntity(domainProvider domain.ChannelTemplateProvider) dao.ChannelTemplateProvider {
 	return dao.ChannelTemplateProvider{
 		ID:                       domainProvider.ID,
 		TemplateID:               domainProvider.TemplateID,
 		TemplateVersionID:        domainProvider.TemplateVersionID,
 		ProviderID:               domainProvider.ProviderID,
 		ProviderName:             domainProvider.ProviderName,
-		ProviderChannel:          string(domainProvider.ProviderChannel),
+		ProviderChannel:          domainProvider.ProviderChannel.String(),
 		RequestID:                domainProvider.RequestID,
 		ProviderTemplateID:       domainProvider.ProviderTemplateID,
-		AuditStatus:              string(domainProvider.AuditStatus),
+		AuditStatus:              domainProvider.AuditStatus.String(),
 		RejectReason:             domainProvider.RejectReason,
 		LastReviewSubmissionTime: domainProvider.LastReviewSubmissionTime,
 	}
@@ -281,7 +281,7 @@ func (r *channelTemplateRepository) convertToProviderDAO(domainProvider domain.C
 
 // UpdateTemplate 更新模版
 func (r *channelTemplateRepository) UpdateTemplate(ctx context.Context, template domain.ChannelTemplate) error {
-	return r.dao.UpdateTemplate(ctx, r.convertToTemplateDAO(template))
+	return r.dao.UpdateTemplate(ctx, r.convertToTemplateEntity(template))
 }
 
 func (r *channelTemplateRepository) GetTemplateVersionByID(ctx context.Context, versionID int64) (domain.ChannelTemplateVersion, error) {

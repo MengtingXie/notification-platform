@@ -5,6 +5,7 @@
 //
 //	mockgen -source=./manage.go -destination=../mocks/manage.mock.go -package=providermocks -typed Service
 //
+
 // Package providermocks is a generated GoMock package.
 package providermocks
 
@@ -20,6 +21,7 @@ import (
 type MockService struct {
 	ctrl     *gomock.Controller
 	recorder *MockServiceMockRecorder
+	isgomock struct{}
 }
 
 // MockServiceMockRecorder is the mock recorder for MockService.
@@ -49,31 +51,31 @@ func (m *MockService) CreateProvider(ctx context.Context, provider domain.Provid
 }
 
 // CreateProvider indicates an expected call of CreateProvider.
-func (mr *MockServiceMockRecorder) CreateProvider(ctx, provider any) *ServiceCreateProviderCall {
+func (mr *MockServiceMockRecorder) CreateProvider(ctx, provider any) *MockServiceCreateProviderCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateProvider", reflect.TypeOf((*MockService)(nil).CreateProvider), ctx, provider)
-	return &ServiceCreateProviderCall{Call: call}
+	return &MockServiceCreateProviderCall{Call: call}
 }
 
-// ServiceCreateProviderCall wrap *gomock.Call
-type ServiceCreateProviderCall struct {
+// MockServiceCreateProviderCall wrap *gomock.Call
+type MockServiceCreateProviderCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *ServiceCreateProviderCall) Return(arg0 domain.Provider, arg1 error) *ServiceCreateProviderCall {
+func (c *MockServiceCreateProviderCall) Return(arg0 domain.Provider, arg1 error) *MockServiceCreateProviderCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *ServiceCreateProviderCall) Do(f func(context.Context, domain.Provider) (domain.Provider, error)) *ServiceCreateProviderCall {
+func (c *MockServiceCreateProviderCall) Do(f func(context.Context, domain.Provider) (domain.Provider, error)) *MockServiceCreateProviderCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *ServiceCreateProviderCall) DoAndReturn(f func(context.Context, domain.Provider) (domain.Provider, error)) *ServiceCreateProviderCall {
+func (c *MockServiceCreateProviderCall) DoAndReturn(f func(context.Context, domain.Provider) (domain.Provider, error)) *MockServiceCreateProviderCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -88,31 +90,31 @@ func (m *MockService) GetProviderByID(ctx context.Context, id int64) (domain.Pro
 }
 
 // GetProviderByID indicates an expected call of GetProviderByID.
-func (mr *MockServiceMockRecorder) GetProviderByID(ctx, id any) *ServiceGetProviderByIDCall {
+func (mr *MockServiceMockRecorder) GetProviderByID(ctx, id any) *MockServiceGetProviderByIDCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProviderByID", reflect.TypeOf((*MockService)(nil).GetProviderByID), ctx, id)
-	return &ServiceGetProviderByIDCall{Call: call}
+	return &MockServiceGetProviderByIDCall{Call: call}
 }
 
-// ServiceGetProviderByIDCall wrap *gomock.Call
-type ServiceGetProviderByIDCall struct {
+// MockServiceGetProviderByIDCall wrap *gomock.Call
+type MockServiceGetProviderByIDCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *ServiceGetProviderByIDCall) Return(arg0 domain.Provider, arg1 error) *ServiceGetProviderByIDCall {
+func (c *MockServiceGetProviderByIDCall) Return(arg0 domain.Provider, arg1 error) *MockServiceGetProviderByIDCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *ServiceGetProviderByIDCall) Do(f func(context.Context, int64) (domain.Provider, error)) *ServiceGetProviderByIDCall {
+func (c *MockServiceGetProviderByIDCall) Do(f func(context.Context, int64) (domain.Provider, error)) *MockServiceGetProviderByIDCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *ServiceGetProviderByIDCall) DoAndReturn(f func(context.Context, int64) (domain.Provider, error)) *ServiceGetProviderByIDCall {
+func (c *MockServiceGetProviderByIDCall) DoAndReturn(f func(context.Context, int64) (domain.Provider, error)) *MockServiceGetProviderByIDCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -127,31 +129,31 @@ func (m *MockService) GetProviderIDByNameAndChannel(ctx context.Context, name st
 }
 
 // GetProviderIDByNameAndChannel indicates an expected call of GetProviderIDByNameAndChannel.
-func (mr *MockServiceMockRecorder) GetProviderIDByNameAndChannel(ctx, name, channel any) *ServiceGetProviderIDByNameAndChannelCall {
+func (mr *MockServiceMockRecorder) GetProviderIDByNameAndChannel(ctx, name, channel any) *MockServiceGetProviderIDByNameAndChannelCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProviderIDByNameAndChannel", reflect.TypeOf((*MockService)(nil).GetProviderIDByNameAndChannel), ctx, name, channel)
-	return &ServiceGetProviderIDByNameAndChannelCall{Call: call}
+	return &MockServiceGetProviderIDByNameAndChannelCall{Call: call}
 }
 
-// ServiceGetProviderIDByNameAndChannelCall wrap *gomock.Call
-type ServiceGetProviderIDByNameAndChannelCall struct {
+// MockServiceGetProviderIDByNameAndChannelCall wrap *gomock.Call
+type MockServiceGetProviderIDByNameAndChannelCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *ServiceGetProviderIDByNameAndChannelCall) Return(arg0 domain.Provider, arg1 error) *ServiceGetProviderIDByNameAndChannelCall {
+func (c *MockServiceGetProviderIDByNameAndChannelCall) Return(arg0 domain.Provider, arg1 error) *MockServiceGetProviderIDByNameAndChannelCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *ServiceGetProviderIDByNameAndChannelCall) Do(f func(context.Context, string, domain.Channel) (domain.Provider, error)) *ServiceGetProviderIDByNameAndChannelCall {
+func (c *MockServiceGetProviderIDByNameAndChannelCall) Do(f func(context.Context, string, domain.Channel) (domain.Provider, error)) *MockServiceGetProviderIDByNameAndChannelCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *ServiceGetProviderIDByNameAndChannelCall) DoAndReturn(f func(context.Context, string, domain.Channel) (domain.Provider, error)) *ServiceGetProviderIDByNameAndChannelCall {
+func (c *MockServiceGetProviderIDByNameAndChannelCall) DoAndReturn(f func(context.Context, string, domain.Channel) (domain.Provider, error)) *MockServiceGetProviderIDByNameAndChannelCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -166,31 +168,31 @@ func (m *MockService) GetProvidersByChannel(ctx context.Context, channel domain.
 }
 
 // GetProvidersByChannel indicates an expected call of GetProvidersByChannel.
-func (mr *MockServiceMockRecorder) GetProvidersByChannel(ctx, channel any) *ServiceGetProvidersByChannelCall {
+func (mr *MockServiceMockRecorder) GetProvidersByChannel(ctx, channel any) *MockServiceGetProvidersByChannelCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProvidersByChannel", reflect.TypeOf((*MockService)(nil).GetProvidersByChannel), ctx, channel)
-	return &ServiceGetProvidersByChannelCall{Call: call}
+	return &MockServiceGetProvidersByChannelCall{Call: call}
 }
 
-// ServiceGetProvidersByChannelCall wrap *gomock.Call
-type ServiceGetProvidersByChannelCall struct {
+// MockServiceGetProvidersByChannelCall wrap *gomock.Call
+type MockServiceGetProvidersByChannelCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *ServiceGetProvidersByChannelCall) Return(arg0 []domain.Provider, arg1 error) *ServiceGetProvidersByChannelCall {
+func (c *MockServiceGetProvidersByChannelCall) Return(arg0 []domain.Provider, arg1 error) *MockServiceGetProvidersByChannelCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *ServiceGetProvidersByChannelCall) Do(f func(context.Context, domain.Channel) ([]domain.Provider, error)) *ServiceGetProvidersByChannelCall {
+func (c *MockServiceGetProvidersByChannelCall) Do(f func(context.Context, domain.Channel) ([]domain.Provider, error)) *MockServiceGetProvidersByChannelCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *ServiceGetProvidersByChannelCall) DoAndReturn(f func(context.Context, domain.Channel) ([]domain.Provider, error)) *ServiceGetProvidersByChannelCall {
+func (c *MockServiceGetProvidersByChannelCall) DoAndReturn(f func(context.Context, domain.Channel) ([]domain.Provider, error)) *MockServiceGetProvidersByChannelCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -204,31 +206,31 @@ func (m *MockService) UpdateProvider(ctx context.Context, provider domain.Provid
 }
 
 // UpdateProvider indicates an expected call of UpdateProvider.
-func (mr *MockServiceMockRecorder) UpdateProvider(ctx, provider any) *ServiceUpdateProviderCall {
+func (mr *MockServiceMockRecorder) UpdateProvider(ctx, provider any) *MockServiceUpdateProviderCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateProvider", reflect.TypeOf((*MockService)(nil).UpdateProvider), ctx, provider)
-	return &ServiceUpdateProviderCall{Call: call}
+	return &MockServiceUpdateProviderCall{Call: call}
 }
 
-// ServiceUpdateProviderCall wrap *gomock.Call
-type ServiceUpdateProviderCall struct {
+// MockServiceUpdateProviderCall wrap *gomock.Call
+type MockServiceUpdateProviderCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *ServiceUpdateProviderCall) Return(arg0 error) *ServiceUpdateProviderCall {
+func (c *MockServiceUpdateProviderCall) Return(arg0 error) *MockServiceUpdateProviderCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *ServiceUpdateProviderCall) Do(f func(context.Context, domain.Provider) error) *ServiceUpdateProviderCall {
+func (c *MockServiceUpdateProviderCall) Do(f func(context.Context, domain.Provider) error) *MockServiceUpdateProviderCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *ServiceUpdateProviderCall) DoAndReturn(f func(context.Context, domain.Provider) error) *ServiceUpdateProviderCall {
+func (c *MockServiceUpdateProviderCall) DoAndReturn(f func(context.Context, domain.Provider) error) *MockServiceUpdateProviderCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

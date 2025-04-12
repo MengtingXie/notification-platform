@@ -19,8 +19,8 @@ var (
 )
 
 // ChannelTemplateService 模板服务接口
-
-//go:generate mockgen -source=./template.go -destination=../../mocks/template.mock.go -package=templatemocks -typed ChannelTemplateService
+//
+//go:generate mockgen -source=./manage.go -destination=../mocks/manage.mock.go -package=templatemocks -typed ChannelTemplateService
 type ChannelTemplateService interface {
 	// 模版
 

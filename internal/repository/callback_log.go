@@ -58,17 +58,17 @@ func (c *callbackLogRepository) toDomain(log dao.CallbackLog, notification domai
 
 func (c *callbackLogRepository) Update(ctx context.Context, logs []domain.CallbackLog) error {
 	return c.dao.Update(ctx, slice.Map(logs, func(_ int, src domain.CallbackLog) dao.CallbackLog {
-		return c.toDAO(src)
+		return c.toEntity(src)
 	}))
 }
 
-func (c *callbackLogRepository) toDAO(log domain.CallbackLog) dao.CallbackLog {
+func (c *callbackLogRepository) toEntity(log domain.CallbackLog) dao.CallbackLog {
 	return dao.CallbackLog{
 		ID:             log.ID,
 		NotificationID: log.Notification.ID,
 		RetryCount:     log.RetryCount,
 		NextRetryTime:  log.NextRetryTime,
-		Status:         string(log.Status),
+		Status:         log.Status.String(),
 	}
 }
 

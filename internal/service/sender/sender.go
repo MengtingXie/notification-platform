@@ -14,6 +14,8 @@ import (
 )
 
 // NotificationSender 通知发送接口
+//
+//go:generate mockgen -source=./sender.go -destination=./mocks/sender.mock.go -package=sendermocks -typed NotificationSender
 type NotificationSender interface {
 	// Send 单条发送通知
 	Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error)

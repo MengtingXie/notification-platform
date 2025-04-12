@@ -30,19 +30,21 @@ func NewSMSProvider(name string, templateSvc manage.ChannelTemplateService, clie
 
 // Send 发送短信
 func (p *smsProvider) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
-	// SMS 有多个供应商 aliyun，腾讯云
 	tmpl, err := p.templateSvc.GetTemplate(ctx, notification.Template.ID, notification.Template.VersionID, p.name, domain.ChannelSMS)
 	if err != nil {
 		return domain.SendResponse{}, fmt.Errorf("%w: %w", errs.ErrSendNotificationFailed, err)
 	}
 
-	version := tmpl.Versions[0]
-	provider := version.Providers[0]
+	activeVersion := tmpl.ActiveVersion()
+	if activeVersion == nil {
+		return domain.SendResponse{}, fmt.Errorf("%w: 无已发布模版", errs.ErrSendNotificationFailed)
+	}
 
+	const first = 0
 	resp, err := p.client.Send(client.SendReq{
 		PhoneNumbers:  notification.Receivers,
-		SignName:      version.Signature,
-		TemplateID:    provider.ProviderTemplateID,
+		SignName:      activeVersion.Signature,
+		TemplateID:    activeVersion.Providers[first].ProviderTemplateID,
 		TemplateParam: notification.Template.Params,
 	})
 	if err != nil {

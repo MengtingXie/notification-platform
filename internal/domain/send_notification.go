@@ -34,8 +34,8 @@ func (e SendStrategyConfig) SendTimeWindow() (stime, etime time.Time) {
 	switch e.Type {
 	case SendStrategyImmediate:
 		now := time.Now()
-		const defaultEndMinute = 30
-		return now, now.Add(time.Minute * defaultEndMinute)
+		const defaultEndMinute = 30 * time.Minute
+		return now, now.Add(defaultEndMinute)
 	case SendStrategyDelayed:
 		now := time.Now()
 		return now, now.Add(e.Delay)
@@ -46,8 +46,8 @@ func (e SendStrategyConfig) SendTimeWindow() (stime, etime time.Time) {
 		return e.StartTime, e.EndTime
 	case SendStrategyScheduled:
 		// 无法精确控制，所以允许一些误差
-		const scheduledTimeTolerance = 3
-		return e.ScheduledTime.Add(-time.Second * scheduledTimeTolerance), e.ScheduledTime
+		const scheduledTimeTolerance = 3 * time.Second
+		return e.ScheduledTime.Add(-scheduledTimeTolerance), e.ScheduledTime
 	default:
 		// 假定一定检测过了，所以这里随便返回一个就可以
 		now := time.Now()
