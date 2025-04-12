@@ -68,8 +68,8 @@ func (l *InfiniteLoop) Run(ctx context.Context) {
 		}
 		// 不管是什么原因，都要考虑释放分布式锁了
 		// 要稍微摆脱 ctx 的控制，因为此时 ctx 可能被取消了
-		ctx = context.Background()
-		unCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
+		unCtx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+		//nolint:contextcheck // 这里必须使用 Background Context，因为原始 ctx 可能已被取消，但仍需尝试解锁操作。
 		unErr := lock.Unlock(unCtx)
 		cancel()
 		if unErr != nil {

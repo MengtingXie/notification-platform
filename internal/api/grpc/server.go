@@ -15,285 +15,58 @@ import (
 	"gitee.com/flycash/notification-platform/internal/api/grpc/interceptor/jwt"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/notification/v1"
 )
 
-// NotificationServer 处理通知平台的gRPC请求
+// NotificationServer 通知平台gRPC服务器处理gRPC请求
 type NotificationServer struct {
 	notificationv1.UnimplementedNotificationServiceServer
 	notificationv1.UnimplementedNotificationQueryServiceServer
-	sendSvc         notificationsvc.SendService
+
 	notificationSvc notificationsvc.Service
-	// TODO: 配置服务 configService config.ConfigService
-	txnSvc notificationsvc.TxNotificationService
+	sendSvc         notificationsvc.SendService
+	txnSvc          notificationsvc.TxNotificationService
 }
 
 // NewServer 创建通知平台gRPC服务器
-func NewServer(sendSvc notificationsvc.SendService, txnSvc notificationsvc.TxNotificationService) *NotificationServer {
+func NewServer(notificationSvc notificationsvc.Service,
+	sendSvc notificationsvc.SendService,
+	txnSvc notificationsvc.TxNotificationService,
+) *NotificationServer {
 	return &NotificationServer{
-		sendSvc: sendSvc,
-		txnSvc:  txnSvc,
+		notificationSvc: notificationSvc,
+		sendSvc:         sendSvc,
+		txnSvc:          txnSvc,
 	}
-}
-
-func (s *NotificationServer) TxPrepare(ctx context.Context, request *notificationv1.TxPrepareRequest) (*notificationv1.TxPrepareResponse, error) {
-	// 1. 从metadata中解析Authorization JWT Token
-	bizID, err := jwt.GetBizIDFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// 2. 将请求转换为领域对象
-	txn, err := s.convertToTxNotification(request.Notification, bizID)
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
-	}
-	_, err = s.txnSvc.Prepare(ctx, txn.Notification)
-	return &notificationv1.TxPrepareResponse{}, err
-}
-
-func (s *NotificationServer) TxCommit(ctx context.Context, request *notificationv1.TxCommitRequest) (*notificationv1.TxCommitResponse, error) {
-	bizID, err := jwt.GetBizIDFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	err = s.txnSvc.Commit(ctx, bizID, request.GetKey())
-	return &notificationv1.TxCommitResponse{}, err
-}
-
-func (s *NotificationServer) TxCancel(ctx context.Context, request *notificationv1.TxCancelRequest) (*notificationv1.TxCancelResponse, error) {
-	bizID, err := jwt.GetBizIDFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	err = s.txnSvc.Cancel(ctx, bizID, request.GetKey())
-	return &notificationv1.TxCancelResponse{}, err
 }
 
 // SendNotification 处理同步发送通知请求
 func (s *NotificationServer) SendNotification(ctx context.Context, req *notificationv1.SendNotificationRequest) (*notificationv1.SendNotificationResponse, error) {
-	// 1. 从metadata中解析Authorization JWT Token
+	// 从metadata中解析Authorization JWT Token
 	bizID, err := jwt.GetBizIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. 将请求转换为领域对象
-	notification, err := s.convertToNotification(req.Notification, bizID)
+	// 构建领域对象
+	notification, err := s.buildNotification(req.Notification, bizID)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
 	}
 
-	// 3. 调用执行器
+	// 调用发送服务
 	result, err := s.sendSvc.SendNotification(ctx, notification)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "发送通知失败: %v", err)
 	}
 
-	// 4. 将结果转换为响应
-	return s.convertToSendResponse(result, err)
+	// 将结果转换为响应
+	return s.buildGRPCSendResponse(result, err)
 }
 
-// SendNotificationAsync 处理异步发送通知请求
-func (s *NotificationServer) SendNotificationAsync(ctx context.Context, req *notificationv1.SendNotificationAsyncRequest) (*notificationv1.SendNotificationAsyncResponse, error) {
-	// 1. 从metadata中解析Authorization JWT Token
-	bizID, err := jwt.GetBizIDFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// 2. 将请求转换为领域对象
-	notification, err := s.convertToNotification(req.Notification, bizID)
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
-	}
-
-	// 3. 调用执行器
-	result, err := s.sendSvc.SendNotificationAsync(ctx, notification)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "异步发送通知失败: %v", err)
-	}
-
-	// 4. 将结果转换为响应
-	response := &notificationv1.SendNotificationAsyncResponse{
-		NotificationId: result.NotificationID,
-	}
-
-	// 如果有错误，提取错误代码和消息
-	if err != nil {
-		response.ErrorMessage = err.Error()
-		response.ErrorCode = s.mapErrorToErrorCode(err)
-	}
-
-	return response, nil
-}
-
-// BatchSendNotifications 处理批量同步发送通知请求
-func (s *NotificationServer) BatchSendNotifications(ctx context.Context, req *notificationv1.BatchSendNotificationsRequest) (*notificationv1.BatchSendNotificationsResponse, error) {
-	// 1. 从metadata中解析Authorization JWT Token
-	bizID, err := jwt.GetBizIDFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// 2. 将请求转换为领域对象
-	notifications := make([]domain.Notification, 0, len(req.Notifications))
-	for _, n := range req.Notifications {
-		notification, err := s.convertToNotification(n, bizID)
-		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
-		}
-		notifications = append(notifications, notification)
-	}
-
-	// 3. 调用执行器
-	responses, err := s.sendSvc.BatchSendNotifications(ctx, notifications...)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "批量发送通知失败: %v", err)
-	}
-
-	// 4. 将结果转换为响应
-	successCount := int32(0)
-	results := make([]*notificationv1.SendNotificationResponse, 0, len(responses.Results))
-	for i := range responses.Results {
-		resp, err1 := s.convertToSendResponse(responses.Results[i], nil)
-		if err1 != nil {
-			return nil, status.Errorf(codes.Internal, "转换响应失败: %v", err1)
-		}
-		results = append(results, resp)
-	}
-
-	return &notificationv1.BatchSendNotificationsResponse{
-		TotalCount:   int32(len(responses.Results)),
-		SuccessCount: successCount,
-		Results:      results,
-	}, nil
-}
-
-// BatchSendNotificationsAsync 处理批量异步发送通知请求
-func (s *NotificationServer) BatchSendNotificationsAsync(ctx context.Context, req *notificationv1.BatchSendNotificationsAsyncRequest) (*notificationv1.BatchSendNotificationsAsyncResponse, error) {
-	// 1. 从metadata中解析Authorization JWT Token
-	bizID, err := jwt.GetBizIDFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// 2. 将请求转换为领域对象
-	notifications := make([]domain.Notification, 0, len(req.Notifications))
-	for _, n := range req.Notifications {
-		notification, err := s.convertToNotification(n, bizID)
-		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
-		}
-		notifications = append(notifications, notification)
-	}
-
-	// 3. 调用执行器
-	result, err := s.sendSvc.BatchSendNotificationsAsync(ctx, notifications...)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "批量异步发送通知失败: %v", err)
-	}
-
-	// 4. 将结果转换为响应
-	response := &notificationv1.BatchSendNotificationsAsyncResponse{
-		NotificationIds: result.NotificationIDs,
-	}
-
-	return response, nil
-}
-
-// BatchQueryNotifications 处理批量查询通知请求
-func (s *NotificationServer) BatchQueryNotifications(ctx context.Context, req *notificationv1.BatchQueryNotificationsRequest) (*notificationv1.BatchQueryNotificationsResponse, error) {
-	// 1. 从metadata中解析Authorization JWT Token
-	bizID, err := jwt.GetBizIDFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// 查询通知
-	notifications, err := s.notificationSvc.GetByKeys(ctx, bizID, req.Keys...)
-	if err != nil {
-		// e.logger.Warn("同步批量查询通知失败", elog.Any("Error", err))
-		return nil, status.Errorf(codes.Internal, "批量查询通知失败: %v", err)
-	}
-
-	// 3. 将结果转换为响应
-	response := &notificationv1.BatchQueryNotificationsResponse{
-		Results: make([]*notificationv1.SendNotificationResponse, 0, len(notifications)),
-	}
-
-	for i := range notifications {
-		response.Results = append(response.Results, &notificationv1.SendNotificationResponse{
-			NotificationId: notifications[i].ID,
-			Status:         s.convertSendStatus(notifications[i].Status),
-		})
-	}
-
-	return response, nil
-}
-
-// QueryNotification 处理单条查询通知请求
-func (s *NotificationServer) QueryNotification(ctx context.Context, req *notificationv1.QueryNotificationRequest) (*notificationv1.QueryNotificationResponse, error) {
-	// 1. 从metadata中解析Authorization JWT Token
-	bizID, err := jwt.GetBizIDFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// 查询通知
-	notifications, err := s.notificationSvc.GetByKeys(ctx, bizID, req.Key)
-	if err != nil {
-		// e.logger.Warn("同步单条查询通知失败", elog.Any("Error", err))
-		return nil, status.Errorf(codes.Internal, "查询通知失败: %v", err)
-	}
-
-	const zero = 0
-	return &notificationv1.QueryNotificationResponse{
-		Result: &notificationv1.SendNotificationResponse{
-			NotificationId: notifications[zero].ID,
-			Status:         s.convertSendStatus(notifications[zero].Status),
-		},
-	}, nil
-}
-
-// extractAndValidateBizID 从请求中提取并验证BizID
-func (s *NotificationServer) extractAndValidateBizID(ctx context.Context) (int64, error) {
-	// 从metadata中获取Authorization header
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return 0, status.Errorf(codes.Unauthenticated, "缺少认证信息")
-	}
-
-	// 获取Authorization token
-	authHeaders := md.Get("Authorization")
-	if len(authHeaders) == 0 {
-		return 0, status.Errorf(codes.Unauthenticated, "缺少认证Token")
-	}
-
-	token := authHeaders[0]
-	if token == "" {
-		return 0, status.Errorf(codes.Unauthenticated, "无效的认证Token")
-	}
-
-	// TODO: 解析JWT Token获取BizID
-	// 这里仅作为示例，实际应该解析JWT并验证
-	// 临时使用固定的BizID
-	bizID := int64(101)
-
-	// TODO: 调用配置服务验证BizID是否有效
-	// 实际应该调用配置服务来验证
-	// if !s.configService.IsValidBizID(ctx, bizID) {
-	//     return 0, status.Errorf(codes.PermissionDenied, "无效的业务ID: %d", bizID)
-	// }
-
-	return bizID, nil
-}
-
-// convertToNotification 将请求转换为通知领域对象
-func (s *NotificationServer) convertToNotification(n *notificationv1.Notification, bizID int64) (domain.Notification, error) {
+func (s *NotificationServer) buildNotification(n *notificationv1.Notification, bizID int64) (domain.Notification, error) {
 	if n == nil {
 		return domain.Notification{}, errors.New("通知不能为空")
 	}
@@ -304,18 +77,33 @@ func (s *NotificationServer) convertToNotification(n *notificationv1.Notificatio
 		return domain.Notification{}, fmt.Errorf("无效的模板ID: %s", n.TemplateId)
 	}
 
-	// 构建基本Notification
-	notification := domain.Notification{
+	return domain.Notification{
 		BizID:     bizID,
 		Key:       n.Key,
 		Receivers: n.Receivers,
-		Channel:   s.convertChannel(n.Channel),
+		Channel:   s.convertToChannel(n.Channel),
 		Template: domain.Template{
 			ID:     tid,
 			Params: n.TemplateParams,
 		},
-	}
+		SendStrategyConfig: s.buildSendStrategyConfig(n),
+	}, nil
+}
 
+func (s *NotificationServer) convertToChannel(channel notificationv1.Channel) domain.Channel {
+	switch channel {
+	case notificationv1.Channel_SMS:
+		return domain.ChannelSMS
+	case notificationv1.Channel_EMAIL:
+		return domain.ChannelEmail
+	case notificationv1.Channel_IN_APP:
+		return domain.ChannelInApp
+	default:
+		return ""
+	}
+}
+
+func (s *NotificationServer) buildSendStrategyConfig(n *notificationv1.Notification) domain.SendStrategyConfig {
 	// 构建发送策略
 	sendStrategyType := domain.SendStrategyImmediate // 默认为立即发送
 	var delaySeconds int64
@@ -352,8 +140,7 @@ func (s *NotificationServer) convertToNotification(n *notificationv1.Notificatio
 			}
 		}
 	}
-
-	notification.SendStrategyConfig = domain.SendStrategyConfig{
+	return domain.SendStrategyConfig{
 		Type:          sendStrategyType,
 		Delay:         time.Duration(delaySeconds) * time.Second,
 		ScheduledTime: scheduledTime,
@@ -361,34 +148,19 @@ func (s *NotificationServer) convertToNotification(n *notificationv1.Notificatio
 		EndTime:       time.Unix(endTimeMilliseconds, 0),
 		DeadlineTime:  deadlineTime,
 	}
-	return notification, nil
 }
 
-// convertChannel 将gRPC通道转换为领域通道
-func (s *NotificationServer) convertChannel(channel notificationv1.Channel) domain.Channel {
-	switch channel {
-	case notificationv1.Channel_SMS:
-		return domain.ChannelSMS
-	case notificationv1.Channel_EMAIL:
-		return domain.ChannelEmail
-	case notificationv1.Channel_IN_APP:
-		return domain.ChannelInApp
-	default:
-		return ""
-	}
-}
-
-// convertToSendResponse 将领域响应转换为gRPC响应
-func (s *NotificationServer) convertToSendResponse(result domain.SendResponse, err error) (*notificationv1.SendNotificationResponse, error) {
+// buildGRPCSendResponse 将领域响应转换为gRPC响应
+func (s *NotificationServer) buildGRPCSendResponse(result domain.SendResponse, err error) (*notificationv1.SendNotificationResponse, error) {
 	response := &notificationv1.SendNotificationResponse{
 		NotificationId: result.NotificationID,
-		Status:         s.convertSendStatus(result.Status),
+		Status:         s.convertToGRPCSendStatus(result.Status),
 	}
 
 	// 如果有错误，提取错误代码和消息
 	if err != nil {
 		response.ErrorMessage = err.Error()
-		response.ErrorCode = s.mapErrorToErrorCode(err)
+		response.ErrorCode = s.convertToGRPCErrorCodeAndErrorMessage(err)
 
 		// 如果状态不是失败，但有错误，更新状态为失败
 		if response.Status != notificationv1.SendStatus_FAILED {
@@ -399,8 +171,26 @@ func (s *NotificationServer) convertToSendResponse(result domain.SendResponse, e
 	return response, nil
 }
 
-// mapErrorToErrorCode 将错误映射为gRPC错误代码
-func (s *NotificationServer) mapErrorToErrorCode(err error) notificationv1.ErrorCode {
+// convertToGRPCSendStatus 将领域发送状态转换为gRPC发送状态
+func (s *NotificationServer) convertToGRPCSendStatus(status domain.SendStatus) notificationv1.SendStatus {
+	switch status {
+	case domain.SendStatusPrepare:
+		return notificationv1.SendStatus_PREPARE
+	case domain.SendStatusCanceled:
+		return notificationv1.SendStatus_CANCELED
+	case domain.SendStatusPending:
+		return notificationv1.SendStatus_PENDING
+	case domain.SendStatusSucceeded:
+		return notificationv1.SendStatus_SUCCEEDED
+	case domain.SendStatusFailed:
+		return notificationv1.SendStatus_FAILED
+	default:
+		return notificationv1.SendStatus_SEND_STATUS_UNSPECIFIED
+	}
+}
+
+// convertToGRPCErrorCodeAndErrorMessage 将错误映射为gRPC错误代码
+func (s *NotificationServer) convertToGRPCErrorCodeAndErrorMessage(err error) notificationv1.ErrorCode {
 	if err == nil {
 		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
 	}
@@ -428,31 +218,139 @@ func (s *NotificationServer) mapErrorToErrorCode(err error) notificationv1.Error
 	}
 }
 
-// convertSendStatus 将领域发送状态转换为gRPC发送状态
-func (s *NotificationServer) convertSendStatus(status domain.SendStatus) notificationv1.SendStatus {
-	switch status {
-	case domain.SendStatusPrepare:
-		return notificationv1.SendStatus_PREPARE
-	case domain.SendStatusCanceled:
-		return notificationv1.SendStatus_CANCELED
-	case domain.SendStatusPending:
-		return notificationv1.SendStatus_PENDING
-	case domain.SendStatusSucceeded:
-		return notificationv1.SendStatus_SUCCEEDED
-	case domain.SendStatusFailed:
-		return notificationv1.SendStatus_FAILED
-	default:
-		return notificationv1.SendStatus_SEND_STATUS_UNSPECIFIED
+// SendNotificationAsync 处理异步发送通知请求
+func (s *NotificationServer) SendNotificationAsync(ctx context.Context, req *notificationv1.SendNotificationAsyncRequest) (*notificationv1.SendNotificationAsyncResponse, error) {
+	// 1. 从metadata中解析Authorization JWT Token
+	bizID, err := jwt.GetBizIDFromContext(ctx)
+	if err != nil {
+		return nil, err
 	}
+
+	// 构建领域对象
+	notification, err := s.buildNotification(req.Notification, bizID)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
+	}
+
+	// 执行发送
+	result, err := s.sendSvc.SendNotificationAsync(ctx, notification)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "异步发送通知失败: %v", err)
+	}
+
+	// 将结果转换为响应
+	response := &notificationv1.SendNotificationAsyncResponse{
+		NotificationId: result.NotificationID,
+	}
+
+	// 如果有错误，提取错误代码和消息
+	if err != nil {
+		response.ErrorMessage = err.Error()
+		response.ErrorCode = s.convertToGRPCErrorCodeAndErrorMessage(err)
+	}
+
+	return response, nil
 }
 
-func (s *NotificationServer) convertToTxNotification(n *notificationv1.Notification, bizID int64) (domain.TxNotification, error) {
+// BatchSendNotifications 处理批量同步发送通知请求
+func (s *NotificationServer) BatchSendNotifications(ctx context.Context, req *notificationv1.BatchSendNotificationsRequest) (*notificationv1.BatchSendNotificationsResponse, error) {
+	// 从metadata中解析Authorization JWT Token
+	bizID, err := jwt.GetBizIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 构建领域对象
+	notifications := make([]domain.Notification, 0, len(req.Notifications))
+	for _, n := range req.Notifications {
+		notification, err1 := s.buildNotification(n, bizID)
+		if err1 != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err1)
+		}
+		notifications = append(notifications, notification)
+	}
+
+	// 执行发送
+	responses, err := s.sendSvc.BatchSendNotifications(ctx, notifications...)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "批量发送通知失败: %v", err)
+	}
+
+	// 将结果转换为响应
+	successCount := int32(0)
+	results := make([]*notificationv1.SendNotificationResponse, 0, len(responses.Results))
+	for i := range responses.Results {
+		resp, err1 := s.buildGRPCSendResponse(responses.Results[i], nil)
+		if err1 != nil {
+			return nil, status.Errorf(codes.Internal, "转换响应失败: %v", err1)
+		}
+		if domain.SendStatusSucceeded == responses.Results[i].Status {
+			successCount++
+		}
+		results = append(results, resp)
+	}
+	return &notificationv1.BatchSendNotificationsResponse{
+		TotalCount:   int32(len(results)),
+		SuccessCount: successCount,
+		Results:      results,
+	}, nil
+}
+
+// BatchSendNotificationsAsync 处理批量异步发送通知请求
+func (s *NotificationServer) BatchSendNotificationsAsync(ctx context.Context, req *notificationv1.BatchSendNotificationsAsyncRequest) (*notificationv1.BatchSendNotificationsAsyncResponse, error) {
+	// 从metadata中解析Authorization JWT Token
+	bizID, err := jwt.GetBizIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 构建领域对象
+	notifications := make([]domain.Notification, 0, len(req.Notifications))
+	for _, n := range req.Notifications {
+		notification, err := s.buildNotification(n, bizID)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
+		}
+		notifications = append(notifications, notification)
+	}
+
+	// 执行发送
+	result, err := s.sendSvc.BatchSendNotificationsAsync(ctx, notifications...)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "批量异步发送通知失败: %v", err)
+	}
+
+	// 将结果转换为响应
+	return &notificationv1.BatchSendNotificationsAsyncResponse{
+		NotificationIds: result.NotificationIDs,
+	}, nil
+}
+
+func (s *NotificationServer) TxPrepare(ctx context.Context, request *notificationv1.TxPrepareRequest) (*notificationv1.TxPrepareResponse, error) {
+	// 从metadata中解析Authorization JWT Token
+	bizID, err := jwt.GetBizIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 构建领域对象
+	txn, err := s.buildTxNotification(request.Notification, bizID)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
+	}
+
+	// 执行操作
+	_, err = s.txnSvc.Prepare(ctx, txn.Notification)
+	return &notificationv1.TxPrepareResponse{}, err
+}
+
+func (s *NotificationServer) buildTxNotification(n *notificationv1.Notification, bizID int64) (domain.TxNotification, error) {
 	if n == nil {
 		return domain.TxNotification{}, errors.New("通知不能为空")
 	}
 
 	// 构建基本Notification
-	noti, err := s.convertToNotification(n, bizID)
+	noti, err := s.buildNotification(n, bizID)
 	noti.Status = domain.SendStatusPrepare
 	if err != nil {
 		return domain.TxNotification{}, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
@@ -463,4 +361,78 @@ func (s *NotificationServer) convertToTxNotification(n *notificationv1.Notificat
 		Notification: noti,
 		Status:       domain.TxNotificationStatusPrepare,
 	}, nil
+}
+
+func (s *NotificationServer) TxCommit(ctx context.Context, request *notificationv1.TxCommitRequest) (*notificationv1.TxCommitResponse, error) {
+	// 从metadata中解析Authorization JWT Token
+	bizID, err := jwt.GetBizIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = s.txnSvc.Commit(ctx, bizID, request.GetKey())
+	return &notificationv1.TxCommitResponse{}, err
+}
+
+func (s *NotificationServer) TxCancel(ctx context.Context, request *notificationv1.TxCancelRequest) (*notificationv1.TxCancelResponse, error) {
+	// 从metadata中解析Authorization JWT Token
+	bizID, err := jwt.GetBizIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// 执行操作
+	err = s.txnSvc.Cancel(ctx, bizID, request.GetKey())
+	return &notificationv1.TxCancelResponse{}, err
+}
+
+// QueryNotification 处理单条查询通知请求
+func (s *NotificationServer) QueryNotification(ctx context.Context, req *notificationv1.QueryNotificationRequest) (*notificationv1.QueryNotificationResponse, error) {
+	// 从metadata中解析Authorization JWT Token
+	bizID, err := jwt.GetBizIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 查询通知
+	notifications, err := s.notificationSvc.GetByKeys(ctx, bizID, req.Key)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "查询通知失败: %v", err)
+	}
+
+	// 将结果转换为响应
+	const zero = 0
+	return &notificationv1.QueryNotificationResponse{
+		Result: &notificationv1.SendNotificationResponse{
+			NotificationId: notifications[zero].ID,
+			Status:         s.convertToGRPCSendStatus(notifications[zero].Status),
+		},
+	}, nil
+}
+
+// BatchQueryNotifications 处理批量查询通知请求
+func (s *NotificationServer) BatchQueryNotifications(ctx context.Context, req *notificationv1.BatchQueryNotificationsRequest) (*notificationv1.BatchQueryNotificationsResponse, error) {
+	// 从metadata中解析Authorization JWT Token
+	bizID, err := jwt.GetBizIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 查询通知
+	notifications, err := s.notificationSvc.GetByKeys(ctx, bizID, req.Keys...)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "批量查询通知失败: %v", err)
+	}
+
+	// 将结果转换为响应
+	response := &notificationv1.BatchQueryNotificationsResponse{
+		Results: make([]*notificationv1.SendNotificationResponse, 0, len(notifications)),
+	}
+
+	for i := range notifications {
+		response.Results = append(response.Results, &notificationv1.SendNotificationResponse{
+			NotificationId: notifications[i].ID,
+			Status:         s.convertToGRPCSendStatus(notifications[i].Status),
+		})
+	}
+
+	return response, nil
 }

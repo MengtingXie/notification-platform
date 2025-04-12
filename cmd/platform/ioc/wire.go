@@ -133,6 +133,8 @@ func InitGrpcServer() *ioc.App {
 		notificationSvcSet,
 		sendNotificationSvcSet,
 		senderSvcSet,
+
+		// 回调服务
 		callbackSvcSet,
 
 		// 提供商服务
@@ -146,8 +148,6 @@ func InitGrpcServer() *ioc.App {
 
 		// 事务通知服务
 		txNotificationSvcSet,
-
-		// 执行器服务 - 使用原生的InitModule
 
 		// GRPC服务器
 		grpcapi.NewServer,
