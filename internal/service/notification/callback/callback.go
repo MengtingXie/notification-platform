@@ -216,6 +216,14 @@ func (c *service) getStatus(notification domain.Notification) notificationv1.Sen
 		status = notificationv1.SendStatus_SUCCEEDED
 	case domain.SendStatusFailed:
 		status = notificationv1.SendStatus_FAILED
+	case domain.SendStatusPrepare:
+		status = notificationv1.SendStatus_PREPARE
+	case domain.SendStatusCanceled:
+		status = notificationv1.SendStatus_CANCELED
+	case domain.SendStatusPending:
+		status = notificationv1.SendStatus_PENDING
+	case domain.SendStatusSending:
+		status = notificationv1.SendStatus_SEND_STATUS_UNSPECIFIED
 	default:
 		status = notificationv1.SendStatus_SEND_STATUS_UNSPECIFIED
 	}

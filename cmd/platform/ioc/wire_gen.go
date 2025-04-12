@@ -25,8 +25,8 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/provider/sequential"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
-	"gitee.com/flycash/notification-platform/internal/service/send_strategy"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
+	"gitee.com/flycash/notification-platform/internal/service/sendstrategy"
 	manage2 "gitee.com/flycash/notification-platform/internal/service/template/manage"
 	"github.com/google/wire"
 	"time"
@@ -61,9 +61,9 @@ func InitGrpcServer() *ioc.App {
 	v := ioc.InitSMSClients()
 	channel := newChannel(service, channelTemplateService, v)
 	notificationSender := sender.NewSender(notificationRepository, businessConfigService, callbackService, channel)
-	immediateSendStrategy := send_strategy.NewImmediateStrategy(notificationRepository, notificationSender)
-	defaultSendStrategy := send_strategy.NewDefaultStrategy(notificationRepository, businessConfigService)
-	sendStrategy := send_strategy.NewDispatcher(immediateSendStrategy, defaultSendStrategy)
+	immediateSendStrategy := sendstrategy.NewImmediateStrategy(notificationRepository, notificationSender)
+	defaultSendStrategy := sendstrategy.NewDefaultStrategy(notificationRepository, businessConfigService)
+	sendStrategy := sendstrategy.NewDispatcher(immediateSendStrategy, defaultSendStrategy)
 	sendService := notification.NewSendService(channelTemplateService, notificationService, sonyflake, sendStrategy)
 	txNotificationDAO := dao.NewTxNotificationDAO(db)
 	txNotificationRepository := repository.NewTxNotificationRepository(txNotificationDAO)
@@ -88,7 +88,7 @@ var (
 	senderSvcSet         = wire.NewSet(
 		newChannel, sender.NewSender,
 	)
-	sendNotificationSvcSet = wire.NewSet(notification.NewSendService, send_strategy.NewDispatcher, send_strategy.NewImmediateStrategy, send_strategy.NewDefaultStrategy)
+	sendNotificationSvcSet = wire.NewSet(notification.NewSendService, sendstrategy.NewDispatcher, sendstrategy.NewImmediateStrategy, sendstrategy.NewDefaultStrategy)
 	callbackSvcSet         = wire.NewSet(callback.NewService, repository.NewCallbackLogRepository, dao.NewCallbackLogDAO)
 	providerSvcSet         = wire.NewSet(manage.NewProviderService, repository.NewProviderRepository, dao.NewProviderDAO, ioc.InitProviderEncryptKey)
 	templateSvcSet         = wire.NewSet(manage2.NewChannelTemplateService, repository.NewChannelTemplateRepository, dao.NewChannelTemplateDAO)

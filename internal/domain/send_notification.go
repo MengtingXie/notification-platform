@@ -34,8 +34,8 @@ func (e SendStrategyConfig) SendTimeWindow() (stime, etime time.Time) {
 	switch e.Type {
 	case SendStrategyImmediate:
 		now := time.Now()
-		const defaultEndMinute = 30 * time.Minute
-		return now, now.Add(defaultEndMinute)
+		const defaultEndDuration = 30 * time.Minute
+		return now, now.Add(defaultEndDuration)
 	case SendStrategyDelayed:
 		now := time.Now()
 		return now, now.Add(e.Delay)

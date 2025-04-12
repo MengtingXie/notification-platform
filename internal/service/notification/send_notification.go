@@ -8,7 +8,7 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/template/manage"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/service/send_strategy"
+	"gitee.com/flycash/notification-platform/internal/service/sendstrategy"
 	"github.com/sony/sonyflake"
 )
 
@@ -31,11 +31,11 @@ type sendService struct {
 	notificationSvc Service
 	templateSvc     manage.ChannelTemplateService
 	idGenerator     *sonyflake.Sonyflake
-	sendStrategy    send_strategy.SendStrategy
+	sendStrategy    sendstrategy.SendStrategy
 }
 
 // NewSendService 创建执行器实例
-func NewSendService(templateSvc manage.ChannelTemplateService, notificationSvc Service, idGenerator *sonyflake.Sonyflake, sendStrategy send_strategy.SendStrategy) SendService {
+func NewSendService(templateSvc manage.ChannelTemplateService, notificationSvc Service, idGenerator *sonyflake.Sonyflake, sendStrategy sendstrategy.SendStrategy) SendService {
 	return &sendService{
 		notificationSvc: notificationSvc,
 		templateSvc:     templateSvc,

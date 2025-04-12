@@ -1,4 +1,4 @@
-package send_strategy
+package sendstrategy
 
 import (
 	"context"

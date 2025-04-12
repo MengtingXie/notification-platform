@@ -23,8 +23,8 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/provider/sequential"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
-	"gitee.com/flycash/notification-platform/internal/service/send_strategy"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
+	"gitee.com/flycash/notification-platform/internal/service/sendstrategy"
 	templatesvc "gitee.com/flycash/notification-platform/internal/service/template/manage"
 	"github.com/google/wire"
 )
@@ -62,9 +62,9 @@ var (
 	)
 	sendNotificationSvcSet = wire.NewSet(
 		notificationsvc.NewSendService,
-		send_strategy.NewDispatcher,
-		send_strategy.NewImmediateStrategy,
-		send_strategy.NewDefaultStrategy,
+		sendstrategy.NewDispatcher,
+		sendstrategy.NewImmediateStrategy,
+		sendstrategy.NewDefaultStrategy,
 	)
 	callbackSvcSet = wire.NewSet(
 		callback.NewService,
