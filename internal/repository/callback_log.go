@@ -17,11 +17,21 @@ type CallbackLogRepository interface {
 
 type callbackLogRepository struct {
 	notificationRepo NotificationRepository
-	d                dao.CallbackLogDAO
+	dao              dao.CallbackLogDAO
+}
+
+func NewCallbackLogRepository(
+	notificationRepo NotificationRepository,
+	dao dao.CallbackLogDAO,
+) CallbackLogRepository {
+	return &callbackLogRepository{
+		notificationRepo: notificationRepo,
+		dao:              dao,
+	}
 }
 
 func (c *callbackLogRepository) Find(ctx context.Context, startTime, batchSize, startID int64) (logs []domain.CallbackLog, nextStartID int64, err error) {
-	entities, nextStartID, err := c.d.Find(ctx, startTime, batchSize, startID)
+	entities, nextStartID, err := c.dao.Find(ctx, startTime, batchSize, startID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -30,8 +40,8 @@ func (c *callbackLogRepository) Find(ctx context.Context, startTime, batchSize, 
 		nextStartID = 0
 	}
 
-	return slice.Map(entities, func(idx int, src dao.CallbackLog) domain.CallbackLog {
-		n, _ := c.notificationRepo.GetByID(context.Background(), src.NotificationID)
+	return slice.Map(entities, func(_ int, src dao.CallbackLog) domain.CallbackLog {
+		n, _ := c.notificationRepo.GetByID(ctx, src.NotificationID)
 		return c.toDomain(src, n)
 	}), nextStartID, nil
 }
@@ -47,7 +57,7 @@ func (c *callbackLogRepository) toDomain(log dao.CallbackLog, notification domai
 }
 
 func (c *callbackLogRepository) Update(ctx context.Context, logs []domain.CallbackLog) error {
-	return c.d.Update(ctx, slice.Map(logs, func(idx int, src domain.CallbackLog) dao.CallbackLog {
+	return c.dao.Update(ctx, slice.Map(logs, func(_ int, src domain.CallbackLog) dao.CallbackLog {
 		return c.toDAO(src)
 	}))
 }
@@ -63,7 +73,7 @@ func (c *callbackLogRepository) toDAO(log domain.CallbackLog) dao.CallbackLog {
 }
 
 func (c *callbackLogRepository) FindByNotificationIDs(ctx context.Context, notificationIDs []uint64) ([]domain.CallbackLog, error) {
-	logs, err := c.d.FindByNotificationIDs(ctx, notificationIDs)
+	logs, err := c.dao.FindByNotificationIDs(ctx, notificationIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +81,7 @@ func (c *callbackLogRepository) FindByNotificationIDs(ctx context.Context, notif
 	if err != nil {
 		return nil, err
 	}
-	return slice.Map(logs, func(idx int, src dao.CallbackLog) domain.CallbackLog {
+	return slice.Map(logs, func(_ int, src dao.CallbackLog) domain.CallbackLog {
 		return c.toDomain(src, ns[src.NotificationID])
 	}), nil
 }

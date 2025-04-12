@@ -5,18 +5,14 @@ import (
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
-	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/notification/callback"
-	"github.com/gotomicro/ego/core/elog"
 	"github.com/meoying/dlock-go"
 )
 
 type AsyncRequestResultCallbackTask struct {
-	dclient         dlock.Client
-	callbackLogRepo repository.CallbackLogRepository
-	callbackSvc     callback.Service
-	batchSize       int64
-	logger          *elog.Component
+	dclient     dlock.Client
+	callbackSvc callback.Service
+	batchSize   int64
 }
 
 func (a *AsyncRequestResultCallbackTask) Start(ctx context.Context) {
@@ -35,7 +31,7 @@ func (a *AsyncRequestResultCallbackTask) HandleSendResult(ctx context.Context) e
 		return err
 	}
 
-	duration := time.Now().Sub(now)
+	duration := time.Since(now)
 	if duration < minDuration {
 		time.Sleep(minDuration - duration)
 	}

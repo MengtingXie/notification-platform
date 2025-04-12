@@ -8,17 +8,13 @@ import (
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/repository"
-	configsvc "gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
-	"github.com/gotomicro/ego/core/elog"
 )
 
 // ImmediateSendStrategy 立即发送策略
 type ImmediateSendStrategy struct {
-	repo      repository.NotificationRepository
-	sender    sender.NotificationSender
-	configSvc configsvc.BusinessConfigService
-	logger    *elog.Component
+	repo   repository.NotificationRepository
+	sender sender.NotificationSender
 }
 
 // NewImmediateStrategy 创建立即发送策略

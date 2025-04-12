@@ -28,7 +28,7 @@ type BusinessConfigServiceV1 struct {
 }
 
 // NewBusinessConfigService 创建业务配置服务实例
-func NewBusinessConfigService(repo repository.BusinessConfigRepository) *BusinessConfigServiceV1 {
+func NewBusinessConfigService(repo repository.BusinessConfigRepository) BusinessConfigService {
 	return &BusinessConfigServiceV1{
 		repo: repo,
 	}

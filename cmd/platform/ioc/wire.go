@@ -3,20 +3,141 @@
 package ioc
 
 import (
+	"context"
+	"time"
+
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
-	"gitee.com/flycash/notification-platform/internal/service/audit"
-	"gitee.com/flycash/notification-platform/internal/service/config"
-	"gitee.com/flycash/notification-platform/internal/service/executor"
-	"gitee.com/flycash/notification-platform/internal/service/notification"
-	providersvc "gitee.com/flycash/notification-platform/internal/service/provider"
-	"gitee.com/flycash/notification-platform/internal/service/template"
-	txnotification "gitee.com/flycash/notification-platform/internal/service/tx_notification"
+	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/ioc"
+	"gitee.com/flycash/notification-platform/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/repository/cache/local"
+	"gitee.com/flycash/notification-platform/internal/repository/cache/redis"
+	"gitee.com/flycash/notification-platform/internal/repository/dao"
+	auditsvc "gitee.com/flycash/notification-platform/internal/service/audit"
+	"gitee.com/flycash/notification-platform/internal/service/channel"
+	configsvc "gitee.com/flycash/notification-platform/internal/service/config"
+	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
+	"gitee.com/flycash/notification-platform/internal/service/notification/callback"
+	"gitee.com/flycash/notification-platform/internal/service/provider"
+	providersvc "gitee.com/flycash/notification-platform/internal/service/provider/manage"
+	"gitee.com/flycash/notification-platform/internal/service/provider/sequential"
+	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
+	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
+	"gitee.com/flycash/notification-platform/internal/service/send_strategy"
+	"gitee.com/flycash/notification-platform/internal/service/sender"
+	templatesvc "gitee.com/flycash/notification-platform/internal/service/template/manage"
 	"github.com/google/wire"
 )
 
-var BaseSet = wire.NewSet(InitDB, InitRedis, InitEtcdClient, InitIDGenerator)
+var (
+	BaseSet = wire.NewSet(
+		ioc.InitDB,
+		ioc.InitDLock,
+		ioc.InitEtcdClient,
+		ioc.InitIDGenerator,
+		ioc.InitRedis,
+		ioc.InitSmsClients,
+		ioc.InitGoCache,
 
-func InitGrpcServer() *App {
+		local.NewLocalCache,
+		redis.NewCache,
+	)
+	configSvcSet = wire.NewSet(
+		configsvc.NewBusinessConfigService,
+		repository.NewBusinessConfigRepository,
+		dao.NewBusinessConfigDAO)
+	notificationSvcSet = wire.NewSet(
+		notificationsvc.NewNotificationService,
+		repository.NewNotificationRepository,
+		dao.NewNotificationDAO,
+	)
+	txNotificationSvcSet = wire.NewSet(
+		notificationsvc.NewTxNotificationService,
+		repository.NewTxNotificationRepository,
+		dao.NewTxNotificationDAO,
+	)
+	senderSvcSet = wire.NewSet(
+		newChannel,
+		sender.NewSender,
+	)
+	sendNotificationSvcSet = wire.NewSet(
+		notificationsvc.NewSendService,
+		newSendStrategy,
+	)
+	callbackSvcSet = wire.NewSet(
+		callback.NewService,
+		repository.NewCallbackLogRepository,
+		dao.NewCallbackLogDAO,
+	)
+	providerSvcSet = wire.NewSet(
+		providersvc.NewProviderService,
+		repository.NewProviderRepository,
+		dao.NewProviderDAO,
+		// 加密密钥
+		ioc.InitProviderEncryptKey,
+	)
+	templateSvcSet = wire.NewSet(
+		templatesvc.NewChannelTemplateService,
+		repository.NewChannelTemplateRepository,
+		dao.NewChannelTemplateDAO,
+	)
+)
+
+func newSendStrategy(repo repository.NotificationRepository,
+	configSvc configsvc.BusinessConfigService,
+	sender sender.NotificationSender) send_strategy.SendStrategy {
+	wire.Build(
+		send_strategy.NewDispatcher,
+		send_strategy.NewImmediateStrategy,
+		send_strategy.NewDefaultStrategy,
+	)
+	return nil
+}
+
+func newChannel(
+	providerSvc providersvc.Service,
+	templateSvc templatesvc.ChannelTemplateService,
+	clients map[string]client.Client,
+) channel.Channel {
+	return channel.NewDispatcher(map[domain.Channel]channel.Channel{
+		domain.ChannelEmail: channel.NewSMSChannel(newSMSSelectorBuilder(providerSvc, templateSvc, clients)),
+	})
+}
+
+func newSMSSelectorBuilder(
+	providerSvc providersvc.Service,
+	templateSvc templatesvc.ChannelTemplateService,
+	clients map[string]client.Client,
+) *sequential.SelectorBuilder {
+	providers := initSMSProviders(providerSvc, templateSvc, clients)
+	return sequential.NewSelectorBuilder(providers)
+}
+
+func initSMSProviders(
+	providerSvc providersvc.Service,
+	templateSvc templatesvc.ChannelTemplateService,
+	clients map[string]client.Client,
+) []provider.Provider {
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelFunc()
+
+	entities, err := providerSvc.GetProvidersByChannel(ctx, domain.ChannelSMS)
+	if err != nil {
+		panic(err)
+	}
+	providers := make([]provider.Provider, 0, len(entities))
+	for i := range entities {
+		providers = append(providers, sms.NewSMSProvider(
+			entities[i].Name,
+			templateSvc,
+			clients[entities[i].Name],
+		))
+	}
+	return providers
+}
+
+func InitGrpcServer() *ioc.App {
 	wire.Build(
 		// 基础设施
 		BaseSet,
@@ -24,43 +145,33 @@ func InitGrpcServer() *App {
 		// --- 服务构建 ---
 
 		// 配置服务
-		config.InitService,
-		wire.FieldsOf(new(*config.Module), "Svc"),
+		configSvcSet,
 
 		// 通知服务
-		notification.InitModule,
-		wire.FieldsOf(new(notification.Module), "Svc"),
-
-		// 加密密钥
-		InitProviderEncryptKey,
+		notificationSvcSet,
+		sendNotificationSvcSet,
+		senderSvcSet,
+		callbackSvcSet,
 
 		// 提供商服务
-		providersvc.InitModule,
-		wire.FieldsOf(new(providersvc.Module), "Svc"),
+		providerSvcSet,
 
 		// 模板服务
-		template.InitModule,
-		wire.FieldsOf(new(template.Module), "Svc"),
+		templateSvcSet,
 
 		// 审计服务
-		audit.InitMoudle,
-		wire.FieldsOf(new(*audit.Module), "Svc"),
-
-		// SMS客户端初始化
-		InitSmsClients,
+		auditsvc.NewService,
 
 		// 事务通知服务
-		txnotification.InitModule,
-		wire.FieldsOf(new(*txnotification.Module), "Svc"),
+		txNotificationSvcSet,
 
 		// 执行器服务 - 使用原生的InitModule
-		executor.InitModule,
-		wire.FieldsOf(new(*executor.Module), "Svc"),
 
 		// GRPC服务器
 		grpcapi.NewServer,
-		InitGrpc,
-		wire.Struct(new(App), "*"),
+		ioc.InitGrpc,
+		wire.Struct(new(ioc.App), "*"),
 	)
-	return new(App)
+
+	return new(ioc.App)
 }

@@ -191,11 +191,11 @@ func (t *txNotificationDAO) FindCheckBack(ctx context.Context, offset, limit int
 func (t *txNotificationDAO) UpdateCheckStatus(ctx context.Context, txNotifications []TxNotification, status domain.SendStatus) error {
 	sqls := make([]string, 0, len(txNotifications))
 	now := time.Now().UnixMilli()
-	notificationIds := make([]uint64, 0, len(txNotifications))
+	notificationIDs := make([]uint64, 0, len(txNotifications))
 	for _, txNotification := range txNotifications {
 		updateSQL := fmt.Sprintf("UPDATE `tx_notifications` set `status` = '%s',`utime` = %d ,`next_check_time` = %d,`check_count` = %d WHERE `key` = %s AND `biz_id` = %d AND `status` = 'PREPARE'", txNotification.Status, now, txNotification.NextCheckTime, txNotification.CheckCount, txNotification.Key, txNotification.BizID)
 		sqls = append(sqls, updateSQL)
-		notificationIds = append(notificationIds, txNotification.NotificationID)
+		notificationIDs = append(notificationIDs, txNotification.NotificationID)
 	}
 	// 拼接所有SQL并执行
 	// UPDATE xxx; UPDATE xxx;UPDATE xxx;
@@ -207,7 +207,7 @@ func (t *txNotificationDAO) UpdateCheckStatus(ctx context.Context, txNotificatio
 				return err
 			}
 			if status != domain.SendStatusPrepare {
-				return tx.WithContext(ctx).Model(&Notification{}).Where("id in ?", notificationIds).
+				return tx.WithContext(ctx).Model(&Notification{}).Where("id in ?", notificationIDs).
 					Update("status", status).Error
 			}
 			return nil

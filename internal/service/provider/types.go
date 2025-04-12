@@ -32,8 +32,8 @@ type Selector interface {
 	Next(ctx context.Context, notification domain.Notification) (Provider, error)
 }
 
-// Builder 供应商选择器的构造器
-type Builder interface {
+// SelectorBuilder 供应商选择器的构造器
+type SelectorBuilder interface {
 	// Build 构造选择器，可以在Build方法上添加参数来构建更复杂选择器
 	Build() (Selector, error)
 }

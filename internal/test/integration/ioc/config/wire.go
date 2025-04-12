@@ -13,7 +13,7 @@ import (
 	ca "github.com/patrickmn/go-cache"
 )
 
-func InitConfigService(localCache *ca.Cache) *config.BusinessConfigServiceV1 {
+func InitConfigService(localCache *ca.Cache) config.BusinessConfigService {
 	wire.Build(
 		testioc.BaseSet,
 		local.NewLocalCache,

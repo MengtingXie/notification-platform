@@ -81,6 +81,9 @@ func (task *TxCheckTask) oneLoop(ctx context.Context) error {
 		return src.BizID
 	})
 	configMap, err := task.configSvc.GetByIDs(ctx, bizIDs)
+	if err != nil {
+		return err
+	}
 	length := len(txNotifications)
 	// 这一次回查没拿到明确结果的
 	retryTxns := &list.ConcurrentList[domain.TxNotification]{
@@ -98,7 +101,6 @@ func (task *TxCheckTask) oneLoop(ctx context.Context) error {
 	// 挨个处理呀
 	var eg errgroup.Group
 	for idx := range txNotifications {
-		idx := idx
 		eg.Go(func() error {
 			// 并发去回查
 			txNotification := txNotifications[idx]

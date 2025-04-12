@@ -5,7 +5,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func InitRedis() redis.Cmdable {
+func InitRedis() *redis.Client {
 	type Config struct {
 		Addr string
 	}

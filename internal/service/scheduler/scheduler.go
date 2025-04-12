@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
-	"github.com/gotomicro/ego/core/elog"
 	"github.com/meoying/dlock-go"
 
 	"gitee.com/flycash/notification-platform/internal/service/sender"
@@ -24,7 +23,6 @@ type staticScheduler struct {
 	notificationSvc notificationsvc.Service
 	sender          sender.NotificationSender
 	dclient         dlock.Client
-	logger          *elog.Component
 
 	batchSize int
 }
@@ -54,7 +52,8 @@ func (s *staticScheduler) Start(ctx context.Context) {
 
 // processPendingNotifications 处理待发送的通知
 func (s *staticScheduler) processPendingNotifications(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	const defaultTimeout = 3 * time.Second
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 	const offset = 0
 	notifications, err := s.notificationSvc.FindReadyNotifications(ctx, offset, s.batchSize)

@@ -17,9 +17,10 @@ type DefaultSendStrategy struct {
 }
 
 // NewDefaultStrategy 创建延迟发送策略
-func NewDefaultStrategy(repo repository.NotificationRepository) *DefaultSendStrategy {
+func NewDefaultStrategy(repo repository.NotificationRepository, configSvc configsvc.BusinessConfigService) *DefaultSendStrategy {
 	return &DefaultSendStrategy{
-		repo: repo,
+		repo:      repo,
+		configSvc: configSvc,
 	}
 }
 

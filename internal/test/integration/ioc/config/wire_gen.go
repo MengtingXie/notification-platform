@@ -18,13 +18,13 @@ import (
 
 // Injectors from wire.go:
 
-func InitConfigService(localCache *cache.Cache) *config.BusinessConfigServiceV1 {
-	v := ioc.InitDB()
-	businessConfigDAO := dao.NewBusinessConfigDAO(v)
+func InitConfigService(localCache *cache.Cache) config.BusinessConfigService {
+	db := ioc.InitDB()
+	businessConfigDAO := dao.NewBusinessConfigDAO(db)
 	client := ioc.InitRedisClient()
 	cache2 := local.NewLocalCache(client, localCache)
 	redisCache := redis.NewCache(client)
 	businessConfigRepository := repository.NewBusinessConfigRepository(businessConfigDAO, cache2, redisCache)
-	businessConfigServiceV1 := config.NewBusinessConfigService(businessConfigRepository)
-	return businessConfigServiceV1
+	businessConfigService := config.NewBusinessConfigService(businessConfigRepository)
+	return businessConfigService
 }

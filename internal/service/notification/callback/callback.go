@@ -8,11 +8,13 @@ import (
 	clientv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/notification/v1"
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/pkg/grpc"
 	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"github.com/ecodeclub/ekit/syncx"
+	"github.com/gotomicro/ego/client/egrpc"
 	"github.com/gotomicro/ego/core/elog"
 )
 
@@ -27,9 +29,24 @@ type Service interface {
 type service struct {
 	configSvc    config.BusinessConfigService
 	bizID2Config syncx.Map[int64, *domain.CallbackConfig]
-	clients      grpc.Clients[clientv1.CallbackServiceClient]
+	clients      *grpc.Clients[clientv1.CallbackServiceClient]
 	repo         repository.CallbackLogRepository
 	logger       *elog.Component
+}
+
+func NewService(
+	configSvc config.BusinessConfigService,
+	repo repository.CallbackLogRepository,
+) Service {
+	return &service{
+		configSvc:    configSvc,
+		bizID2Config: syncx.Map[int64, *domain.CallbackConfig]{},
+		repo:         repo,
+		clients: grpc.NewClients(func(conn *egrpc.Component) clientv1.CallbackServiceClient {
+			return clientv1.NewCallbackServiceClient(conn)
+		}),
+		logger: elog.DefaultLogger.With(elog.FieldComponent("callback")),
+	}
 }
 
 func (c *service) SendCallback(ctx context.Context, startTime, batchSize int64) error {
@@ -80,18 +97,13 @@ func (c *service) sendCallbackAndUpdateCallbackLogs(ctx context.Context, logs []
 			needUpdate = append(needUpdate, logs[i])
 		}
 	}
-	return c.repo.Update(ctx, logs)
+	return c.repo.Update(ctx, needUpdate)
 }
 
 func (c *service) sendCallbackAndSetChangedFields(ctx context.Context, log *domain.CallbackLog) (changed bool, err error) {
 	resp, err := c.sendCallback(ctx, log.Notification)
 	if err != nil {
 		return false, err
-	}
-
-	// 业务方无配置
-	if resp == nil {
-		return false, nil
 	}
 
 	// 拿到业务方对回调的处理结果
@@ -126,7 +138,7 @@ func (c *service) sendCallback(ctx context.Context, notification domain.Notifica
 	}
 	if cfg == nil {
 		// 业务方未提供配置
-		return nil, nil
+		return nil, fmt.Errorf("%w", errs.ErrConfigNotFound)
 	}
 	return c.clients.Get(cfg.ServiceName).HandleNotificationResult(ctx, c.buildRequest(notification))
 }
@@ -139,6 +151,7 @@ func (c *service) SendCallbackByNotification(ctx context.Context, notification d
 	if len(logs) == 0 {
 		// 直接发回调
 		_, err = c.sendCallback(ctx, notification)
+		return err
 	}
 	return c.sendCallbackAndUpdateCallbackLogs(ctx, logs)
 }

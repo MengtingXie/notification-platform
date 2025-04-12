@@ -51,6 +51,6 @@ func (s *FixedIntervalRetryStrategy) Next() (time.Duration, bool) {
 	return s.nextWithRetries(retries)
 }
 
-func (s *FixedIntervalRetryStrategy) Report(err error) Strategy {
+func (s *FixedIntervalRetryStrategy) Report(_ error) Strategy {
 	return s
 }

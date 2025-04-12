@@ -36,6 +36,7 @@ func (s *SendingTimeoutTask) Start(ctx context.Context) {
 
 func (s *SendingTimeoutTask) HandleSendingTimeout(ctx context.Context) error {
 	const batchSize = 10
+	const defaultSleepTime = time.Second * 10
 	cnt, err := s.repo.MarkTimeoutSendingAsFailed(ctx, batchSize)
 	if err != nil {
 		return err
@@ -43,7 +44,7 @@ func (s *SendingTimeoutTask) HandleSendingTimeout(ctx context.Context) error {
 	// 说明 SENDING 的不多，可以休息一下
 	if cnt < batchSize {
 		// 这里可以随便设置，在分钟以内都可以
-		time.Sleep(time.Second * 10)
+		time.Sleep(defaultSleepTime)
 	}
 	return nil
 }

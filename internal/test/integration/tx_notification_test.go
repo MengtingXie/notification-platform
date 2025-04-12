@@ -86,7 +86,8 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 				return mockConfigServices
 			},
 			after: func(t *testing.T, now int64, id uint64) {
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				t.Helper()
+				ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 				defer cancel()
 				var actual dao.TxNotification
 				err := s.db.WithContext(ctx).Where("biz_id = ? AND `key` = ?", 3, "case_01").First(&actual).Error
@@ -154,7 +155,8 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 				return mockConfigServices
 			},
 			after: func(t *testing.T, now int64, id uint64) {
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				t.Helper()
+				ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 				defer cancel()
 				var actual dao.TxNotification
 				err := s.db.WithContext(ctx).Where("biz_id = ? AND `key` = ?", 22, "case_02").First(&actual).Error
@@ -201,7 +203,7 @@ func (s *TxNotificationServiceTestSuite) TestPrepare() {
 		tc := tc
 		s.T().Run(tc.name, func(t *testing.T) {
 			now := time.Now().Unix()
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
@@ -256,7 +258,7 @@ func (s *TxNotificationServiceTestSuite) TestCommit() {
 				return txn.BizID, txn.Key
 			},
 			after: func(t *testing.T, bizId int64, key string) {
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 				defer cancel()
 				var actual dao.TxNotification
 				err := s.db.WithContext(ctx).Where("biz_id = ? AND `key` = ?", bizId, key).First(&actual).Error
@@ -277,7 +279,7 @@ func (s *TxNotificationServiceTestSuite) TestCommit() {
 	for _, tc := range testcases {
 		tc := tc
 		s.T().Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
@@ -339,7 +341,7 @@ func (s *TxNotificationServiceTestSuite) TestCancel() {
 				return txn.BizID, txn.Key
 			},
 			after: func(t *testing.T, bizId int64, key string) {
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 				defer cancel()
 				var actual dao.TxNotification
 				err := s.db.WithContext(ctx).Where("biz_id = ? AND `key` = ?", bizId, key).First(&actual).Error
@@ -361,7 +363,7 @@ func (s *TxNotificationServiceTestSuite) TestCancel() {
 	for _, tc := range testcases {
 		tc := tc
 		s.T().Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
@@ -380,7 +382,8 @@ func (s *TxNotificationServiceTestSuite) TestCancel() {
 }
 
 func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
-	ctrl := gomock.NewController(s.T())
+	t := s.T()
+	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	configSvc := configmocks.NewMockBusinessConfigService(ctrl)
 	mockConfigMap := s.mockConfigMap()
@@ -451,7 +454,7 @@ func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
 		tx44,
 	}
 	err := s.db.WithContext(context.Background()).Create(txns).Error
-	require.NoError(s.T(), err)
+	require.NoError(t, err)
 	s.mockNotifications()
 
 	txSvc := tx_notification.InitTxNotificationService(configSvc)
@@ -463,7 +466,7 @@ func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
 		server := testgrpc.NewServer("order.notification.callback.service", reg, &MockGrpcServer{})
 		err = server.Start("127.0.0.1:30001")
 		if err != nil {
-			require.NoError(s.T(), err)
+			require.NoError(t, err)
 		}
 	}()
 	// 等待启动完成
@@ -499,27 +502,27 @@ func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
 	nctx, ncancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer ncancel()
 	err = s.db.WithContext(nctx).Model(&dao.TxNotification{}).Find(&notifications).Error
-	require.NoError(s.T(), err)
+	require.NoError(t, err)
 	txnMap := make(map[int64]dao.TxNotification, len(notifications))
 	for _, n := range notifications {
 		txnMap[n.TxID] = n
 	}
 	for _, n := range txns {
 		txn, ok := txnMap[n.TxID]
-		require.True(s.T(), ok)
+		require.True(t, ok)
 		s.assertTxNotification(n, txn)
 	}
 	var list []dao.Notification
 	notiMap := make(map[uint64]dao.Notification)
 	s.db.WithContext(nctx).Model(&dao.Notification{}).Find(&list)
-	for _, n := range list {
-		notiMap[n.ID] = n
+	for i := range list {
+		notiMap[list[i].ID] = list[i]
 	}
 
 	for key, wantNotification := range s.wantNotifications() {
 		actualNotification, ok := notiMap[key]
-		require.True(s.T(), ok)
-		assert.Equal(s.T(), wantNotification, actualNotification.Status)
+		require.True(t, ok)
+		assert.Equal(t, wantNotification, actualNotification.Status)
 	}
 }
 
@@ -555,6 +558,7 @@ func (s *TxNotificationServiceTestSuite) mockConfigMap() map[int64]domain.Busine
 }
 
 func TestTxNotificationServiceSuite(t *testing.T) {
+	t.Parallel()
 	suite.Run(t, new(TxNotificationServiceTestSuite))
 }
 

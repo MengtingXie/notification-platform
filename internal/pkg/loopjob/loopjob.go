@@ -82,7 +82,8 @@ func (l *InfiniteLoop) Run(ctx context.Context) {
 		}
 		// 不管是什么原因，都要考虑释放分布式锁了
 		// 要稍微摆脱 ctx 的控制，因为此时 ctx 可能被取消了
-		unCtx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+		ctx = context.Background()
+		unCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 		unErr := lock.Unlock(unCtx)
 		cancel()
 		if unErr != nil {
@@ -112,7 +113,7 @@ func (l *InfiniteLoop) bizLoop(ctx context.Context, lock dlock.Lock) error {
 			// 要中断这个循环了
 			return ctx.Err()
 		}
-		refCtx, cancel := context.WithTimeout(ctx, time.Second*3)
+		refCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 		err = lock.Refresh(refCtx)
 		cancel()
 		if err != nil {

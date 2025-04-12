@@ -15,7 +15,8 @@ import (
 
 // Service 通知服务接口
 //
-//go:generate mockgen -source=./notification.go -destination=../../mocks/notification.mock.go -package=notificationmocks -typed Service
+
+//go:generate mockgen -source=./notification.go -destination=./mocks/notification.mock.go -package=notificationmocks -typed Service
 type Service interface {
 	// FindReadyNotifications 准备好调度发送的通知
 	FindReadyNotifications(ctx context.Context, offset, limit int) ([]domain.Notification, error)

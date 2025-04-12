@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/errs"
 	"github.com/ecodeclub/ekit/slice"
 
 	"gitee.com/flycash/notification-platform/internal/pkg/retry"
@@ -288,14 +289,14 @@ func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig
 
 // 创建配置并返回ID
 func (s *BusinessConfigTestSuite) createConfigAndGetID(t *testing.T) int64 {
+	t.Helper()
 	testConfig := s.createTestConfig()
 	testConfig.ID = 6
-	ctx := context.Background()
 	// 创建配置
-	err := s.svc.SaveConfig(ctx, testConfig)
+	err := s.svc.SaveConfig(t.Context(), testConfig)
 	assert.NoError(t, err, "创建业务配置应成功")
 	key := fmt.Sprintf("config:%d", testConfig.ID)
-	err = s.redisCache.Del(ctx, key).Err()
+	err = s.redisCache.Del(t.Context(), key).Err()
 	require.NoError(t, err)
 	s.localCache.Delete(key)
 	return 6
@@ -317,6 +318,7 @@ func (s *BusinessConfigTestSuite) TestServiceSaveConfig() {
 			before: func(t *testing.T) {},
 			req:    s.createTestConfig(),
 			after: func(t *testing.T) {
+				t.Helper()
 				s.checkBusinessConfig(t, s.createTestConfig())
 				// 清理：删除创建的配置
 				err := s.svc.Delete(ctx, 5)
@@ -329,6 +331,7 @@ func (s *BusinessConfigTestSuite) TestServiceSaveConfig() {
 		{
 			name: "更新",
 			before: func(t *testing.T) {
+				t.Helper()
 				testConfig := s.createTestConfig()
 				err := s.svc.SaveConfig(ctx, testConfig)
 				assert.NoError(t, err, "创建业务配置应成功")
@@ -371,6 +374,7 @@ func (s *BusinessConfigTestSuite) TestServiceSaveConfig() {
 				},
 			},
 			after: func(t *testing.T) {
+				t.Helper()
 				s.checkBusinessConfig(t, domain.BusinessConfig{
 					ID:        5,
 					OwnerID:   1003,
@@ -453,6 +457,7 @@ func (s *BusinessConfigTestSuite) TestServiceGetByID() {
 		{
 			name: "成功获取",
 			before: func(t *testing.T) int64 {
+				t.Helper()
 				return s.createConfigAndGetID(t)
 			},
 			wantConfig: domain.BusinessConfig{
@@ -498,17 +503,17 @@ func (s *BusinessConfigTestSuite) TestServiceGetByID() {
 			before: func(t *testing.T) int64 {
 				return 9999
 			},
-			wantErr: config.ErrConfigNotFound,
+			wantErr: errs.ErrConfigNotFound,
 		},
 	}
 	for _, tc := range testcases {
 		tc := tc
 		s.T().Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
 			id := tc.before(t)
 			conf, err := s.svc.GetByID(ctx, id)
-			require.Equal(t, tc.wantErr, err)
+			require.ErrorIs(t, err, tc.wantErr)
 			if err != nil {
 				return
 			}
@@ -517,7 +522,7 @@ func (s *BusinessConfigTestSuite) TestServiceGetByID() {
 			err = s.svc.Delete(ctx, id)
 			assert.NoError(t, err, "删除业务配置应成功")
 			key := fmt.Sprintf("config:%d", id)
-			err = s.redisCache.Del(context.Background(), key).Err()
+			err = s.redisCache.Del(t.Context(), key).Err()
 			assert.NoError(t, err, "删除业务配置应成功")
 			s.localCache.Delete(key)
 		})
@@ -596,15 +601,17 @@ func (s *BusinessConfigTestSuite) TestServiceDelete() {
 			name: "正常删除",
 			id:   5,
 			before: func(t *testing.T) {
+				t.Helper()
 				s.createConfigAndGetID(t)
 			},
 			after: func(t *testing.T) {
-				_, err := s.svc.GetByID(context.Background(), 5)
-				assert.Equal(t, config.ErrConfigNotFound, err, "应返回配置不存在错误")
+				t.Helper()
+				_, err := s.svc.GetByID(t.Context(), 5)
+				assert.ErrorIs(t, err, errs.ErrConfigNotFound, "应返回配置不存在错误")
 
 				_, ok := s.localCache.Get("config:5")
 				require.False(t, ok)
-				res := s.redisCache.Get(context.Background(), "config:5")
+				res := s.redisCache.Get(t.Context(), "config:5")
 				assert.Equal(t, redis.Nil, res.Err())
 			},
 		},
@@ -612,7 +619,7 @@ func (s *BusinessConfigTestSuite) TestServiceDelete() {
 	for _, tc := range testcases {
 		tc := tc
 		s.T().Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
 			tc.before(t)
 			err := s.svc.Delete(ctx, tc.id)
@@ -627,6 +634,7 @@ func (s *BusinessConfigTestSuite) TestServiceDelete() {
 }
 
 func TestBusinessConfigService(t *testing.T) {
+	t.Parallel()
 	suite.Run(t, new(BusinessConfigTestSuite))
 }
 
@@ -641,7 +649,8 @@ func assertBusinessConfig(t *testing.T, wantConfig domain.BusinessConfig, actual
 }
 
 func (s *BusinessConfigTestSuite) checkBusinessConfig(t *testing.T, wantConfig domain.BusinessConfig) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	var cfgDao dao.BusinessConfig
 	err := s.db.WithContext(ctx).Where("id = ?", wantConfig.ID).First(&cfgDao).Error
@@ -653,7 +662,7 @@ func (s *BusinessConfigTestSuite) checkBusinessConfig(t *testing.T, wantConfig d
 	require.True(t, ok)
 	assertBusinessConfig(t, conf, v.(domain.BusinessConfig))
 
-	res := s.redisCache.Get(context.Background(), key)
+	res := s.redisCache.Get(t.Context(), key)
 	require.NoError(t, res.Err())
 	var redisConf domain.BusinessConfig
 	configStr := res.Val()

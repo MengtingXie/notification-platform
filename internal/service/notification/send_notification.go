@@ -9,13 +9,12 @@ import (
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/send_strategy"
-	"github.com/gotomicro/ego/core/elog"
 	"github.com/sony/sonyflake"
 )
 
 // SendService 负责处理发送
 //
-//go:generate mockgen -source=./executor.go -destination=./mocks/executor.mock.go -package=notificationmocks -typed SendService
+//go:generate mockgen -source=./send_notification.go -destination=./mocks/send_notification.mock.go -package=notificationmocks -typed SendService
 type SendService interface {
 	// SendNotification 同步单条发送
 	SendNotification(ctx context.Context, n domain.Notification) (domain.SendResponse, error)
@@ -33,7 +32,6 @@ type sendService struct {
 	templateSvc     manage.ChannelTemplateService
 	idGenerator     *sonyflake.Sonyflake
 	sendStrategy    send_strategy.SendStrategy
-	logger          *elog.Component
 }
 
 // NewSendService 创建执行器实例

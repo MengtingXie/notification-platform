@@ -33,7 +33,7 @@ func NewProvider() *Provider {
 	}
 }
 
-func (p *Provider) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
+func (p *Provider) Send(_ context.Context, notification domain.Notification) (domain.SendResponse, error) {
 	p.logger.Info("发送通知", elog.Any("notification", notification))
 	return domain.SendResponse{Status: domain.SendStatusSucceeded}, nil
 }

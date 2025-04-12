@@ -44,7 +44,7 @@ func NewExponentialBackoffRetryStrategy(initialInterval, maxInterval time.Durati
 	}
 }
 
-func (s *ExponentialBackoffRetryStrategy) Report(err error) Strategy {
+func (s *ExponentialBackoffRetryStrategy) Report(_ error) Strategy {
 	return s
 }
 
@@ -57,7 +57,8 @@ func (s *ExponentialBackoffRetryStrategy) nextWithRetries(retries int32) (time.D
 		if reached, ok := s.maxIntervalReached.Load().(bool); ok && reached {
 			return s.maxInterval, true
 		}
-		interval := s.initialInterval * time.Duration(math.Pow(2, float64(retries-1)))
+		const two = 2
+		interval := s.initialInterval * time.Duration(math.Pow(two, float64(retries-1)))
 		// 溢出或当前重试间隔大于最大重试间隔
 		if interval <= 0 || interval > s.maxInterval {
 			s.maxIntervalReached.Store(true)

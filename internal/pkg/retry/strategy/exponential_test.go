@@ -24,6 +24,8 @@ import (
 )
 
 func TestNewExponentialBackoffRetryStrategy_New(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name            string
 		initialInterval time.Duration
@@ -47,6 +49,7 @@ func TestNewExponentialBackoffRetryStrategy_New(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			s := NewExponentialBackoffRetryStrategy(tt.initialInterval, tt.maxInterval, tt.maxRetries)
 			assert.Equal(t, tt.want, s)
 		})
@@ -54,6 +57,8 @@ func TestNewExponentialBackoffRetryStrategy_New(t *testing.T) {
 }
 
 func TestExponentialBackoffRetryStrategy_Next(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name     string
 		ctx      context.Context
@@ -63,7 +68,7 @@ func TestExponentialBackoffRetryStrategy_Next(t *testing.T) {
 	}{
 		{
 			name: "stop if retries reaches maxRetries",
-			ctx:  context.Background(),
+			ctx:  t.Context(),
 			strategy: func() *ExponentialBackoffRetryStrategy {
 				return NewExponentialBackoffRetryStrategy(1*time.Second, 10*time.Second, 3)
 			}(),
@@ -71,7 +76,7 @@ func TestExponentialBackoffRetryStrategy_Next(t *testing.T) {
 		},
 		{
 			name: "initialInterval over maxInterval",
-			ctx:  context.Background(),
+			ctx:  t.Context(),
 			strategy: func() *ExponentialBackoffRetryStrategy {
 				return NewExponentialBackoffRetryStrategy(1*time.Second, 4*time.Second, 5)
 			}(),
@@ -81,6 +86,7 @@ func TestExponentialBackoffRetryStrategy_Next(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			intervals := make([]time.Duration, 0)
 			for {
 				if interval, ok := tt.strategy.Next(); ok {
@@ -96,11 +102,14 @@ func TestExponentialBackoffRetryStrategy_Next(t *testing.T) {
 
 // 指数退避重试策略子测试函数，无限重试
 func TestExponentialBackoffRetryStrategy_Next4InfiniteRetry(t *testing.T) {
+	t.Parallel()
 	t.Run("maxRetries equals 0", func(t *testing.T) {
+		t.Parallel()
 		testNext4InfiniteRetry(t, 0)
 	})
 
 	t.Run("maxRetries equals -1", func(t *testing.T) {
+		t.Parallel()
 		testNext4InfiniteRetry(t, -1)
 	})
 }

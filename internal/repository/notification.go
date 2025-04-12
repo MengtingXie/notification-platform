@@ -75,7 +75,7 @@ func NewNotificationRepository(d dao.NotificationDAO) NotificationRepository {
 
 func (r *notificationRepository) FindReadyNotifications(ctx context.Context, offset, limit int) ([]domain.Notification, error) {
 	nos, err := r.dao.FindReadyNotifications(ctx, offset, limit)
-	return slice.Map(nos, func(idx int, src dao.Notification) domain.Notification {
+	return slice.Map(nos, func(_ int, src dao.Notification) domain.Notification {
 		return r.toDomain(src)
 	}), err
 }
@@ -141,7 +141,7 @@ func (r *notificationRepository) batchCreate(ctx context.Context, notifications 
 		return nil, nil
 	}
 
-	daoNotifications := slice.Map(notifications, func(idx int, src domain.Notification) dao.Notification {
+	daoNotifications := slice.Map(notifications, func(_ int, src domain.Notification) dao.Notification {
 		return r.toEntity(src)
 	})
 
@@ -160,7 +160,7 @@ func (r *notificationRepository) batchCreate(ctx context.Context, notifications 
 		}
 	}
 
-	return slice.Map(createdNotifications, func(idx int, src dao.Notification) domain.Notification {
+	return slice.Map(createdNotifications, func(_ int, src dao.Notification) domain.Notification {
 		return r.toDomain(src)
 	}), nil
 }

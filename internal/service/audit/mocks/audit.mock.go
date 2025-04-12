@@ -5,6 +5,7 @@
 //
 //	mockgen -source=./audit.go -destination=./mocks/audit.mock.go -package=auditmocks -typed Service
 //
+
 // Package auditmocks is a generated GoMock package.
 package auditmocks
 
@@ -20,6 +21,7 @@ import (
 type MockService struct {
 	ctrl     *gomock.Controller
 	recorder *MockServiceMockRecorder
+	isgomock struct{}
 }
 
 // MockServiceMockRecorder is the mock recorder for MockService.
@@ -49,31 +51,31 @@ func (m *MockService) CreateAudit(ctx context.Context, req domain.Audit) (int64,
 }
 
 // CreateAudit indicates an expected call of CreateAudit.
-func (mr *MockServiceMockRecorder) CreateAudit(ctx, req any) *ServiceCreateAuditCall {
+func (mr *MockServiceMockRecorder) CreateAudit(ctx, req any) *MockServiceCreateAuditCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAudit", reflect.TypeOf((*MockService)(nil).CreateAudit), ctx, req)
-	return &ServiceCreateAuditCall{Call: call}
+	return &MockServiceCreateAuditCall{Call: call}
 }
 
-// ServiceCreateAuditCall wrap *gomock.Call
-type ServiceCreateAuditCall struct {
+// MockServiceCreateAuditCall wrap *gomock.Call
+type MockServiceCreateAuditCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *ServiceCreateAuditCall) Return(arg0 int64, arg1 error) *ServiceCreateAuditCall {
+func (c *MockServiceCreateAuditCall) Return(arg0 int64, arg1 error) *MockServiceCreateAuditCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *ServiceCreateAuditCall) Do(f func(context.Context, domain.Audit) (int64, error)) *ServiceCreateAuditCall {
+func (c *MockServiceCreateAuditCall) Do(f func(context.Context, domain.Audit) (int64, error)) *MockServiceCreateAuditCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *ServiceCreateAuditCall) DoAndReturn(f func(context.Context, domain.Audit) (int64, error)) *ServiceCreateAuditCall {
+func (c *MockServiceCreateAuditCall) DoAndReturn(f func(context.Context, domain.Audit) (int64, error)) *MockServiceCreateAuditCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

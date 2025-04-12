@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	_ provider.Selector = (*selector)(nil)
-	_ provider.Builder  = (*SelectorBuilder)(nil)
+	_ provider.Selector        = (*selector)(nil)
+	_ provider.SelectorBuilder = (*SelectorBuilder)(nil)
 )
 
 // selector 供应商顺序选择器

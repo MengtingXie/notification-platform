@@ -403,7 +403,7 @@ func (d *notificationDAO) MarkTimeoutSendingAsFailed(ctx context.Context, batchS
 	return res.RowsAffected, res.Error
 }
 
-func (d *notificationDAO) FindReadyNotifications(ctx context.Context, offset int, limit int) ([]Notification, error) {
+func (d *notificationDAO) FindReadyNotifications(ctx context.Context, offset, limit int) ([]Notification, error) {
 	var res []Notification
 	now := time.Now().UnixMilli()
 	err := d.db.WithContext(ctx).

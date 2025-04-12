@@ -1,0 +1,21 @@
+package ioc
+
+import (
+	"time"
+
+	"github.com/gotomicro/ego/core/econf"
+	"github.com/patrickmn/go-cache"
+)
+
+func InitGoCache() *cache.Cache {
+	type Config struct {
+		DefaultExpiration, CleanupInterval time.Duration
+	}
+	var cfg Config
+	err := econf.UnmarshalKey("cache", &cfg)
+	if err != nil {
+		panic(err)
+	}
+	c := cache.New(cfg.DefaultExpiration, cfg.CleanupInterval)
+	return c
+}

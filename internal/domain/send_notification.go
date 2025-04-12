@@ -30,7 +30,7 @@ type SendStrategyConfig struct {
 }
 
 // SendTimeWindow 计算最早发送时间和最晚发送时间
-func (e SendStrategyConfig) SendTimeWindow() (time.Time, time.Time) {
+func (e SendStrategyConfig) SendTimeWindow() (stime, etime time.Time) {
 	switch e.Type {
 	case SendStrategyImmediate:
 		now := time.Now()

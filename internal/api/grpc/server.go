@@ -25,17 +25,17 @@ import (
 type NotificationServer struct {
 	notificationv1.UnimplementedNotificationServiceServer
 	notificationv1.UnimplementedNotificationQueryServiceServer
-	executor        notificationsvc.SendService
+	sendSvc         notificationsvc.SendService
 	notificationSvc notificationsvc.Service
 	// TODO: 配置服务 configService config.ConfigService
 	txnSvc notificationsvc.TxNotificationService
 }
 
 // NewServer 创建通知平台gRPC服务器
-func NewServer(executor notificationsvc.SendService, txnSvc notificationsvc.TxNotificationService) *NotificationServer {
+func NewServer(sendSvc notificationsvc.SendService, txnSvc notificationsvc.TxNotificationService) *NotificationServer {
 	return &NotificationServer{
-		executor: executor,
-		txnSvc:   txnSvc,
+		sendSvc: sendSvc,
+		txnSvc:  txnSvc,
 	}
 }
 
@@ -51,7 +51,7 @@ func (s *NotificationServer) TxPrepare(ctx context.Context, request *notificatio
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
 	}
-	_, err = s.txnSvc.Prepare(ctx, txn)
+	_, err = s.txnSvc.Prepare(ctx, txn.Notification)
 	return &notificationv1.TxPrepareResponse{}, err
 }
 
@@ -88,7 +88,7 @@ func (s *NotificationServer) SendNotification(ctx context.Context, req *notifica
 	}
 
 	// 3. 调用执行器
-	result, err := s.executor.SendNotification(ctx, notification)
+	result, err := s.sendSvc.SendNotification(ctx, notification)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "发送通知失败: %v", err)
 	}
@@ -112,7 +112,7 @@ func (s *NotificationServer) SendNotificationAsync(ctx context.Context, req *not
 	}
 
 	// 3. 调用执行器
-	result, err := s.executor.SendNotificationAsync(ctx, notification)
+	result, err := s.sendSvc.SendNotificationAsync(ctx, notification)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "异步发送通知失败: %v", err)
 	}
@@ -150,27 +150,27 @@ func (s *NotificationServer) BatchSendNotifications(ctx context.Context, req *no
 	}
 
 	// 3. 调用执行器
-	result, err := s.executor.BatchSendNotifications(ctx, notifications...)
+	responses, err := s.sendSvc.BatchSendNotifications(ctx, notifications...)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "批量发送通知失败: %v", err)
 	}
 
 	// 4. 将结果转换为响应
-	response := &notificationv1.BatchSendNotificationsResponse{
-		TotalCount:   int32(result.TotalCount),
-		SuccessCount: int32(result.SuccessCount),
-		Results:      make([]*notificationv1.SendNotificationResponse, 0, len(result.Results)),
-	}
-
-	for _, r := range result.Results {
-		resp, err := s.convertToSendResponse(r, nil)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "转换响应失败: %v", err)
+	successCount := int32(0)
+	results := make([]*notificationv1.SendNotificationResponse, 0, len(responses.Results))
+	for i := range responses.Results {
+		resp, err1 := s.convertToSendResponse(responses.Results[i], nil)
+		if err1 != nil {
+			return nil, status.Errorf(codes.Internal, "转换响应失败: %v", err1)
 		}
-		response.Results = append(response.Results, resp)
+		results = append(results, resp)
 	}
 
-	return response, nil
+	return &notificationv1.BatchSendNotificationsResponse{
+		TotalCount:   int32(len(responses.Results)),
+		SuccessCount: successCount,
+		Results:      results,
+	}, nil
 }
 
 // BatchSendNotificationsAsync 处理批量异步发送通知请求
@@ -192,7 +192,7 @@ func (s *NotificationServer) BatchSendNotificationsAsync(ctx context.Context, re
 	}
 
 	// 3. 调用执行器
-	result, err := s.executor.BatchSendNotificationsAsync(ctx, notifications...)
+	result, err := s.sendSvc.BatchSendNotificationsAsync(ctx, notifications...)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "批量异步发送通知失败: %v", err)
 	}

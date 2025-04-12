@@ -21,8 +21,8 @@ type QuotaConfig struct {
 	Monthly MonthlyConfig `json:"monthly"`
 }
 type MonthlyConfig struct {
-	SMS   int `json:"SMS"`
-	EMAIL int `json:"EMAIL"`
+	SMS   int `json:"sms"`
+	EMAIL int `json:"email"`
 }
 type ChannelConfig struct {
 	Channels    []ChannelItem `json:"channels"`

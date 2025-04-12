@@ -20,10 +20,10 @@ import (
 // Injectors from wire.go:
 
 func InitTxNotificationService(configSvc config.BusinessConfigService) *App {
-	v := ioc.InitDB()
-	txNotificationDAO := dao.NewTxNotificationDAO(v)
+	db := ioc.InitDB()
+	txNotificationDAO := dao.NewTxNotificationDAO(db)
 	txNotificationRepository := repository.NewTxNotificationRepository(txNotificationDAO)
-	notificationDAO := dao.NewNotificationDAO(v)
+	notificationDAO := dao.NewNotificationDAO(db)
 	notificationRepository := repository.NewNotificationRepository(notificationDAO)
 	cmdable := ioc.InitRedis()
 	client := initRedisClient(cmdable)

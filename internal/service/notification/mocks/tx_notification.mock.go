@@ -118,18 +118,18 @@ func (c *MockTxNotificationServiceCommitCall) DoAndReturn(f func(context.Context
 }
 
 // Prepare mocks base method.
-func (m *MockTxNotificationService) Prepare(ctx context.Context, txNotification domain.TxNotification) (uint64, error) {
+func (m *MockTxNotificationService) Prepare(ctx context.Context, notification domain.Notification) (uint64, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Prepare", ctx, txNotification)
+	ret := m.ctrl.Call(m, "Prepare", ctx, notification)
 	ret0, _ := ret[0].(uint64)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Prepare indicates an expected call of Prepare.
-func (mr *MockTxNotificationServiceMockRecorder) Prepare(ctx, txNotification any) *MockTxNotificationServicePrepareCall {
+func (mr *MockTxNotificationServiceMockRecorder) Prepare(ctx, notification any) *MockTxNotificationServicePrepareCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Prepare", reflect.TypeOf((*MockTxNotificationService)(nil).Prepare), ctx, txNotification)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Prepare", reflect.TypeOf((*MockTxNotificationService)(nil).Prepare), ctx, notification)
 	return &MockTxNotificationServicePrepareCall{Call: call}
 }
 
@@ -145,13 +145,13 @@ func (c *MockTxNotificationServicePrepareCall) Return(arg0 uint64, arg1 error) *
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockTxNotificationServicePrepareCall) Do(f func(context.Context, domain.TxNotification) (uint64, error)) *MockTxNotificationServicePrepareCall {
+func (c *MockTxNotificationServicePrepareCall) Do(f func(context.Context, domain.Notification) (uint64, error)) *MockTxNotificationServicePrepareCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockTxNotificationServicePrepareCall) DoAndReturn(f func(context.Context, domain.TxNotification) (uint64, error)) *MockTxNotificationServicePrepareCall {
+func (c *MockTxNotificationServicePrepareCall) DoAndReturn(f func(context.Context, domain.Notification) (uint64, error)) *MockTxNotificationServicePrepareCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

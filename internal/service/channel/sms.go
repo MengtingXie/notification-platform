@@ -24,7 +24,7 @@ import (
 )
 
 type baseChannel struct {
-	builder provider.Builder
+	builder provider.SelectorBuilder
 }
 
 func (s *baseChannel) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
@@ -54,19 +54,7 @@ type smsChannel struct {
 	baseChannel
 }
 
-func NewSMSChannel(builder provider.Builder) Channel {
-	return &smsChannel{
-		baseChannel{
-			builder: builder,
-		},
-	}
-}
-
-type emailChannel struct {
-	baseChannel
-}
-
-func NewEmailChannel(builder provider.Builder) Channel {
+func NewSMSChannel(builder provider.SelectorBuilder) Channel {
 	return &smsChannel{
 		baseChannel{
 			builder: builder,
