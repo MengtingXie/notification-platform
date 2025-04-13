@@ -59,8 +59,7 @@ func InitGrpcServer() *ioc.App {
 	callbackLogDAO := dao.NewCallbackLogDAO(db)
 	callbackLogRepository := repository.NewCallbackLogRepository(notificationRepository, callbackLogDAO)
 	callbackService := callback.NewService(businessConfigService, callbackLogRepository)
-	v := ioc.InitSMSClients()
-	channel := newChannel(manageService, channelTemplateService, v)
+	channel := newChannel(manageService, channelTemplateService)
 	notificationSender := sender.NewSender(notificationRepository, businessConfigService, callbackService, channel)
 	immediateSendStrategy := sendstrategy.NewImmediateStrategy(notificationRepository, notificationSender)
 	defaultSendStrategy := sendstrategy.NewDefaultStrategy(notificationRepository, businessConfigService)
@@ -88,7 +87,7 @@ func InitGrpcServer() *ioc.App {
 // wire.go:
 
 var (
-	BaseSet              = wire.NewSet(ioc.InitDB, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitIDGenerator, ioc.InitRedisClient, ioc.InitSMSClients, ioc.InitGoCache, local.NewLocalCache, redis.NewCache)
+	BaseSet              = wire.NewSet(ioc.InitDB, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitIDGenerator, ioc.InitRedisClient, ioc.InitGoCache, local.NewLocalCache, redis.NewCache)
 	configSvcSet         = wire.NewSet(config.NewBusinessConfigService, repository.NewBusinessConfigRepository, dao.NewBusinessConfigDAO)
 	notificationSvcSet   = wire.NewSet(notification.NewNotificationService, repository.NewNotificationRepository, dao.NewNotificationDAO, notification.NewSendingTimeoutTask)
 	txNotificationSvcSet = wire.NewSet(notification.NewTxNotificationService, repository.NewTxNotificationRepository, dao.NewTxNotificationDAO, notification.NewTxCheckTask)
@@ -105,15 +104,13 @@ var (
 func newChannel(
 	providerSvc manage.Service,
 	templateSvc manage2.ChannelTemplateService,
-	clients map[string]client.Client,
 ) channel.Channel {
-	return channel.NewDispatcher(map[domain.Channel]channel.Channel{domain.ChannelEmail: channel.NewSMSChannel(newSMSSelectorBuilder(providerSvc, templateSvc, clients))})
+	return channel.NewDispatcher(map[domain.Channel]channel.Channel{domain.ChannelEmail: channel.NewSMSChannel(newSMSSelectorBuilder(providerSvc, templateSvc))})
 }
 
 func newSMSSelectorBuilder(
 	providerSvc manage.Service,
 	templateSvc manage2.ChannelTemplateService,
-	clients map[string]client.Client,
 ) *sequential.SelectorBuilder {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
@@ -125,10 +122,24 @@ func newSMSSelectorBuilder(
 
 	providers := make([]provider.Provider, 0, len(entities))
 	for i := range entities {
+		var cli client.Client
+		if entities[i].Name == "aliyun" {
+			c, err1 := client.NewAliyunSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret)
+			if err1 != nil {
+				panic(err1)
+			}
+			cli = c
+		} else if entities[i].Name == "gitee" {
+			c, err1 := client.NewTencentCloudSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret, entities[i].APPID)
+			if err1 != nil {
+				panic(err1)
+			}
+			cli = c
+		}
 		providers = append(providers, sms.NewSMSProvider(
 			entities[i].Name,
 			templateSvc,
-			clients[entities[i].Name],
+			cli,
 		))
 	}
 	return sequential.NewSelectorBuilder(providers)

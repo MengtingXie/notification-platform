@@ -1,3 +1,5 @@
+//go:build e2e
+
 package test
 
 import (
@@ -8,7 +10,7 @@ import (
 )
 
 func TestIoc(*testing.T) {
-	ioc.InitDB()
+	ioc.InitDBAndTables()
 	log.Println("启动db成功")
 	ioc.InitCache()
 	log.Println("启动redis成功")

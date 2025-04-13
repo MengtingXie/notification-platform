@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/repository/dao"
+
 	"github.com/ecodeclub/ekit/retry"
 	"github.com/ego-component/egorm"
 	"github.com/gotomicro/ego/core/econf"
@@ -12,7 +14,12 @@ import (
 
 func InitDB() *egorm.Component {
 	WaitForDBSetup(econf.GetString("mysql.dsn"))
-	return egorm.Load("mysql").Build()
+	db := egorm.Load("mysql").Build()
+	err := dao.InitTables(db)
+	if err != nil {
+		panic(err)
+	}
+	return db
 }
 
 func WaitForDBSetup(dsn string) {

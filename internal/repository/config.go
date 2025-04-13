@@ -2,14 +2,13 @@ package repository
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/cache"
 	"gitee.com/flycash/notification-platform/internal/repository/cache/local"
 	"gitee.com/flycash/notification-platform/internal/repository/cache/redis"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
+	"github.com/ecodeclub/ekit/sqlx"
 	"github.com/gotomicro/ego/core/elog"
 )
 
@@ -105,8 +104,10 @@ func (b *businessConfigRepository) GetByIDs(ctx context.Context, ids []int64) (m
 	}
 
 	// 4. 处理从数据库获取的结果，批量更新缓存并添加到结果集
-	var configsToCache []domain.BusinessConfig
-	for id, config := range configMap {
+
+	configsToCache := make([]domain.BusinessConfig, 0, len(ids))
+	for id := range configMap {
+		config := configMap[id]
 		domainConfig := b.toDomain(config)
 		result[id] = domainConfig
 		configsToCache = append(configsToCache, domainConfig)
@@ -192,32 +193,8 @@ func (b *businessConfigRepository) SaveConfig(ctx context.Context, config domain
 	return nil
 }
 
-func (b *businessConfigRepository) toDomain(daoConfig dao.BusinessConfig) domain.BusinessConfig {
+func (b *businessConfigRepository) toDomain(config dao.BusinessConfig) domain.BusinessConfig {
 	domainCfg := domain.BusinessConfig{
-		ID:        daoConfig.ID,
-		OwnerID:   daoConfig.OwnerID,
-		OwnerType: daoConfig.OwnerType,
-		RateLimit: daoConfig.RateLimit,
-		Ctime:     daoConfig.Ctime,
-		Utime:     daoConfig.Utime,
-	}
-	if daoConfig.ChannelConfig.Valid {
-		domainCfg.ChannelConfig = unmarshal[domain.ChannelConfig](daoConfig.ChannelConfig.String)
-	}
-	if daoConfig.TxnConfig.Valid {
-		domainCfg.TxnConfig = unmarshal[domain.TxnConfig](daoConfig.TxnConfig.String)
-	}
-	if daoConfig.Quota.Valid {
-		domainCfg.Quota = unmarshal[domain.QuotaConfig](daoConfig.Quota.String)
-	}
-	if daoConfig.CallbackConfig.Valid {
-		domainCfg.CallbackConfig = unmarshal[domain.CallbackConfig](daoConfig.CallbackConfig.String)
-	}
-	return domainCfg
-}
-
-func (b *businessConfigRepository) toEntity(config domain.BusinessConfig) dao.BusinessConfig {
-	daoConfig := dao.BusinessConfig{
 		ID:        config.ID,
 		OwnerID:   config.OwnerID,
 		OwnerType: config.OwnerType,
@@ -225,31 +202,58 @@ func (b *businessConfigRepository) toEntity(config domain.BusinessConfig) dao.Bu
 		Ctime:     config.Ctime,
 		Utime:     config.Utime,
 	}
+	if config.ChannelConfig.Valid {
+		domainCfg.ChannelConfig = &config.ChannelConfig.Val
+	}
+	if config.TxnConfig.Valid {
+		domainCfg.TxnConfig = &config.TxnConfig.Val
+	}
+	if config.Quota.Valid {
+		domainCfg.Quota = &config.Quota.Val
+	}
+	if config.CallbackConfig.Valid {
+		domainCfg.CallbackConfig = &config.CallbackConfig.Val
+	}
+	return domainCfg
+}
+
+func (b *businessConfigRepository) toEntity(config domain.BusinessConfig) dao.BusinessConfig {
+	businessConfig := dao.BusinessConfig{
+		ID:        config.ID,
+		OwnerID:   config.OwnerID,
+		OwnerType: config.OwnerType,
+		RateLimit: config.RateLimit,
+		Ctime:     config.Ctime,
+		Utime:     config.Utime,
+	}
+
 	if config.ChannelConfig != nil {
-		daoConfig.ChannelConfig = marshal(config.ChannelConfig)
+		businessConfig.ChannelConfig = sqlx.JsonColumn[domain.ChannelConfig]{
+			Val:   *config.ChannelConfig,
+			Valid: true,
+		}
 	}
+
 	if config.TxnConfig != nil {
-		daoConfig.TxnConfig = marshal(config.TxnConfig)
+		businessConfig.TxnConfig = sqlx.JsonColumn[domain.TxnConfig]{
+			Val:   *config.TxnConfig,
+			Valid: true,
+		}
 	}
+
 	if config.Quota != nil {
-		daoConfig.Quota = marshal(config.Quota)
+		businessConfig.Quota = sqlx.JsonColumn[domain.QuotaConfig]{
+			Val:   *config.Quota,
+			Valid: true,
+		}
 	}
+
 	if config.CallbackConfig != nil {
-		daoConfig.CallbackConfig = marshal(config.CallbackConfig)
+		businessConfig.CallbackConfig = sqlx.JsonColumn[domain.CallbackConfig]{
+			Val:   *config.CallbackConfig,
+			Valid: true,
+		}
 	}
-	return daoConfig
-}
 
-func marshal(v any) sql.NullString {
-	byteV, _ := json.Marshal(v)
-	return sql.NullString{
-		String: string(byteV),
-		Valid:  true,
-	}
-}
-
-func unmarshal[T any](v string) *T {
-	var t T
-	_ = json.Unmarshal([]byte(v), &t)
-	return &t
+	return businessConfig
 }

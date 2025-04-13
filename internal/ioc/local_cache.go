@@ -9,7 +9,8 @@ import (
 
 func InitGoCache() *cache.Cache {
 	type Config struct {
-		DefaultExpiration, CleanupInterval time.Duration
+		DefaultExpiration time.Duration `yaml:"defaultExpiration"`
+		CleanupInterval   time.Duration `yaml:"cleanupInterval"`
 	}
 	var cfg Config
 	err := econf.UnmarshalKey("cache", &cfg)

@@ -37,7 +37,6 @@ var (
 		ioc.InitEtcdClient,
 		ioc.InitIDGenerator,
 		ioc.InitRedisClient,
-		ioc.InitSMSClients,
 		ioc.InitGoCache,
 
 		local.NewLocalCache,
@@ -93,17 +92,15 @@ var (
 func newChannel(
 	providerSvc providersvc.Service,
 	templateSvc templatesvc.ChannelTemplateService,
-	clients map[string]client.Client,
 ) channel.Channel {
 	return channel.NewDispatcher(map[domain.Channel]channel.Channel{
-		domain.ChannelEmail: channel.NewSMSChannel(newSMSSelectorBuilder(providerSvc, templateSvc, clients)),
+		domain.ChannelEmail: channel.NewSMSChannel(newSMSSelectorBuilder(providerSvc, templateSvc)),
 	})
 }
 
 func newSMSSelectorBuilder(
 	providerSvc providersvc.Service,
 	templateSvc templatesvc.ChannelTemplateService,
-	clients map[string]client.Client,
 ) *sequential.SelectorBuilder {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
@@ -115,10 +112,24 @@ func newSMSSelectorBuilder(
 	// 构建SMS供应商
 	providers := make([]provider.Provider, 0, len(entities))
 	for i := range entities {
+		var cli client.Client
+		if entities[i].Name == "aliyun" {
+			c, err1 := client.NewAliyunSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret)
+			if err1 != nil {
+				panic(err1)
+			}
+			cli = c
+		} else if entities[i].Name == "gitee" {
+			c, err1 := client.NewTencentCloudSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret, entities[i].APPID)
+			if err1 != nil {
+				panic(err1)
+			}
+			cli = c
+		}
 		providers = append(providers, sms.NewSMSProvider(
 			entities[i].Name,
 			templateSvc,
-			clients[entities[i].Name],
+			cli,
 		))
 	}
 	return sequential.NewSelectorBuilder(providers)

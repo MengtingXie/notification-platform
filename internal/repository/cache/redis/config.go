@@ -108,7 +108,7 @@ func (c *Cache) Get(ctx context.Context, bizID int64) (domain.BusinessConfig, er
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			// 键不存在
-			return domain.BusinessConfig{}, cache.ErrorKeyNotFound
+			return domain.BusinessConfig{}, cache.ErrKeyNotFound
 		}
 		// 其他错误
 		return domain.BusinessConfig{}, fmt.Errorf("failed to get config from redis %w", err)
