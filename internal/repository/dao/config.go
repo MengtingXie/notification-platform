@@ -2,23 +2,24 @@ package dao
 
 import (
 	"context"
-	"database/sql"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/domain"
+	"github.com/ecodeclub/ekit/sqlx"
 	"github.com/ego-component/egorm"
 	"gorm.io/gorm/clause"
 )
 
 // BusinessConfig 业务配置表
 type BusinessConfig struct {
-	ID             int64          `gorm:"primaryKey;type:BIGINT;comment:'业务标识'"`
-	OwnerID        int64          `gorm:"type:BIGINT;comment:'业务方'"`
-	OwnerType      string         `gorm:"type:ENUM('person', 'organization');comment:'业务方类型：person-个人,organization-组织'"`
-	ChannelConfig  sql.NullString `gorm:"type:JSON;comment:'{\"channels\":[{\"channel\":\"SMS\", \"priority\":\"1\",\"enabled\":\"true\"},{\"channel\":\"EMAIL\", \"priority\":\"2\",\"enabled\":\"true\"}]}'"`
-	TxnConfig      sql.NullString `gorm:"type:JSON;comment:'事务配置'"`
-	RateLimit      int            `gorm:"type:INT;DEFAULT:1000;comment:'每秒最大请求数'"`
-	Quota          sql.NullString `gorm:"type:JSON;comment:'{\"monthly\":{\"SMS\":100000,\"EMAIL\":500000}}'"`
-	CallbackConfig sql.NullString `gorm:"type:JSON;comment:'回调配置，通知平台回调业务方通知异步请求结果'"`
+	ID             int64                                  `gorm:"primaryKey;type:BIGINT;comment:'业务标识'"`
+	OwnerID        int64                                  `gorm:"type:BIGINT;comment:'业务方'"`
+	OwnerType      string                                 `gorm:"type:ENUM('person', 'organization');comment:'业务方类型：person-个人,organization-组织'"`
+	ChannelConfig  sqlx.JsonColumn[domain.ChannelConfig]  `gorm:"type:JSON;comment:'{\"channels\":[{\"channel\":\"SMS\", \"priority\":\"1\",\"enabled\":\"true\"},{\"channel\":\"EMAIL\", \"priority\":\"2\",\"enabled\":\"true\"}]}'"`
+	TxnConfig      sqlx.JsonColumn[domain.TxnConfig]      `gorm:"type:JSON;comment:'事务配置'"`
+	RateLimit      int                                    `gorm:"type:INT;DEFAULT:1000;comment:'每秒最大请求数'"`
+	Quota          sqlx.JsonColumn[domain.QuotaConfig]    `gorm:"type:JSON;comment:'{\"monthly\":{\"SMS\":100000,\"EMAIL\":500000}}'"`
+	CallbackConfig sqlx.JsonColumn[domain.CallbackConfig] `gorm:"type:JSON;comment:'回调配置，通知平台回调业务方通知异步请求结果'"`
 	Ctime          int64
 	Utime          int64
 }
