@@ -62,6 +62,7 @@ type NotificationDAO interface {
 	BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error
 	FindReadyNotifications(ctx context.Context, offset, limit int) ([]Notification, error)
 	MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error)
+	MarkFailed(ctx context.Context, entity Notification) error
 }
 
 // Notification 通知记录表
@@ -116,6 +117,17 @@ func (d *notificationDAO) create(ctx context.Context, db *gorm.DB, data Notifica
 			}
 			return err
 		}
+		res := tx.Model(&Quota{}).Where("quota >=1 AND biz_id = ? AND channel = ? ",
+			data.BizID, data.Channel).Updates(
+			map[string]any{
+				"quota": gorm.Expr("`quota`-1"),
+				"utime": now,
+			})
+		if res.Error != nil || res.RowsAffected == 0 {
+			return fmt.Errorf("%w，原因: %w", errs.ErrNoQuota, res.Error)
+		}
+
+		// 直接数据库操作，直接扣减，CAS 扣减1
 		if createCallbackLog {
 			if err := tx.Create(&CallbackLog{NotificationID: data.ID, NextRetryTime: now}).Error; err != nil {
 				return fmt.Errorf("%w", errs.ErrCreateCallbackLogFailed)
@@ -198,10 +210,18 @@ func (d *notificationDAO) UpdateStatus(ctx context.Context, notification Notific
 	return d.db.WithContext(ctx).Model(&Notification{}).
 		Where("id = ?", notification.ID).
 		Updates(map[string]any{
-			"status": notification.Status,
-			"utime":  time.Now().Unix(),
+			"status":  notification.Status,
+			"version": gorm.Expr("version + 1"),
+			"utime":   time.Now().UnixMilli(),
 		}).Error
 }
+
+// 1. 提供 docker compose 文件，部署 prometheus, zipkin, grafana, kibana, logstash, ES
+// 2. 在 grpc interceptor 接入可观测性（响应时间，日志-统一打印ERROR，以及panic， trace），
+// 2.1 gorm 接入可观测性（响应时间, trace 也接入进去）, Redis 监控
+// 3. 在发送核心流程各个阶段补日志，DEBUG/INFO
+// 4. prometheus 采集 Linux 系统的数据，去找找开源工具 - 可以认为是运行在 docker 内，采集 docker 内的指标
+// 4. 尝试一下 mysql 和 Redis 本体的监控，有开源的就部署开源的 - 准备 docker
 
 // CASStatus 更新通知状态
 func (d *notificationDAO) CASStatus(ctx context.Context, notification Notification) error {
@@ -389,6 +409,27 @@ func (d *notificationDAO) BatchUpdateStatus(ctx context.Context, ids []uint64, s
 	return result.Error
 }
 
+func (d *notificationDAO) MarkFailed(ctx context.Context, notification Notification) error {
+	now := time.Now().UnixMilli()
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		err := tx.Model(&Notification{}).
+			Where("id = ?", notification.ID).
+			Updates(map[string]any{
+				"status":  notification.Status,
+				"utime":   now,
+				"version": gorm.Expr("version + 1"),
+			}).Error
+		if err != nil {
+			return err
+		}
+		return tx.Model(&Quota{}).Where("biz_id = ? AND channel = ?",
+			notification.BizID, notification.Channel).
+			Updates(map[string]any{
+				"quota": gorm.Expr("quota+1"),
+				"utime": now,
+			}).Error
+	})
+}
 func (d *notificationDAO) MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error) {
 	now := time.Now()
 	ddl := now.Add(-time.Minute).UnixMilli()
@@ -397,8 +438,9 @@ func (d *notificationDAO) MarkTimeoutSendingAsFailed(ctx context.Context, batchS
 		Limit(batchSize).
 		Where("status = ? AND utime <=?", string(domain.SendStatusSending), ddl)
 	res := d.db.WithContext(ctx).Where("IN ?", sub).Updates(map[string]any{
-		"status": string(domain.SendStatusFailed),
-		"utime":  now,
+		"status":  string(domain.SendStatusFailed),
+		"version": gorm.Expr("version + 1"),
+		"utime":   now,
 	})
 	return res.RowsAffected, res.Error
 }

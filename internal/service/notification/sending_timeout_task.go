@@ -28,6 +28,10 @@ type SendingTimeoutTask struct {
 	repo    repository.NotificationRepository
 }
 
+func NewSendingTimeoutTask(dclient dlock.Client, repo repository.NotificationRepository) *SendingTimeoutTask {
+	return &SendingTimeoutTask{dclient: dclient, repo: repo}
+}
+
 func (s *SendingTimeoutTask) Start(ctx context.Context) {
 	const key = "notification_handling_sending_timeout"
 	lj := loopjob.NewInfiniteLoop(s.dclient, s.HandleSendingTimeout, key)

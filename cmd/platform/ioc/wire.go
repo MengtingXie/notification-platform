@@ -4,6 +4,7 @@ package ioc
 
 import (
 	"context"
+	"gitee.com/flycash/notification-platform/internal/service/scheduler"
 	"time"
 
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
@@ -50,11 +51,13 @@ var (
 		notificationsvc.NewNotificationService,
 		repository.NewNotificationRepository,
 		dao.NewNotificationDAO,
+		notificationsvc.NewSendingTimeoutTask,
 	)
 	txNotificationSvcSet = wire.NewSet(
 		notificationsvc.NewTxNotificationService,
 		repository.NewTxNotificationRepository,
 		dao.NewTxNotificationDAO,
+		notificationsvc.NewTxCheckTask,
 	)
 	senderSvcSet = wire.NewSet(
 		newChannel,
@@ -70,6 +73,7 @@ var (
 		callback.NewService,
 		repository.NewCallbackLogRepository,
 		dao.NewCallbackLogDAO,
+		callback.NewAsyncRequestResultCallbackTask,
 	)
 	providerSvcSet = wire.NewSet(
 		providersvc.NewProviderService,
@@ -83,6 +87,7 @@ var (
 		repository.NewChannelTemplateRepository,
 		dao.NewChannelTemplateDAO,
 	)
+	schedulerSet = wire.NewSet(scheduler.NewScheduler)
 )
 
 func newChannel(
@@ -149,9 +154,13 @@ func InitGrpcServer() *ioc.App {
 		// 事务通知服务
 		txNotificationSvcSet,
 
+		// 调度器
+		schedulerSet,
+
 		// GRPC服务器
 		grpcapi.NewServer,
 		ioc.InitGrpc,
+		ioc.InitTasks,
 		wire.Struct(new(ioc.App), "*"),
 	)
 

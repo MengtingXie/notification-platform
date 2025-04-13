@@ -1,18 +1,23 @@
-package notification
+package callback
 
 import (
 	"context"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
-	"gitee.com/flycash/notification-platform/internal/service/notification/callback"
 	"github.com/meoying/dlock-go"
 )
 
 type AsyncRequestResultCallbackTask struct {
 	dclient     dlock.Client
-	callbackSvc callback.Service
+	callbackSvc Service
 	batchSize   int64
+}
+
+func NewAsyncRequestResultCallbackTask(dclient dlock.Client, callbackSvc Service) *AsyncRequestResultCallbackTask {
+	return &AsyncRequestResultCallbackTask{dclient: dclient,
+		batchSize:   10,
+		callbackSvc: callbackSvc}
 }
 
 func (a *AsyncRequestResultCallbackTask) Start(ctx context.Context) {

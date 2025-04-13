@@ -148,11 +148,6 @@ func (c *service) SendCallbackByNotification(ctx context.Context, notification d
 	if err != nil {
 		return err
 	}
-	if len(logs) == 0 {
-		// 直接发回调
-		_, err = c.sendCallback(ctx, notification)
-		return err
-	}
 	return c.sendCallbackAndUpdateCallbackLogs(ctx, logs)
 }
 

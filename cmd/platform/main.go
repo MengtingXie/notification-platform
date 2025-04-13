@@ -1,16 +1,20 @@
 package main
 
 import (
+	"context"
 	"gitee.com/flycash/notification-platform/cmd/platform/ioc"
 	"github.com/gotomicro/ego"
 	"github.com/gotomicro/ego/core/elog"
-	"github.com/gotomicro/ego/server"
 )
 
+// go run --main
 func main() {
-	if err := ego.New().Serve(func() server.Server {
-		return ioc.InitGrpcServer().GrpcServer
-	}()).Run(); err != nil {
+	instance := ego.New()
+	app := ioc.InitGrpcServer()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	app.StartTasks(ctx)
+	if err := instance.Serve(app.GrpcServer).Run(); err != nil {
 		elog.Panic("startup", elog.Any("err", err))
 	}
 }

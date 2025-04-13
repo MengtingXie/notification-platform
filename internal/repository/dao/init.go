@@ -7,5 +7,6 @@ func InitTables(db *egorm.Component) error {
 		&BusinessConfig{},
 		&Notification{},
 		&TxNotification{},
+		&Quota{},
 	)
 }
