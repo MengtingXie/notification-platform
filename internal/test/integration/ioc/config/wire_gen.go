@@ -19,7 +19,7 @@ import (
 // Injectors from wire.go:
 
 func InitConfigService(localCache *cache.Cache) config.BusinessConfigService {
-	db := ioc.InitDB()
+	db := ioc.InitDBAndTables()
 	businessConfigDAO := dao.NewBusinessConfigDAO(db)
 	client := ioc.InitRedisClient()
 	cache2 := local.NewLocalCache(client, localCache)

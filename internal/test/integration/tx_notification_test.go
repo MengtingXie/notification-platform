@@ -1,3 +1,5 @@
+//go:build e2e
+
 package integration
 
 import (
@@ -34,8 +36,7 @@ type TxNotificationServiceTestSuite struct {
 }
 
 func (s *TxNotificationServiceTestSuite) SetupSuite() {
-	s.db = testioc.InitDB()
-	s.NoError(dao.InitTables(s.db))
+	s.db = testioc.InitDBAndTables()
 }
 
 func (s *TxNotificationServiceTestSuite) TearDownTest() {

@@ -20,7 +20,7 @@ import (
 // Injectors from wire.go:
 
 func InitTxNotificationService(configSvc config.BusinessConfigService) *App {
-	db := ioc.InitDB()
+	db := ioc.InitDBAndTables()
 	txNotificationDAO := dao.NewTxNotificationDAO(db)
 	txNotificationRepository := repository.NewTxNotificationRepository(txNotificationDAO)
 	notificationDAO := dao.NewNotificationDAO(db)

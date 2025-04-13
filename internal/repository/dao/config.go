@@ -96,23 +96,20 @@ func (b *businessConfigDAO) SaveConfig(ctx context.Context, config BusinessConfi
 	// 使用upsert语句，如果记录存在则更新，不存在则插入
 	db := b.db.WithContext(ctx)
 	result := db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "id"}},           // 根据ID判断冲突
-		DoUpdates: clause.AssignmentColumns(updateColumns), // 只更新指定的非空列
+		Columns: []clause.Column{{Name: "id"}}, // 根据ID判断冲突
+		DoUpdates: clause.AssignmentColumns([]string{
+			"owner_id",
+			"owner_type",
+			"channel_config",
+			"txn_config",
+			"rate_limit",
+			"quota",
+			"callback_config",
+			"utime",
+		}), // 只更新指定的非空列
 	}).Create(&config)
 	if result.Error != nil {
 		return BusinessConfig{}, result.Error
 	}
 	return config, nil
-}
-
-var updateColumns = []string{
-	"owner_id",
-	"owner_type",
-	"channel_config",
-	"quota",
-	"txn_config",
-	"rate_limit",
-	"retry_policy",
-	"callback_config",
-	"utime",
 }

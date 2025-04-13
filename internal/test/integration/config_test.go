@@ -1,3 +1,5 @@
+//go:build e2e
+
 package integration
 
 import (
@@ -41,9 +43,7 @@ func (s *BusinessConfigTestSuite) SetupSuite() {
 	s.svc = configIoc.InitConfigService(localCache)
 	s.localCache = localCache
 	s.redisCache = ioc.InitRedisClient()
-	s.db = ioc.InitDB()
-	err := dao.InitTables(s.db)
-	require.NoError(s.T(), err)
+	s.db = ioc.InitDBAndTables()
 }
 
 func (s *BusinessConfigTestSuite) TearDownTest() {
@@ -731,28 +731,42 @@ func (s *BusinessConfigTestSuite) toDomain(config dao.BusinessConfig) domain.Bus
 }
 
 func (s *BusinessConfigTestSuite) toEntity(config domain.BusinessConfig) dao.BusinessConfig {
-	return dao.BusinessConfig{
+	businessConfig := dao.BusinessConfig{
 		ID:        config.ID,
 		OwnerID:   config.OwnerID,
 		OwnerType: config.OwnerType,
-		ChannelConfig: sqlx.JsonColumn[domain.ChannelConfig]{
-			Val:   *config.ChannelConfig,
-			Valid: config.ChannelConfig != nil,
-		},
-		TxnConfig: sqlx.JsonColumn[domain.TxnConfig]{
-			Val:   *config.TxnConfig,
-			Valid: config.TxnConfig != nil,
-		},
 		RateLimit: config.RateLimit,
-		Quota: sqlx.JsonColumn[domain.QuotaConfig]{
-			Val:   *config.Quota,
-			Valid: config.Quota != nil,
-		},
-		CallbackConfig: sqlx.JsonColumn[domain.CallbackConfig]{
-			Val:   *config.CallbackConfig,
-			Valid: config.CallbackConfig != nil,
-		},
-		Ctime: config.Ctime,
-		Utime: config.Utime,
+		Ctime:     config.Ctime,
+		Utime:     config.Utime,
 	}
+
+	if config.ChannelConfig != nil {
+		businessConfig.ChannelConfig = sqlx.JsonColumn[domain.ChannelConfig]{
+			Val:   *config.ChannelConfig,
+			Valid: true,
+		}
+	}
+
+	if config.TxnConfig != nil {
+		businessConfig.TxnConfig = sqlx.JsonColumn[domain.TxnConfig]{
+			Val:   *config.TxnConfig,
+			Valid: true,
+		}
+	}
+
+	if config.Quota != nil {
+		businessConfig.Quota = sqlx.JsonColumn[domain.QuotaConfig]{
+			Val:   *config.Quota,
+			Valid: true,
+		}
+	}
+
+	if config.CallbackConfig != nil {
+		businessConfig.CallbackConfig = sqlx.JsonColumn[domain.CallbackConfig]{
+			Val:   *config.CallbackConfig,
+			Valid: true,
+		}
+	}
+
+	return businessConfig
 }

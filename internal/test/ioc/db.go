@@ -3,12 +3,13 @@ package ioc
 import (
 	"context"
 	"database/sql"
+	"sync"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/repository/dao"
+	"github.com/ecodeclub/ekit/retry"
 	"github.com/ego-component/egorm"
 	"github.com/gotomicro/ego/core/econf"
-
-	"github.com/ecodeclub/ekit/retry"
 )
 
 func WaitForDBSetup(dsn string) {
@@ -39,17 +40,25 @@ func WaitForDBSetup(dsn string) {
 	}
 }
 
-var db *egorm.Component
+var (
+	db         *egorm.Component
+	initDBOnce sync.Once
+)
 
-func InitDB() *egorm.Component {
-	if db != nil {
-		return db
-	}
-	econf.Set("mysql", map[string]any{
-		"dsn":   "root:root@tcp(localhost:13316)/notification?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true",
-		"debug": true,
+func InitDBAndTables() *egorm.Component {
+	initDBOnce.Do(func() {
+		if db != nil {
+			return
+		}
+		econf.Set("mysql", map[string]any{
+			"dsn":   "root:root@tcp(localhost:13316)/notification?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true",
+			"debug": true,
+		})
+		WaitForDBSetup(econf.GetStringMapString("mysql")["dsn"])
+		db = egorm.Load("mysql").Build()
+		if err := dao.InitTables(db); err != nil {
+			panic(err)
+		}
 	})
-	WaitForDBSetup(econf.GetStringMapString("mysql")["dsn"])
-	db = egorm.Load("mysql").Build()
 	return db
 }
