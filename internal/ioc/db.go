@@ -3,6 +3,7 @@ package ioc
 import (
 	"context"
 	"database/sql"
+	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"time"
 
 	"github.com/ecodeclub/ekit/retry"
@@ -12,7 +13,12 @@ import (
 
 func InitDB() *egorm.Component {
 	WaitForDBSetup(econf.GetString("mysql.dsn"))
-	return egorm.Load("mysql").Build()
+	db := egorm.Load("mysql").Build()
+	err := dao.InitTables(db)
+	if err != nil {
+		panic(err)
+	}
+	return db
 }
 
 func WaitForDBSetup(dsn string) {
