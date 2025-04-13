@@ -7,5 +7,10 @@ func InitTables(db *egorm.Component) error {
 		&BusinessConfig{},
 		&Notification{},
 		&TxNotification{},
+		&CallbackLog{},
+		&Provider{},
+		&ChannelTemplate{},
+		&ChannelTemplateVersion{},
+		&ChannelTemplateProvider{},
 	)
 }

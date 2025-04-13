@@ -2,14 +2,13 @@ package repository
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/cache"
 	"gitee.com/flycash/notification-platform/internal/repository/cache/local"
 	"gitee.com/flycash/notification-platform/internal/repository/cache/redis"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
+	"github.com/ecodeclub/ekit/sqlx"
 	"github.com/gotomicro/ego/core/elog"
 )
 
@@ -194,32 +193,8 @@ func (b *businessConfigRepository) SaveConfig(ctx context.Context, config domain
 	return nil
 }
 
-func (b *businessConfigRepository) toDomain(daoConfig dao.BusinessConfig) domain.BusinessConfig {
+func (b *businessConfigRepository) toDomain(config dao.BusinessConfig) domain.BusinessConfig {
 	domainCfg := domain.BusinessConfig{
-		ID:        daoConfig.ID,
-		OwnerID:   daoConfig.OwnerID,
-		OwnerType: daoConfig.OwnerType,
-		RateLimit: daoConfig.RateLimit,
-		Ctime:     daoConfig.Ctime,
-		Utime:     daoConfig.Utime,
-	}
-	if daoConfig.ChannelConfig.Valid {
-		domainCfg.ChannelConfig = unmarshal[domain.ChannelConfig](daoConfig.ChannelConfig.String)
-	}
-	if daoConfig.TxnConfig.Valid {
-		domainCfg.TxnConfig = unmarshal[domain.TxnConfig](daoConfig.TxnConfig.String)
-	}
-	if daoConfig.Quota.Valid {
-		domainCfg.Quota = unmarshal[domain.QuotaConfig](daoConfig.Quota.String)
-	}
-	if daoConfig.CallbackConfig.Valid {
-		domainCfg.CallbackConfig = unmarshal[domain.CallbackConfig](daoConfig.CallbackConfig.String)
-	}
-	return domainCfg
-}
-
-func (b *businessConfigRepository) toEntity(config domain.BusinessConfig) dao.BusinessConfig {
-	daoConfig := dao.BusinessConfig{
 		ID:        config.ID,
 		OwnerID:   config.OwnerID,
 		OwnerType: config.OwnerType,
@@ -227,31 +202,44 @@ func (b *businessConfigRepository) toEntity(config domain.BusinessConfig) dao.Bu
 		Ctime:     config.Ctime,
 		Utime:     config.Utime,
 	}
-	if config.ChannelConfig != nil {
-		daoConfig.ChannelConfig = marshal(config.ChannelConfig)
+	if config.ChannelConfig.Valid {
+		domainCfg.ChannelConfig = &config.ChannelConfig.Val
 	}
-	if config.TxnConfig != nil {
-		daoConfig.TxnConfig = marshal(config.TxnConfig)
+	if config.TxnConfig.Valid {
+		domainCfg.TxnConfig = &config.TxnConfig.Val
 	}
-	if config.Quota != nil {
-		daoConfig.Quota = marshal(config.Quota)
+	if config.Quota.Valid {
+		domainCfg.Quota = &config.Quota.Val
 	}
-	if config.CallbackConfig != nil {
-		daoConfig.CallbackConfig = marshal(config.CallbackConfig)
+	if config.CallbackConfig.Valid {
+		domainCfg.CallbackConfig = &config.CallbackConfig.Val
 	}
-	return daoConfig
+	return domainCfg
 }
 
-func marshal(v any) sql.NullString {
-	byteV, _ := json.Marshal(v)
-	return sql.NullString{
-		String: string(byteV),
-		Valid:  true,
+func (b *businessConfigRepository) toEntity(config domain.BusinessConfig) dao.BusinessConfig {
+	return dao.BusinessConfig{
+		ID:        config.ID,
+		OwnerID:   config.OwnerID,
+		OwnerType: config.OwnerType,
+		ChannelConfig: sqlx.JsonColumn[domain.ChannelConfig]{
+			Val:   *config.ChannelConfig,
+			Valid: config.ChannelConfig != nil,
+		},
+		TxnConfig: sqlx.JsonColumn[domain.TxnConfig]{
+			Val:   *config.TxnConfig,
+			Valid: config.TxnConfig != nil,
+		},
+		RateLimit: config.RateLimit,
+		Quota: sqlx.JsonColumn[domain.QuotaConfig]{
+			Val:   *config.Quota,
+			Valid: config.Quota != nil,
+		},
+		CallbackConfig: sqlx.JsonColumn[domain.CallbackConfig]{
+			Val:   *config.CallbackConfig,
+			Valid: config.CallbackConfig != nil,
+		},
+		Ctime: config.Ctime,
+		Utime: config.Utime,
 	}
-}
-
-func unmarshal[T any](v string) *T {
-	var t T
-	_ = json.Unmarshal([]byte(v), &t)
-	return &t
 }

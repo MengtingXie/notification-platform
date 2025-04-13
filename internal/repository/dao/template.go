@@ -52,10 +52,6 @@ func (ChannelTemplateVersion) TableName() string {
 	return "channel_template_versions"
 }
 
-// ChannelTemplateProvider 渠道模供应商关联表
-// template id = 123, channel = sms
-// version = v1
-
 type ChannelTemplateProvider struct {
 	ID                       int64  `gorm:"primaryKey;autoIncrement;comment:'渠道模版-供应商关联ID'"`
 	TemplateID               int64  `gorm:"type:BIGINT;NOT NULL;uniqueIndex:idx_template_version_provider,priority:1;uniqueIndex:idx_tmpl_ver_name_chan,priority:1;comment:'渠道模版ID'"`
