@@ -105,8 +105,10 @@ func (b *businessConfigRepository) GetByIDs(ctx context.Context, ids []int64) (m
 	}
 
 	// 4. 处理从数据库获取的结果，批量更新缓存并添加到结果集
-	var configsToCache []domain.BusinessConfig
-	for id, config := range configMap {
+
+	configsToCache := make([]domain.BusinessConfig, 0, len(ids))
+	for id := range configMap {
+		config := configMap[id]
 		domainConfig := b.toDomain(config)
 		result[id] = domainConfig
 		configsToCache = append(configsToCache, domainConfig)

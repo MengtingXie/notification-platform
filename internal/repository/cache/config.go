@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var ErrorKeyNotFound = errors.New("key not found")
+var ErrKeyNotFound = errors.New("key not found")
 
 const (
 	ConfigPrefix       = "config"

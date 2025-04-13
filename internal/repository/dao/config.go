@@ -68,7 +68,8 @@ func (b *businessConfigDAO) GetByIDs(ctx context.Context, ids []int64) (map[int6
 		return nil, err
 	}
 	configMap := make(map[int64]BusinessConfig, len(ids))
-	for _, config := range configs {
+	for idx := range configs {
+		config := configs[idx]
 		configMap[config.ID] = config
 	}
 	return configMap, nil
@@ -111,5 +112,6 @@ var updateColumns = []string{
 	"txn_config",
 	"rate_limit",
 	"retry_policy",
+	"callback_config",
 	"utime",
 }

@@ -279,7 +279,7 @@ func (s *BusinessConfigTestSuite) createTestConfigList() []domain.BusinessConfig
 			Utime: 1744274114000,
 		},
 	}
-	ans := slice.Map(list, func(idx int, src domain.BusinessConfig) dao.BusinessConfig {
+	ans := slice.Map(list, func(_ int, src domain.BusinessConfig) dao.BusinessConfig {
 		return s.toEntity(src)
 	})
 	err := s.db.WithContext(context.Background()).Create(&ans).Error
@@ -315,15 +315,15 @@ func (s *BusinessConfigTestSuite) TestServiceSaveConfig() {
 	}{
 		{
 			name:   "新增",
-			before: func(t *testing.T) {},
+			before: func(_ *testing.T) {},
 			req:    s.createTestConfig(),
 			after: func(t *testing.T) {
 				t.Helper()
-				s.checkBusinessConfig(t, s.createTestConfig())
+				s.checkBusinessConfig(ctx, t, s.createTestConfig())
 				// 清理：删除创建的配置
 				err := s.svc.Delete(ctx, 5)
 				assert.NoError(t, err, "删除业务配置应成功")
-				err = s.redisCache.Del(context.Background(), "config:5").Err()
+				err = s.redisCache.Del(ctx, "config:5").Err()
 				assert.NoError(t, err, "删除业务配置应成功")
 				s.localCache.Delete("config:5")
 			},
@@ -372,10 +372,20 @@ func (s *BusinessConfigTestSuite) TestServiceSaveConfig() {
 						EMAIL: 200,
 					},
 				},
+				CallbackConfig: &domain.CallbackConfig{
+					ServiceName: "newcallbackName",
+					RetryPolicy: &retry.Config{
+						Type: "fixed",
+						FixedInterval: &retry.FixedIntervalConfig{
+							Interval:   10,
+							MaxRetries: 3,
+						},
+					},
+				},
 			},
 			after: func(t *testing.T) {
 				t.Helper()
-				s.checkBusinessConfig(t, domain.BusinessConfig{
+				s.checkBusinessConfig(ctx, t, domain.BusinessConfig{
 					ID:        5,
 					OwnerID:   1003,
 					OwnerType: "person",
@@ -411,28 +421,38 @@ func (s *BusinessConfigTestSuite) TestServiceSaveConfig() {
 							EMAIL: 200,
 						},
 					},
+					CallbackConfig: &domain.CallbackConfig{
+						ServiceName: "newcallbackName",
+						RetryPolicy: &retry.Config{
+							Type: "fixed",
+							FixedInterval: &retry.FixedIntervalConfig{
+								Interval:   10,
+								MaxRetries: 3,
+							},
+						},
+					},
 				})
 
 				// 清理：删除创建的配置
 				err := s.svc.Delete(ctx, 5)
 				assert.NoError(t, err, "删除业务配置应成功")
-				err = s.redisCache.Del(context.Background(), "config:5").Err()
+				err = s.redisCache.Del(ctx, "config:5").Err()
 				assert.NoError(t, err, "删除业务配置应成功")
 				s.localCache.Delete("config:5")
 			},
 		},
 		{
 			name:   "id为0",
-			before: func(t *testing.T) {},
+			before: func(_ *testing.T) {},
 			req: domain.BusinessConfig{
 				ID: 0,
 			},
-			after:   func(t *testing.T) {},
+			after:   func(_ *testing.T) {},
 			wantErr: config.ErrIDNotSet,
 		},
 	}
-	for _, tc := range testcases {
-		tc := tc
+	for idx := range testcases {
+		tc := testcases[idx]
 		t.Run(tc.name, func(t *testing.T) {
 			tc.before(t)
 			err := s.svc.SaveConfig(ctx, tc.req)
@@ -496,18 +516,28 @@ func (s *BusinessConfigTestSuite) TestServiceGetByID() {
 						EMAIL: 100,
 					},
 				},
+				CallbackConfig: &domain.CallbackConfig{
+					ServiceName: "callbackName",
+					RetryPolicy: &retry.Config{
+						Type: "fixed",
+						FixedInterval: &retry.FixedIntervalConfig{
+							Interval:   10,
+							MaxRetries: 3,
+						},
+					},
+				},
 			},
 		},
 		{
 			name: "未存在的id",
-			before: func(t *testing.T) int64 {
+			before: func(_ *testing.T) int64 {
 				return 9999
 			},
 			wantErr: errs.ErrConfigNotFound,
 		},
 	}
-	for _, tc := range testcases {
-		tc := tc
+	for idx := range testcases {
+		tc := testcases[idx]
 		s.T().Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
@@ -518,7 +548,7 @@ func (s *BusinessConfigTestSuite) TestServiceGetByID() {
 				return
 			}
 			assertBusinessConfig(t, tc.wantConfig, conf)
-			s.checkBusinessConfig(t, conf)
+			s.checkBusinessConfig(ctx, t, conf)
 			err = s.svc.Delete(ctx, id)
 			assert.NoError(t, err, "删除业务配置应成功")
 			key := fmt.Sprintf("config:%d", id)
@@ -548,7 +578,7 @@ func (s *BusinessConfigTestSuite) TestServiceGetByIDs() {
 	configJSON, err := json.Marshal(configList[0])
 	require.NoError(t, err, "序列化配置应成功")
 	err = s.redisCache.Set(ctx, key1, string(configJSON), time.Minute*10).Err()
-
+	require.NoError(t, err)
 	// 将config2添加到Redis和本地缓存
 	key2 := fmt.Sprintf("config:%d", configList[1].ID)
 	configJSON, err = json.Marshal(configList[1])
@@ -571,7 +601,9 @@ func (s *BusinessConfigTestSuite) TestServiceGetByIDs() {
 		cachedCfg, ok := s.localCache.Get(key)
 		require.True(t, ok, "ID %d的配置应在本地缓存中", cfg.ID)
 		if ok {
-			assertBusinessConfig(t, cfg, cachedCfg.(domain.BusinessConfig))
+			vv, ok := cachedCfg.(domain.BusinessConfig)
+			require.True(t, ok)
+			assertBusinessConfig(t, cfg, vv)
 		}
 	}
 
@@ -616,8 +648,8 @@ func (s *BusinessConfigTestSuite) TestServiceDelete() {
 			},
 		},
 	}
-	for _, tc := range testcases {
-		tc := tc
+	for idx := range testcases {
+		tc := testcases[idx]
 		s.T().Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
@@ -638,7 +670,8 @@ func TestBusinessConfigService(t *testing.T) {
 	suite.Run(t, new(BusinessConfigTestSuite))
 }
 
-func assertBusinessConfig(t *testing.T, wantConfig domain.BusinessConfig, actualConfig domain.BusinessConfig) {
+func assertBusinessConfig(t *testing.T, wantConfig, actualConfig domain.BusinessConfig) {
+	t.Helper()
 	require.True(t, actualConfig.Ctime > 0)
 	require.True(t, actualConfig.Utime > 0)
 	actualConfig.Ctime = 0
@@ -648,9 +681,9 @@ func assertBusinessConfig(t *testing.T, wantConfig domain.BusinessConfig, actual
 	assert.Equal(t, wantConfig, actualConfig)
 }
 
-func (s *BusinessConfigTestSuite) checkBusinessConfig(t *testing.T, wantConfig domain.BusinessConfig) {
+func (s *BusinessConfigTestSuite) checkBusinessConfig(ctx context.Context, t *testing.T, wantConfig domain.BusinessConfig) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var cfgDao dao.BusinessConfig
 	err := s.db.WithContext(ctx).Where("id = ?", wantConfig.ID).First(&cfgDao).Error
@@ -660,14 +693,16 @@ func (s *BusinessConfigTestSuite) checkBusinessConfig(t *testing.T, wantConfig d
 	key := fmt.Sprintf("config:%d", wantConfig.ID)
 	v, ok := s.localCache.Get(key)
 	require.True(t, ok)
-	assertBusinessConfig(t, conf, v.(domain.BusinessConfig))
+	vv, ok := v.(domain.BusinessConfig)
+	require.True(t, ok)
+	assertBusinessConfig(t, conf, vv)
 
-	res := s.redisCache.Get(t.Context(), key)
+	res := s.redisCache.Get(ctx, key)
 	require.NoError(t, res.Err())
 	var redisConf domain.BusinessConfig
 	configStr := res.Val()
 	err = json.Unmarshal([]byte(configStr), &redisConf)
-	require.NoError(t, res.Err())
+	require.NoError(t, err)
 	assertBusinessConfig(t, conf, redisConf)
 }
 
@@ -688,6 +723,9 @@ func (s *BusinessConfigTestSuite) toDomain(daoConfig dao.BusinessConfig) domain.
 	}
 	if daoConfig.Quota.Valid {
 		domainCfg.Quota = unmarsal[domain.QuotaConfig](daoConfig.Quota.String)
+	}
+	if daoConfig.CallbackConfig.Valid {
+		domainCfg.CallbackConfig = unmarsal[domain.CallbackConfig](daoConfig.CallbackConfig.String)
 	}
 	return domainCfg
 }
