@@ -2,6 +2,7 @@ package ioc
 
 import (
 	"context"
+
 	"github.com/gotomicro/ego/server/egrpc"
 )
 

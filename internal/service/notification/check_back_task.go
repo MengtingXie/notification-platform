@@ -34,12 +34,14 @@ type TxCheckTask struct {
 }
 
 func NewTxCheckTask(repo repository.TxNotificationRepository, configSvc config.BusinessConfigService, lock dlock.Client) *TxCheckTask {
-	return &TxCheckTask{repo: repo,
+	return &TxCheckTask{
+		repo:      repo,
 		configSvc: configSvc,
 		clients: grpc.NewClients[clientv1.TransactionCheckServiceClient](func(conn *egrpc.Component) clientv1.TransactionCheckServiceClient {
 			return clientv1.NewTransactionCheckServiceClient(conn)
 		}),
-		lock: lock}
+		lock: lock,
+	}
 }
 
 const (
