@@ -11,8 +11,9 @@ import (
 )
 
 type Service struct {
-	Svc  notification.Service
-	Repo repository.NotificationRepository
+	Svc       notification.Service
+	Repo      repository.NotificationRepository
+	QuotaRepo repository.QuotaRepository
 }
 
 func Init() *Service {
@@ -21,6 +22,9 @@ func Init() *Service {
 		repository.NewNotificationRepository,
 		notification.NewNotificationService,
 		dao.NewNotificationDAO,
+
+		repository.NewQuotaRepository,
+		dao.NewQuotaDAO,
 
 		wire.Struct(new(Service), "*"),
 	)

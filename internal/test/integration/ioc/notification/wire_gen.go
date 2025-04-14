@@ -21,9 +21,12 @@ func Init() *Service {
 	notificationRepository := repository.NewNotificationRepository(notificationDAO)
 	sonyflake := ioc.InitIDGenerator()
 	service := notification.NewNotificationService(notificationRepository, sonyflake)
+	quotaDAO := dao.NewQuotaDAO(db)
+	quotaRepository := repository.NewQuotaRepository(quotaDAO)
 	notificationService := &Service{
-		Svc:  service,
-		Repo: notificationRepository,
+		Svc:       service,
+		Repo:      notificationRepository,
+		QuotaRepo: quotaRepository,
 	}
 	return notificationService
 }
@@ -31,6 +34,7 @@ func Init() *Service {
 // wire.go:
 
 type Service struct {
-	Svc  notification.Service
-	Repo repository.NotificationRepository
+	Svc       notification.Service
+	Repo      repository.NotificationRepository
+	QuotaRepo repository.QuotaRepository
 }

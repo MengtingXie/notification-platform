@@ -9,7 +9,8 @@ import (
 )
 
 type QuotaRepository interface {
-	CreateQuotaOrUpdate(ctx context.Context, quota ...domain.Quota) error
+	CreateOrUpdate(ctx context.Context, quota ...domain.Quota) error
+	Find(ctx context.Context, bizID int64, channel domain.Channel) (domain.Quota, error)
 }
 
 type quotaRepository struct {
@@ -20,7 +21,7 @@ func NewQuotaRepository(dao dao.QuotaDAO) QuotaRepository {
 	return &quotaRepository{dao: dao}
 }
 
-func (repo *quotaRepository) CreateQuotaOrUpdate(ctx context.Context, quota ...domain.Quota) error {
+func (q *quotaRepository) CreateOrUpdate(ctx context.Context, quota ...domain.Quota) error {
 	qs := slice.Map(quota, func(_ int, src domain.Quota) dao.Quota {
 		return dao.Quota{
 			Quota:   src.Quota,
@@ -28,5 +29,17 @@ func (repo *quotaRepository) CreateQuotaOrUpdate(ctx context.Context, quota ...d
 			Channel: src.Channel.String(),
 		}
 	})
-	return repo.dao.CreateQuotaOrUpdate(ctx, qs...)
+	return q.dao.CreateOrUpdate(ctx, qs...)
+}
+
+func (q *quotaRepository) Find(ctx context.Context, bizID int64, channel domain.Channel) (domain.Quota, error) {
+	found, err := q.dao.Find(ctx, bizID, channel.String())
+	if err != nil {
+		return domain.Quota{}, err
+	}
+	return domain.Quota{
+		BizID:   found.BizID,
+		Quota:   found.Quota,
+		Channel: domain.Channel(found.Channel),
+	}, nil
 }

@@ -104,6 +104,7 @@ func (d *notificationDAO) create(ctx context.Context, db *gorm.DB, data Notifica
 			}
 			return err
 		}
+		// 直接数据库操作，直接扣减，CAS 扣减1
 		res := tx.Model(&Quota{}).Where("quota >=1 AND biz_id = ? AND channel = ? ",
 			data.BizID, data.Channel).Updates(
 			map[string]any{
@@ -114,7 +115,6 @@ func (d *notificationDAO) create(ctx context.Context, db *gorm.DB, data Notifica
 			return fmt.Errorf("%w，原因: %w", errs.ErrNoQuota, res.Error)
 		}
 
-		// 直接数据库操作，直接扣减，CAS 扣减1
 		if createCallbackLog {
 			if err := tx.Create(&CallbackLog{
 				NotificationID: data.ID,
@@ -338,7 +338,7 @@ func (d *notificationDAO) batchMarkSuccess(tx *gorm.DB, successIDs []uint64) err
 
 	// 要更新 callback log 了
 	return tx.Model(&CallbackLog{}).
-		Where("notification_id IN ", successIDs).
+		Where("notification_id IN ? ", successIDs).
 		Updates(map[string]any{
 			"status": domain.CallbackLogStatusPending.String(),
 			"utime":  now,
@@ -405,7 +405,7 @@ func (d *notificationDAO) MarkTimeoutSendingAsFailed(ctx context.Context, batchS
 	sub := d.db.Model(&Notification{}).
 		Select("id").
 		Limit(batchSize).
-		Where("status = ? AND utime <=?", string(domain.SendStatusSending), ddl)
+		Where("status = ? AND utime <=?", domain.SendStatusSending.String(), ddl)
 	res := d.db.WithContext(ctx).Where("IN ?", sub).Updates(map[string]any{
 		"status":  string(domain.SendStatusFailed),
 		"version": gorm.Expr("version + 1"),

@@ -45,8 +45,8 @@ func (s *service) ResetQuota(ctx context.Context, biz domain.BusinessConfig) err
 	}
 	email := domain.Quota{
 		BizID:   biz.ID,
-		Quota:   int32(biz.Quota.Monthly.SMS),
+		Quota:   int32(biz.Quota.Monthly.EMAIL),
 		Channel: domain.ChannelEmail,
 	}
-	return s.repo.CreateQuotaOrUpdate(ctx, sms, email)
+	return s.repo.CreateOrUpdate(ctx, sms, email)
 }

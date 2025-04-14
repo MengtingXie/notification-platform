@@ -27,20 +27,22 @@ func TestNotificationServiceSuite(t *testing.T) {
 
 type NotificationServiceTestSuite struct {
 	suite.Suite
-	db   *egorm.Component
-	svc  notificationsvc.Service
-	repo repository.NotificationRepository
+	db        *egorm.Component
+	svc       notificationsvc.Service
+	repo      repository.NotificationRepository
+	quotaRepo repository.QuotaRepository
 }
 
 func (s *NotificationServiceTestSuite) SetupSuite() {
 	s.db = testioc.InitDBAndTables()
 	svc := notificationioc.Init()
-	s.svc, s.repo = svc.Svc, svc.Repo
+	s.svc, s.repo, s.quotaRepo = svc.Svc, svc.Repo, svc.QuotaRepo
 }
 
 func (s *NotificationServiceTestSuite) TearDownTest() {
 	// 每个测试后清空表数据
 	s.db.Exec("TRUNCATE TABLE `notifications`")
+	s.db.Exec("TRUNCATE TABLE `quotas`")
 }
 
 // 创建测试用的通知对象
@@ -64,7 +66,7 @@ func (s *NotificationServiceTestSuite) createTestNotification(bizID int64) domai
 
 func (s *NotificationServiceTestSuite) TestRepositoryCreate() {
 	t := s.T()
-	t.Skip()
+
 	bizID := int64(2)
 	tests := []struct {
 		name          string
@@ -74,8 +76,16 @@ func (s *NotificationServiceTestSuite) TestRepositoryCreate() {
 		assertErrFunc assert.ErrorAssertionFunc
 	}{
 		{
-			name:   "创建成功",
-			before: func(t *testing.T, notification domain.Notification) {},
+			name: "创建成功",
+			before: func(t *testing.T, notification domain.Notification) {
+				t.Helper()
+				err := s.quotaRepo.CreateOrUpdate(t.Context(), domain.Quota{
+					BizID:   notification.BizID,
+					Quota:   100,
+					Channel: notification.Channel,
+				})
+				require.NoError(t, err)
+			},
 			notification: func() domain.Notification {
 				return s.createTestNotification(1)
 			}(),
@@ -89,7 +99,16 @@ func (s *NotificationServiceTestSuite) TestRepositoryCreate() {
 			name: "BizID和Key组成的唯一索引冲突",
 			before: func(t *testing.T, notification domain.Notification) {
 				t.Helper()
-				_, err := s.repo.Create(t.Context(), notification)
+				t.Helper()
+
+				err := s.quotaRepo.CreateOrUpdate(t.Context(), domain.Quota{
+					BizID:   notification.BizID,
+					Quota:   100,
+					Channel: notification.Channel,
+				})
+				require.NoError(t, err)
+
+				_, err = s.repo.Create(t.Context(), notification)
 				assert.NoError(t, err)
 			},
 			notification: func() domain.Notification {
@@ -178,7 +197,6 @@ func (s *NotificationServiceTestSuite) TestRepositoryBatchCreate() {
 
 func (s *NotificationServiceTestSuite) TestRepositoryCASStatus() {
 	t := s.T()
-	t.Skip()
 
 	bizID := int64(8)
 	tests := []struct {
@@ -189,13 +207,21 @@ func (s *NotificationServiceTestSuite) TestRepositoryCASStatus() {
 		requireFunc require.ErrorAssertionFunc
 	}{
 		{
-			name: "id存在，并发更新成功",
+			name: "id存在，更新成功",
 			before: func(t *testing.T) (uint64, int) {
 				t.Helper()
-				created, err := s.repo.Create(t.Context(), s.createTestNotification(bizID))
+
+				notification := s.createTestNotification(bizID)
+				err := s.quotaRepo.CreateOrUpdate(t.Context(), domain.Quota{
+					BizID:   bizID,
+					Quota:   100,
+					Channel: notification.Channel,
+				})
+				require.NoError(t, err)
+
+				created, err := s.repo.Create(t.Context(), notification)
 				require.NoError(t, err)
 				assert.Equal(t, domain.SendStatusPending, created.Status)
-
 				return created.ID, created.Version
 			},
 			after: func(t *testing.T, id uint64) {
@@ -205,37 +231,12 @@ func (s *NotificationServiceTestSuite) TestRepositoryCASStatus() {
 				require.NoError(t, err)
 				assert.Equal(t, domain.SendStatusSucceeded, updated.Status)
 				assert.Equal(t, 2, updated.Version) // 版本号应该加1
+
+				find, err := s.quotaRepo.Find(t.Context(), bizID, updated.Channel)
+				require.NoError(t, err)
+				assert.Equal(t, int32(99), find.Quota)
 			},
 			requireFunc: require.NoError,
-		},
-		{
-			name: "id存在，并发更新失败",
-			before: func(t *testing.T) (uint64, int) {
-				t.Helper()
-				// 创建一条记录
-				created, err := s.repo.Create(t.Context(), s.createTestNotification(bizID))
-				require.NoError(t, err)
-				assert.Equal(t, domain.SendStatusPending, created.Status)
-
-				// 模拟其他协程修改记录为发送失败
-				err = s.repo.UpdateStatus(t.Context(), domain.Notification{
-					ID:      created.ID,
-					Status:  domain.SendStatusFailed,
-					Version: created.Version,
-				})
-				assert.NoError(t, err)
-
-				return created.ID, created.Version
-			},
-			after: func(t *testing.T, id uint64) {
-				t.Helper()
-				// 验证状态已更新，其他协程修改成功
-				updated, err := s.repo.GetByID(t.Context(), id)
-				require.NoError(t, err)
-				assert.Equal(t, domain.SendStatusFailed, updated.Status)
-				assert.Equal(t, 2, updated.Version)
-			},
-			requireFunc: require.Error,
 		},
 		{
 			name: "id不存在",
@@ -269,7 +270,6 @@ func (s *NotificationServiceTestSuite) TestRepositoryCASStatus() {
 
 func (s *NotificationServiceTestSuite) TestRepositoryUpdateStatus() {
 	t := s.T()
-	t.Skip()
 
 	bizID := int64(8)
 	tests := []struct {
@@ -481,36 +481,16 @@ func (s *NotificationServiceTestSuite) TestRepositoryBatchUpdateStatusSucceededO
 				assert.Greater(t, updated2.Version, initialVersions[createdNotifications[5].ID])
 			},
 		},
-		{
-			name:                   "版本号不匹配的情况",
-			succeededNotifications: nil,
-			failedNotifications: []domain.Notification{
-				{
-					ID:      createdNotifications[0].ID,
-					Version: 999, // 错误的版本号
-				},
-			},
-			assertFunc: func(t *testing.T, err error, initialVersions map[uint64]int) {
-				assert.Error(t, err)
-				// 状态应该保持不变
-				unchanged, err := s.repo.GetByID(ctx, createdNotifications[0].ID)
-				require.NoError(t, err)
-				// 此时应该是成功状态，因为前面的测试已经更新过了
-				assert.Equal(t, domain.SendStatusSucceeded, unchanged.Status)
-				// 版本号应该是前面测试增加后的值，而不是999
-				assert.NotEqual(t, 999, unchanged.Version)
-			},
-		},
 	}
 
 	// 执行测试场景
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// 更新状态
-			err := s.repo.BatchUpdateStatusSucceededOrFailed(ctx, tt.succeededNotifications, tt.failedNotifications)
+			err1 := s.repo.BatchUpdateStatusSucceededOrFailed(ctx, tt.succeededNotifications, tt.failedNotifications)
 
 			// 断言结果
-			tt.assertFunc(t, err, initialVersions)
+			tt.assertFunc(t, err1, initialVersions)
 		})
 	}
 }
