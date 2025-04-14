@@ -1,5 +1,11 @@
 package domain
 
+import (
+	"fmt"
+
+	"gitee.com/flycash/notification-platform/internal/errs"
+)
+
 // Channel 通知渠道
 type Channel string
 
@@ -49,4 +55,40 @@ type Provider struct {
 
 	AuditCallbackURL string // 审核请求回调地址
 	Status           ProviderStatus
+}
+
+func (p *Provider) Validate() error {
+	if p.Name == "" {
+		return fmt.Errorf("%w: 供应商名称不能为空", errs.ErrInvalidParameter)
+	}
+
+	if !p.Channel.IsValid() {
+		return fmt.Errorf("%w: 不支持的渠道类型", errs.ErrInvalidParameter)
+	}
+
+	if p.Endpoint == "" {
+		return fmt.Errorf("%w: API入口地址不能为空", errs.ErrInvalidParameter)
+	}
+
+	if p.APIKey == "" {
+		return fmt.Errorf("%w: API Key不能为空", errs.ErrInvalidParameter)
+	}
+
+	if p.APISecret == "" {
+		return fmt.Errorf("%w: API Secret不能为空", errs.ErrInvalidParameter)
+	}
+
+	if p.Weight <= 0 {
+		return fmt.Errorf("%w: 权重不能小于等于0", errs.ErrInvalidParameter)
+	}
+
+	if p.QPSLimit <= 0 {
+		return fmt.Errorf("%w: 每秒请求数限制不能小于等于0", errs.ErrInvalidParameter)
+	}
+
+	if p.DailyLimit <= 0 {
+		return fmt.Errorf("%w: 每日请求数限制不能小于等于0", errs.ErrInvalidParameter)
+	}
+
+	return nil
 }

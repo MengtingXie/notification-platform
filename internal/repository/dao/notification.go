@@ -25,6 +25,16 @@ type NotificationDAO interface {
 	// BatchCreateWithCallbackLog 批量创建通知记录，同时创建对应的回调记录
 	BatchCreateWithCallbackLog(ctx context.Context, datas []Notification) ([]Notification, error)
 
+	// GetByID 根据ID查询通知
+	GetByID(ctx context.Context, id uint64) (Notification, error)
+
+	BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]Notification, error)
+
+	// GetByKeys 根据业务ID和业务内唯一标识获取通知列表
+	GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]Notification, error)
+	// GetByKey 根据业务ID和业务内唯一标识获取通知列表
+	GetByKey(ctx context.Context, bizID int64, key string) (Notification, error)
+
 	// CASStatus 更新通知状态
 	CASStatus(ctx context.Context, notification Notification) error
 	UpdateStatus(ctx context.Context, notification Notification) error
@@ -34,28 +44,8 @@ type NotificationDAO interface {
 	// failedNotifications: 更新为失败状态的通知列表，包含ID、Version和重试次数
 	BatchUpdateStatusSucceededOrFailed(ctx context.Context, successNotifications, failedNotifications []Notification) error
 
-	// GetByID 根据ID查询通知
-	GetByID(ctx context.Context, id uint64) (Notification, error)
-
-	BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]Notification, error)
-
-	// GetByBizID 根据业务ID查询通知列表
-	GetByBizID(ctx context.Context, bizID int64) ([]Notification, error)
-
-	// GetByKeys 根据业务ID和业务内唯一标识获取通知列表
-	GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]Notification, error)
-	// GetByKey 根据业务ID和业务内唯一标识获取通知列表
-	GetByKey(ctx context.Context, bizID int64, key string) (Notification, error)
-
-	// ListByStatus 根据状态查询通知列表
-	ListByStatus(ctx context.Context, status string, limit int) ([]Notification, error)
-
-	// ListByScheduleTime 根据计划发送时间查询通知
-	ListByScheduleTime(ctx context.Context, startTime, endTime int64, limit int) ([]Notification, error)
-
-	// BatchUpdateStatus 批量更新通知状态
-	BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error
 	FindReadyNotifications(ctx context.Context, offset, limit int) ([]Notification, error)
+
 	MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error)
 	MarkFailed(ctx context.Context, entity Notification) error
 	MarkSuccess(ctx context.Context, entity Notification) error
@@ -205,45 +195,6 @@ func (d *notificationDAO) batchCreate(ctx context.Context, datas []Notification,
 	return datas, err
 }
 
-func (d *notificationDAO) UpdateStatus(ctx context.Context, notification Notification) error {
-	return d.db.WithContext(ctx).Model(&Notification{}).
-		Where("id = ?", notification.ID).
-		Updates(map[string]any{
-			"status":  notification.Status,
-			"version": gorm.Expr("version + 1"),
-			"utime":   time.Now().UnixMilli(),
-		}).Error
-}
-
-// 1. 提供 docker compose 文件，部署 prometheus, zipkin, grafana, kibana, logstash, ES
-// 2. 在 grpc interceptor 接入可观测性（响应时间，日志-统一打印ERROR，以及panic， trace），
-// 2.1 gorm 接入可观测性（响应时间, trace 也接入进去）, Redis 监控
-// 3. 在发送核心流程各个阶段补日志，DEBUG/INFO
-// 4. prometheus 采集 Linux 系统的数据，去找找开源工具 - 可以认为是运行在 docker 内，采集 docker 内的指标
-// 4. 尝试一下 mysql 和 Redis 本体的监控，有开源的就部署开源的 - 准备 docker
-
-// CASStatus 更新通知状态
-func (d *notificationDAO) CASStatus(ctx context.Context, notification Notification) error {
-	updates := map[string]any{
-		"status":  notification.Status,
-		"version": gorm.Expr("version + 1"),
-		"utime":   time.Now().Unix(),
-	}
-
-	result := d.db.WithContext(ctx).Model(&Notification{}).
-		Where("id = ? AND version = ?", notification.ID, notification.Version).
-		Updates(updates)
-
-	if result.Error != nil {
-		return result.Error
-	}
-
-	if result.RowsAffected < 1 {
-		return fmt.Errorf("并发竞争失败 %w, id %d", errs.ErrNotificationVersionMismatch, notification.ID)
-	}
-	return nil
-}
-
 // GetByID 根据ID查询通知
 func (d *notificationDAO) GetByID(ctx context.Context, id uint64) (Notification, error) {
 	var notification Notification
@@ -299,32 +250,36 @@ func (d *notificationDAO) GetByKeys(ctx context.Context, bizID int64, keys ...st
 	return notifications, nil
 }
 
-// ListByStatus 根据状态查询通知列表
-func (d *notificationDAO) ListByStatus(ctx context.Context, status string, limit int) ([]Notification, error) {
-	var notifications []Notification
-	query := d.db.WithContext(ctx).Where("status = ?", status)
-
-	if limit > 0 {
-		query = query.Limit(limit)
+// CASStatus 更新通知状态
+func (d *notificationDAO) CASStatus(ctx context.Context, notification Notification) error {
+	updates := map[string]any{
+		"status":  notification.Status,
+		"version": gorm.Expr("version + 1"),
+		"utime":   time.Now().Unix(),
 	}
 
-	err := query.Find(&notifications).Error
-	return notifications, err
+	result := d.db.WithContext(ctx).Model(&Notification{}).
+		Where("id = ? AND version = ?", notification.ID, notification.Version).
+		Updates(updates)
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected < 1 {
+		return fmt.Errorf("并发竞争失败 %w, id %d", errs.ErrNotificationVersionMismatch, notification.ID)
+	}
+	return nil
 }
 
-// ListByScheduleTime 根据计划发送时间查询通知
-func (d *notificationDAO) ListByScheduleTime(ctx context.Context, startTime, endTime int64, limit int) ([]Notification, error) {
-	var notifications []Notification
-	query := d.db.WithContext(ctx).
-		Where("scheduled_s_time >= ? AND scheduled_s_time <= ?", startTime, endTime).
-		Order("scheduled_s_time ASC")
-
-	if limit > 0 {
-		query = query.Limit(limit)
-	}
-
-	err := query.Find(&notifications).Error
-	return notifications, err
+func (d *notificationDAO) UpdateStatus(ctx context.Context, notification Notification) error {
+	return d.db.WithContext(ctx).Model(&Notification{}).
+		Where("id = ?", notification.ID).
+		Updates(map[string]any{
+			"status":  notification.Status,
+			"version": gorm.Expr("version + 1"),
+			"utime":   time.Now().Unix(),
+		}).Error
 }
 
 // BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败，使用乐观锁控制并发
@@ -389,15 +344,14 @@ func (d *notificationDAO) batchMarkSuccess(tx *gorm.DB, successIds []uint64) err
 		}).Error
 }
 
-func (d *notificationDAO) BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error {
-	result := d.db.WithContext(ctx).Model(&Notification{}).
-		Where("id in ?", ids).
-		Updates(map[string]any{
-			"status":  status,
-			"utime":   time.Now().Unix(),
-			"version": gorm.Expr("version + 1"),
-		})
-	return result.Error
+func (d *notificationDAO) FindReadyNotifications(ctx context.Context, offset, limit int) ([]Notification, error) {
+	var res []Notification
+	now := time.Now().UnixMilli()
+	err := d.db.WithContext(ctx).
+		Where("scheduled_stime <=? AND scheduled_etime >= ? AND status=?", now, now, string(domain.SendStatusPending)).
+		Limit(limit).Offset(offset).
+		Find(&res).Error
+	return res, err
 }
 
 func (d *notificationDAO) MarkSuccess(ctx context.Context, notification Notification) error {
@@ -443,6 +397,7 @@ func (d *notificationDAO) MarkFailed(ctx context.Context, notification Notificat
 			}).Error
 	})
 }
+
 func (d *notificationDAO) MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error) {
 	now := time.Now()
 	ddl := now.Add(-time.Minute).UnixMilli()
@@ -456,14 +411,4 @@ func (d *notificationDAO) MarkTimeoutSendingAsFailed(ctx context.Context, batchS
 		"utime":   now,
 	})
 	return res.RowsAffected, res.Error
-}
-
-func (d *notificationDAO) FindReadyNotifications(ctx context.Context, offset, limit int) ([]Notification, error) {
-	var res []Notification
-	now := time.Now().UnixMilli()
-	err := d.db.WithContext(ctx).
-		Where("scheduled_stime <=? AND scheduled_etime >= ? AND status=?", now, now, string(domain.SendStatusPending)).
-		Limit(limit).Offset(offset).
-		Find(&res).Error
-	return res, err
 }

@@ -33,10 +33,11 @@ func NewScheduler(
 	dispatcher sender.NotificationSender,
 	dclient dlock.Client,
 ) NotificationScheduler {
+	const defaultBatchSize = 10
 	return &staticScheduler{
 		notificationSvc: notificationSvc,
 		sender:          dispatcher,
-		batchSize:       10,
+		batchSize:       defaultBatchSize,
 		dclient:         dclient,
 	}
 }

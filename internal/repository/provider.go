@@ -6,12 +6,11 @@ import (
 	"fmt"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 
 	"gorm.io/gorm"
 )
-
-var ErrProviderNotFound = errors.New("供应商不存在")
 
 // ProviderRepository 供应商仓储接口
 type ProviderRepository interface {
@@ -83,7 +82,7 @@ func (p *providerRepository) FindByID(ctx context.Context, id int64) (domain.Pro
 	if err != nil {
 		// 处理未找到的情况，转换为领域错误
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return domain.Provider{}, fmt.Errorf("%w", ErrProviderNotFound)
+			return domain.Provider{}, fmt.Errorf("%w", errs.ErrProviderNotFound)
 		}
 		return domain.Provider{}, err
 	}

@@ -15,9 +15,12 @@ type AsyncRequestResultCallbackTask struct {
 }
 
 func NewAsyncRequestResultCallbackTask(dclient dlock.Client, callbackSvc Service) *AsyncRequestResultCallbackTask {
-	return &AsyncRequestResultCallbackTask{dclient: dclient,
-		batchSize:   10,
-		callbackSvc: callbackSvc}
+	const defaultBatchSize = int64(10)
+	return &AsyncRequestResultCallbackTask{
+		dclient:     dclient,
+		batchSize:   defaultBatchSize,
+		callbackSvc: callbackSvc,
+	}
 }
 
 func (a *AsyncRequestResultCallbackTask) Start(ctx context.Context) {

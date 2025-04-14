@@ -123,7 +123,7 @@ func newSMSSelectorBuilder(
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
 
-	entities, err := providerSvc.GetProvidersByChannel(ctx, domain.ChannelSMS)
+	entities, err := providerSvc.GetByChannel(ctx, domain.ChannelSMS)
 	if err != nil {
 		panic(err)
 	}
