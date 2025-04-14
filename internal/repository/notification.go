@@ -43,6 +43,7 @@ type NotificationRepository interface {
 	CASStatus(ctx context.Context, notification domain.Notification) error
 	UpdateStatus(ctx context.Context, notification domain.Notification) error
 	MarkFailed(ctx context.Context, notification domain.Notification) error
+	MarkSuccess(ctx context.Context, entity domain.Notification) error
 
 	// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
 	BatchUpdateStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error
@@ -248,6 +249,10 @@ func (r *notificationRepository) UpdateStatus(ctx context.Context, notification 
 }
 
 func (r *notificationRepository) MarkFailed(ctx context.Context, notification domain.Notification) error {
+	return r.dao.MarkFailed(ctx, r.toEntity(notification))
+}
+
+func (r *notificationRepository) MarkSuccess(ctx context.Context, notification domain.Notification) error {
 	return r.dao.MarkFailed(ctx, r.toEntity(notification))
 }
 

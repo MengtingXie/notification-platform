@@ -122,7 +122,7 @@ func (c *service) sendCallbackAndSetChangedFields(ctx context.Context, log *doma
 		log.RetryCount++
 	} else {
 		// 达到最大重试次数限制，不再重试，更新状态为失败
-		log.Status = domain.CallbackLogStatusFAILED
+		log.Status = domain.CallbackLogStatusFailed
 	}
 	return true, nil
 }

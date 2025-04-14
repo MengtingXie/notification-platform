@@ -14,7 +14,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	app.StartTasks(ctx)
-	if err := instance.Serve(app.GrpcServer).Run(); err != nil {
+	if err := instance.Serve(app.GrpcServer).
+		Cron(app.Crons...).
+		Run(); err != nil {
 		elog.Panic("startup", elog.Any("err", err))
 	}
 }

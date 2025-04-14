@@ -64,7 +64,7 @@ func (d *sender) Send(ctx context.Context, notification domain.Notification) (do
 	} else {
 		resp.Status = domain.SendStatusSucceeded
 		notification.Status = domain.SendStatusSucceeded
-		err = d.repo.UpdateStatus(ctx, notification)
+		err = d.repo.MarkSuccess(ctx, notification)
 	}
 
 	// 更新发送状态

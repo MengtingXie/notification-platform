@@ -17,6 +17,7 @@ type BusinessConfigRepository interface {
 	GetByID(ctx context.Context, id int64) (domain.BusinessConfig, error)
 	Delete(ctx context.Context, id int64) error
 	SaveConfig(ctx context.Context, config domain.BusinessConfig) error
+	Find(ctx context.Context, offset, limit int) ([]domain.BusinessConfig, error)
 }
 
 type businessConfigRepository struct {

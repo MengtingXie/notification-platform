@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ecodeclub/ekit/slice"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -12,12 +13,6 @@ import (
 	"github.com/ego-component/egorm"
 	"github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
-)
-
-const (
-	notificationStatusPending   = "PENDING"
-	notificationStatusSucceeded = "SUCCEEDED"
-	notificationStatusFailed    = "FAILED"
 )
 
 type NotificationDAO interface {
@@ -63,6 +58,7 @@ type NotificationDAO interface {
 	FindReadyNotifications(ctx context.Context, offset, limit int) ([]Notification, error)
 	MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error)
 	MarkFailed(ctx context.Context, entity Notification) error
+	MarkSuccess(ctx context.Context, entity Notification) error
 }
 
 // Notification 通知记录表
@@ -129,7 +125,10 @@ func (d *notificationDAO) create(ctx context.Context, db *gorm.DB, data Notifica
 
 		// 直接数据库操作，直接扣减，CAS 扣减1
 		if createCallbackLog {
-			if err := tx.Create(&CallbackLog{NotificationID: data.ID, NextRetryTime: now}).Error; err != nil {
+			if err := tx.Create(&CallbackLog{
+				NotificationID: data.ID,
+				Status:         domain.CallbackLogStatusInit.String(),
+				NextRetryTime:  now}).Error; err != nil {
 				return fmt.Errorf("%w", errs.ErrCreateCallbackLogFailed)
 			}
 		}
@@ -336,66 +335,58 @@ func (d *notificationDAO) BatchUpdateStatusSucceededOrFailed(ctx context.Context
 		return nil
 	}
 
+	successIds := slice.Map(successNotifications, func(idx int, src Notification) uint64 {
+		return src.ID
+	})
+
+	failedIds := slice.Map(failedNotifications, func(idx int, src Notification) uint64 {
+		return src.ID
+	})
+
 	// 开启事务
 	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		now := time.Now().Unix()
-		var updateErrors []error
 
-		// 处理成功状态的通知
-		for i := range successNotifications {
-			if err := d.updateNotificationStatus(tx, successNotifications[i], notificationStatusSucceeded, now); err != nil {
-				updateErrors = append(updateErrors, err)
+		if len(successIds) != 0 {
+			err := d.batchMarkSuccess(tx, successIds)
+			if err != nil {
+				return err
 			}
 		}
 
-		// 处理失败状态的通知
-		for i := range failedNotifications {
-			if err := d.updateNotificationStatus(tx, failedNotifications[i], notificationStatusFailed, now); err != nil {
-				updateErrors = append(updateErrors, err)
-			}
+		if len(failedIds) != 0 {
+			now := time.Now().Unix()
+			return tx.Model(&Notification{}).
+				Where("id IN ?", failedIds).
+				Updates(map[string]any{
+					"version": gorm.Expr("version + 1"),
+					"utime":   now,
+					"status":  domain.SendStatusFailed.String(),
+				}).Error
 		}
-
-		// 如果有任何更新错误，则回滚事务
-		if len(updateErrors) > 0 {
-			return fmt.Errorf("批量更新通知状态失败: %v", updateErrors)
-		}
-
 		return nil
 	})
 }
 
-// updateNotificationStatus 更新单个通知的状态，处理乐观锁和重试次数
-func (d *notificationDAO) updateNotificationStatus(tx *gorm.DB, notification Notification, status string, now int64) error {
-	// 设置基本更新字段
-	updates := map[string]any{
-		"status":  status,
-		"utime":   now,
-		"version": gorm.Expr("version + 1"),
+func (d *notificationDAO) batchMarkSuccess(tx *gorm.DB, successIds []uint64) error {
+	now := time.Now().Unix()
+	err := tx.Model(&Notification{}).
+		Where("id IN ?", successIds).
+		Updates(map[string]any{
+			"version": gorm.Expr("version + 1"),
+			"utime":   now,
+			"status":  domain.SendStatusSucceeded.String(),
+		}).Error
+	if err != nil {
+		return err
 	}
 
-	result := tx.Model(&Notification{}).
-		Where("id = ? AND version = ?", notification.ID, notification.Version).
-		Updates(updates)
-
-	if result.Error != nil {
-		return result.Error
-	}
-
-	if result.RowsAffected == 0 {
-		// 版本不匹配或记录不存在
-		var exists int64
-		if err := tx.Model(&Notification{}).Where("id = ?", notification.ID).Count(&exists).Error; err != nil {
-			return err
-		}
-
-		if exists == 0 {
-			return fmt.Errorf("未找到ID为%d的通知记录", notification.ID)
-		}
-
-		return fmt.Errorf("ID为%d的通知记录版本不匹配", notification.ID)
-	}
-
-	return nil
+	// 要更新 callback log 了
+	return tx.Model(&CallbackLog{}).
+		Where("notification_id IN ", successIds).
+		Updates(map[string]any{
+			"status": domain.CallbackLogStatusPending.String(),
+			"utime":  now,
+		}).Error
 }
 
 func (d *notificationDAO) BatchUpdateStatus(ctx context.Context, ids []uint64, status string) error {
@@ -407,6 +398,28 @@ func (d *notificationDAO) BatchUpdateStatus(ctx context.Context, ids []uint64, s
 			"version": gorm.Expr("version + 1"),
 		})
 	return result.Error
+}
+
+func (d *notificationDAO) MarkSuccess(ctx context.Context, notification Notification) error {
+	now := time.Now().UnixMilli()
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		err := tx.Model(&Notification{}).
+			Where("id = ?", notification.ID).
+			Updates(map[string]any{
+				"status":  notification.Status,
+				"utime":   now,
+				"version": gorm.Expr("version + 1"),
+			}).Error
+		if err != nil {
+			return err
+		}
+		// 要把 callback log 标记为可以发送了
+		return tx.Model(&CallbackLog{}).Where("notification_id = ?").Updates(map[string]any{
+			// 标记为可以发送回调了
+			"status": domain.CallbackLogStatusPending,
+			"utime":  now,
+		}).Error
+	})
 }
 
 func (d *notificationDAO) MarkFailed(ctx context.Context, notification Notification) error {

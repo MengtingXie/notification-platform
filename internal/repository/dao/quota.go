@@ -1,5 +1,12 @@
 package dao
 
+import (
+	"context"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"time"
+)
+
 type Quota struct {
 	ID uint64 `gorm:"primaryKey;comment:'雪花算法ID'"`
 	// 构成一个唯一索引
@@ -15,4 +22,27 @@ type Quota struct {
 	// 时间戳，毫秒数
 	Utime int64
 	Ctime int64
+}
+
+type QuotaDAO interface {
+	CreateQuotaOrUpdate(ctx context.Context, quota ...Quota) error
+}
+
+type quotaDAO struct {
+	db *gorm.DB
+}
+
+func NewQuotaDAO(db *gorm.DB) QuotaDAO {
+	return &quotaDAO{db: db}
+}
+
+func (dao *quotaDAO) CreateQuotaOrUpdate(ctx context.Context, quota ...Quota) error {
+	now := time.Now().UnixMilli()
+	for i := range quota {
+		quota[i].Ctime = now
+		quota[i].Utime = now
+	}
+	return dao.db.WithContext(ctx).Clauses(clause.OnConflict{
+		DoUpdates: clause.AssignmentColumns([]string{"quota", "utime"}),
+	}).Create(&quota).Error
 }

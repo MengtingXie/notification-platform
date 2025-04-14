@@ -3,6 +3,7 @@ package ioc
 import (
 	"context"
 	"github.com/gotomicro/ego/server/egrpc"
+	"github.com/gotomicro/ego/task/ecron"
 )
 
 type Task interface {
@@ -12,6 +13,7 @@ type Task interface {
 type App struct {
 	GrpcServer *egrpc.Component
 	Tasks      []Task
+	Crons      []ecron.Ecron
 }
 
 func (a *App) StartTasks(ctx context.Context) {

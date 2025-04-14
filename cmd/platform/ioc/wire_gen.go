@@ -25,6 +25,7 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/provider/sequential"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
+	"gitee.com/flycash/notification-platform/internal/service/quota"
 	"gitee.com/flycash/notification-platform/internal/service/scheduler"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
 	"gitee.com/flycash/notification-platform/internal/service/sendstrategy"
@@ -76,10 +77,16 @@ func InitGrpcServer() *ioc.App {
 	notificationScheduler := scheduler.NewScheduler(service, notificationSender, dlockClient)
 	sendingTimeoutTask := notification.NewSendingTimeoutTask(dlockClient, notificationRepository)
 	txCheckTask := notification.NewTxCheckTask(txNotificationRepository, businessConfigService, dlockClient)
-	v2 := ioc.InitTasks(asyncRequestResultCallbackTask, notificationScheduler, sendingTimeoutTask, txCheckTask)
+	v := ioc.InitTasks(asyncRequestResultCallbackTask, notificationScheduler, sendingTimeoutTask, txCheckTask)
+	quotaDAO := dao.NewQuotaDAO(db)
+	quotaRepository := repository.NewQuotaRepository(quotaDAO)
+	quotaService := quota.NewService(quotaRepository)
+	quotaMonthlyResetCron := quota.NewQuotaMonthlyResetCron(businessConfigRepository, quotaService)
+	v2 := ioc.Crons(quotaMonthlyResetCron)
 	app := &ioc.App{
 		GrpcServer: egrpcComponent,
-		Tasks:      v2,
+		Tasks:      v,
+		Crons:      v2,
 	}
 	return app
 }
@@ -99,6 +106,7 @@ var (
 	providerSvcSet         = wire.NewSet(manage.NewProviderService, repository.NewProviderRepository, dao.NewProviderDAO, ioc.InitProviderEncryptKey)
 	templateSvcSet         = wire.NewSet(manage2.NewChannelTemplateService, repository.NewChannelTemplateRepository, dao.NewChannelTemplateDAO)
 	schedulerSet           = wire.NewSet(scheduler.NewScheduler)
+	quotaSvcSet            = wire.NewSet(quota.NewService, quota.NewQuotaMonthlyResetCron, repository.NewQuotaRepository, dao.NewQuotaDAO)
 )
 
 func newChannel(

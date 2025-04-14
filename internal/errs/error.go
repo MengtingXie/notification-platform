@@ -34,5 +34,6 @@ var (
 	ErrNoAvailableChannel  = errors.New("无可用渠道")
 
 	ErrConfigNotFound = errors.New("业务配置不存在")
+	ErrNoQuotaConfig  = errors.New("没有提供 Quota 有关的配置")
 	ErrNoQuota        = errors.New("额度已经用完")
 )

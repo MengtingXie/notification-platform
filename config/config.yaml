@@ -19,3 +19,7 @@ provider:
 cache:
   defaultExpiration: 60000000000
   cleanupInterval: 60000000000
+
+cron:
+  quotaMonthlyReset:
+    spec: "0 0 1 1 * ?"

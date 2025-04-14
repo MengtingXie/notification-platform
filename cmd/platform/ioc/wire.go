@@ -4,6 +4,7 @@ package ioc
 
 import (
 	"context"
+	"gitee.com/flycash/notification-platform/internal/service/quota"
 	"gitee.com/flycash/notification-platform/internal/service/scheduler"
 	"time"
 
@@ -87,6 +88,11 @@ var (
 		dao.NewChannelTemplateDAO,
 	)
 	schedulerSet = wire.NewSet(scheduler.NewScheduler)
+	quotaSvcSet  = wire.NewSet(
+		quota.NewService,
+		quota.NewQuotaMonthlyResetCron,
+		repository.NewQuotaRepository,
+		dao.NewQuotaDAO)
 )
 
 func newChannel(
@@ -168,10 +174,14 @@ func InitGrpcServer() *ioc.App {
 		// 调度器
 		schedulerSet,
 
+		// 额度控制服务
+		quotaSvcSet,
+
 		// GRPC服务器
 		grpcapi.NewServer,
 		ioc.InitGrpc,
 		ioc.InitTasks,
+		ioc.Crons,
 		wire.Struct(new(ioc.App), "*"),
 	)
 
