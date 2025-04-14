@@ -31,10 +31,11 @@ type NotificationDAO interface {
 
 	BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]Notification, error)
 
-	// GetByKeys 根据业务ID和业务内唯一标识获取通知列表
-	GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]Notification, error)
 	// GetByKey 根据业务ID和业务内唯一标识获取通知列表
 	GetByKey(ctx context.Context, bizID int64, key string) (Notification, error)
+
+	// GetByKeys 根据业务ID和业务内唯一标识获取通知列表
+	GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]Notification, error)
 
 	// CASStatus 更新通知状态
 	CASStatus(ctx context.Context, notification Notification) error
@@ -46,10 +47,9 @@ type NotificationDAO interface {
 	BatchUpdateStatusSucceededOrFailed(ctx context.Context, successNotifications, failedNotifications []Notification) error
 
 	FindReadyNotifications(ctx context.Context, offset, limit int) ([]Notification, error)
-
-	MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error)
-	MarkFailed(ctx context.Context, entity Notification) error
 	MarkSuccess(ctx context.Context, entity Notification) error
+	MarkFailed(ctx context.Context, entity Notification) error
+	MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error)
 }
 
 // Notification 通知记录表
@@ -223,16 +223,6 @@ func (d *notificationDAO) BatchGetByIDs(ctx context.Context, ids []uint64) (map[
 	return notificationMap, err
 }
 
-// GetByBizID 根据业务ID查询通知列表
-func (d *notificationDAO) GetByBizID(ctx context.Context, bizID int64) ([]Notification, error) {
-	var notifications []Notification
-	err := d.db.WithContext(ctx).Where("biz_id = ?", bizID).Find(&notifications).Error
-	if err != nil {
-		return nil, err
-	}
-	return notifications, nil
-}
-
 func (d *notificationDAO) GetByKey(ctx context.Context, bizID int64, key string) (Notification, error) {
 	var not Notification
 	err := d.db.WithContext(ctx).Where("biz_id = ? AND `key` = ?", bizID, key).First(&not).Error
@@ -369,7 +359,7 @@ func (d *notificationDAO) MarkSuccess(ctx context.Context, notification Notifica
 			return err
 		}
 		// 要把 callback log 标记为可以发送了
-		return tx.Model(&CallbackLog{}).Where("notification_id = ?").Updates(map[string]any{
+		return tx.Model(&CallbackLog{}).Where("notification_id = ?", notification.ID).Updates(map[string]any{
 			// 标记为可以发送回调了
 			"status": domain.CallbackLogStatusPending,
 			"utime":  now,
@@ -402,14 +392,40 @@ func (d *notificationDAO) MarkFailed(ctx context.Context, notification Notificat
 func (d *notificationDAO) MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error) {
 	now := time.Now()
 	ddl := now.Add(-time.Minute).UnixMilli()
-	sub := d.db.Model(&Notification{}).
-		Select("id").
-		Limit(batchSize).
-		Where("status = ? AND utime <=?", domain.SendStatusSending.String(), ddl)
-	res := d.db.WithContext(ctx).Where("IN ?", sub).Updates(map[string]any{
-		"status":  string(domain.SendStatusFailed),
-		"version": gorm.Expr("version + 1"),
-		"utime":   now,
+	var rowsAffected int64
+
+	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var idsToUpdate []uint64
+
+		// 查询需要更新的 ID
+		err := tx.Model(&Notification{}).
+			Select("id").
+			Where("status = ? AND utime <= ?", domain.SendStatusSending.String(), ddl).
+			Limit(batchSize).
+			Find(&idsToUpdate).Error
+
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+
+		// 没有找到需要更新的记录，直接成功返回 (事务将提交)
+		if len(idsToUpdate) == 0 {
+			rowsAffected = 0
+			return nil
+		}
+
+		// 根据查询到的 ID 集合更新记录
+		res := tx.Model(&Notification{}).
+			Where("id IN ?", idsToUpdate).
+			Updates(map[string]any{
+				"status":  domain.SendStatusFailed.String(),
+				"version": gorm.Expr("version + 1"),
+				"utime":   now.UnixMilli(),
+			})
+
+		rowsAffected = res.RowsAffected
+		return res.Error
 	})
-	return res.RowsAffected, res.Error
+
+	return rowsAffected, err
 }

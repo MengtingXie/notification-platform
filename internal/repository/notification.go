@@ -35,14 +35,13 @@ type NotificationRepository interface {
 	// CASStatus 更新通知状态
 	CASStatus(ctx context.Context, notification domain.Notification) error
 	UpdateStatus(ctx context.Context, notification domain.Notification) error
-	MarkFailed(ctx context.Context, notification domain.Notification) error
-	MarkSuccess(ctx context.Context, entity domain.Notification) error
 
 	// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
 	BatchUpdateStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error
 
 	FindReadyNotifications(ctx context.Context, offset int, limit int) ([]domain.Notification, error)
-
+	MarkSuccess(ctx context.Context, entity domain.Notification) error
+	MarkFailed(ctx context.Context, notification domain.Notification) error
 	// MarkTimeoutSendingAsFailed 将超时的 SENDING 状态的通知都标记为失败
 	MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error)
 }
@@ -211,14 +210,6 @@ func (r *notificationRepository) UpdateStatus(ctx context.Context, notification 
 	return r.dao.UpdateStatus(ctx, r.toEntity(notification))
 }
 
-func (r *notificationRepository) MarkFailed(ctx context.Context, notification domain.Notification) error {
-	return r.dao.MarkFailed(ctx, r.toEntity(notification))
-}
-
-func (r *notificationRepository) MarkSuccess(ctx context.Context, notification domain.Notification) error {
-	return r.dao.MarkFailed(ctx, r.toEntity(notification))
-}
-
 // BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
 func (r *notificationRepository) BatchUpdateStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error {
 	// 转换成功的通知为DAO层的实体
@@ -241,6 +232,14 @@ func (r *notificationRepository) FindReadyNotifications(ctx context.Context, off
 	return slice.Map(nos, func(_ int, src dao.Notification) domain.Notification {
 		return r.toDomain(src)
 	}), err
+}
+
+func (r *notificationRepository) MarkSuccess(ctx context.Context, notification domain.Notification) error {
+	return r.dao.MarkSuccess(ctx, r.toEntity(notification))
+}
+
+func (r *notificationRepository) MarkFailed(ctx context.Context, notification domain.Notification) error {
+	return r.dao.MarkFailed(ctx, r.toEntity(notification))
 }
 
 func (r *notificationRepository) MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error) {

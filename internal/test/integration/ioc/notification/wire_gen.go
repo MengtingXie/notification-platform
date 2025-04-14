@@ -23,10 +23,13 @@ func Init() *Service {
 	service := notification.NewNotificationService(notificationRepository, sonyflake)
 	quotaDAO := dao.NewQuotaDAO(db)
 	quotaRepository := repository.NewQuotaRepository(quotaDAO)
+	callbackLogDAO := dao.NewCallbackLogDAO(db)
+	callbackLogRepository := repository.NewCallbackLogRepository(notificationRepository, callbackLogDAO)
 	notificationService := &Service{
-		Svc:       service,
-		Repo:      notificationRepository,
-		QuotaRepo: quotaRepository,
+		Svc:             service,
+		Repo:            notificationRepository,
+		QuotaRepo:       quotaRepository,
+		CallbackLogRepo: callbackLogRepository,
 	}
 	return notificationService
 }
@@ -34,7 +37,8 @@ func Init() *Service {
 // wire.go:
 
 type Service struct {
-	Svc       notification.Service
-	Repo      repository.NotificationRepository
-	QuotaRepo repository.QuotaRepository
+	Svc             notification.Service
+	Repo            repository.NotificationRepository
+	QuotaRepo       repository.QuotaRepository
+	CallbackLogRepo repository.CallbackLogRepository
 }
