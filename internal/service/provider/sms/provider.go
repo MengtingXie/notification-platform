@@ -3,6 +3,7 @@ package sms
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"gitee.com/flycash/notification-platform/internal/service/provider"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
@@ -54,7 +55,7 @@ func (p *smsProvider) Send(ctx context.Context, notification domain.Notification
 	}
 
 	for _, status := range resp.PhoneNumbers {
-		if status.Code != "OK" {
+		if !strings.EqualFold(status.Code, "OK") {
 			return domain.SendResponse{}, fmt.Errorf("%w: Code = %s, Message = %s", errs.ErrSendNotificationFailed, status.Code, status.Message)
 		}
 	}
