@@ -5,7 +5,7 @@ import (
 	"github.com/gotomicro/ego/task/ecron"
 )
 
-func Crons(q *quota.QuotaMonthlyResetCron) []ecron.Ecron {
+func Crons(q *quota.MonthlyResetCron) []ecron.Ecron {
 	q1 := ecron.Load("cron").Build(ecron.WithJob(q.Do))
 	return []ecron.Ecron{q1}
 }

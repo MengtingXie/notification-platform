@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ecodeclub/ekit/slice"
 	"time"
+
+	"github.com/ecodeclub/ekit/slice"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/errs"
@@ -118,7 +119,8 @@ func (d *notificationDAO) create(ctx context.Context, db *gorm.DB, data Notifica
 			if err := tx.Create(&CallbackLog{
 				NotificationID: data.ID,
 				Status:         domain.CallbackLogStatusInit.String(),
-				NextRetryTime:  now}).Error; err != nil {
+				NextRetryTime:  now,
+			}).Error; err != nil {
 				return fmt.Errorf("%w", errs.ErrCreateCallbackLogFailed)
 			}
 		}
@@ -290,28 +292,27 @@ func (d *notificationDAO) BatchUpdateStatusSucceededOrFailed(ctx context.Context
 		return nil
 	}
 
-	successIds := slice.Map(successNotifications, func(idx int, src Notification) uint64 {
+	successIDs := slice.Map(successNotifications, func(_ int, src Notification) uint64 {
 		return src.ID
 	})
 
-	failedIds := slice.Map(failedNotifications, func(idx int, src Notification) uint64 {
+	failedIDs := slice.Map(failedNotifications, func(_ int, src Notification) uint64 {
 		return src.ID
 	})
 
 	// 开启事务
 	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-
-		if len(successIds) != 0 {
-			err := d.batchMarkSuccess(tx, successIds)
+		if len(successIDs) != 0 {
+			err := d.batchMarkSuccess(tx, successIDs)
 			if err != nil {
 				return err
 			}
 		}
 
-		if len(failedIds) != 0 {
+		if len(failedIDs) != 0 {
 			now := time.Now().Unix()
 			return tx.Model(&Notification{}).
-				Where("id IN ?", failedIds).
+				Where("id IN ?", failedIDs).
 				Updates(map[string]any{
 					"version": gorm.Expr("version + 1"),
 					"utime":   now,
@@ -322,10 +323,10 @@ func (d *notificationDAO) BatchUpdateStatusSucceededOrFailed(ctx context.Context
 	})
 }
 
-func (d *notificationDAO) batchMarkSuccess(tx *gorm.DB, successIds []uint64) error {
+func (d *notificationDAO) batchMarkSuccess(tx *gorm.DB, successIDs []uint64) error {
 	now := time.Now().Unix()
 	err := tx.Model(&Notification{}).
-		Where("id IN ?", successIds).
+		Where("id IN ?", successIDs).
 		Updates(map[string]any{
 			"version": gorm.Expr("version + 1"),
 			"utime":   now,
@@ -337,7 +338,7 @@ func (d *notificationDAO) batchMarkSuccess(tx *gorm.DB, successIds []uint64) err
 
 	// 要更新 callback log 了
 	return tx.Model(&CallbackLog{}).
-		Where("notification_id IN ", successIds).
+		Where("notification_id IN ", successIDs).
 		Updates(map[string]any{
 			"status": domain.CallbackLogStatusPending.String(),
 			"utime":  now,

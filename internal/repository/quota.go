@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"github.com/ecodeclub/ekit/slice"
@@ -20,10 +21,10 @@ func NewQuotaRepository(dao dao.QuotaDAO) QuotaRepository {
 }
 
 func (repo *quotaRepository) CreateQuotaOrUpdate(ctx context.Context, quota ...domain.Quota) error {
-	qs := slice.Map(quota, func(idx int, src domain.Quota) dao.Quota {
+	qs := slice.Map(quota, func(_ int, src domain.Quota) dao.Quota {
 		return dao.Quota{
 			Quota:   src.Quota,
-			BizId:   src.BizID,
+			BizID:   src.BizID,
 			Channel: src.Channel.String(),
 		}
 	})

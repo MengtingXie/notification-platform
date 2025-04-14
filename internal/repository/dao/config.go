@@ -34,6 +34,7 @@ type BusinessConfigDAO interface {
 	GetByID(ctx context.Context, id int64) (BusinessConfig, error)
 	Delete(ctx context.Context, id int64) error
 	SaveConfig(ctx context.Context, config BusinessConfig) (BusinessConfig, error)
+	Find(ctx context.Context, offset int, limit int) ([]BusinessConfig, error)
 }
 
 // Implementation of the BusinessConfigDAO interface
@@ -46,6 +47,12 @@ func NewBusinessConfigDAO(db *egorm.Component) BusinessConfigDAO {
 	return &businessConfigDAO{
 		db: db,
 	}
+}
+
+func (b *businessConfigDAO) Find(ctx context.Context, offset, limit int) ([]BusinessConfig, error) {
+	var res []BusinessConfig
+	err := b.db.WithContext(ctx).Limit(limit).Offset(offset).Find(&res).Error
+	return res, err
 }
 
 func (b *businessConfigDAO) GetByID(ctx context.Context, id int64) (BusinessConfig, error) {

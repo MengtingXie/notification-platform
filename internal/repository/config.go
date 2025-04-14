@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 
+	"github.com/ecodeclub/ekit/slice"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/cache"
 	"gitee.com/flycash/notification-platform/internal/repository/cache/local"
@@ -38,6 +40,13 @@ func NewBusinessConfigRepository(
 		localCache: localCache,
 		redisCache: redisCache,
 	}
+}
+
+func (b *businessConfigRepository) Find(ctx context.Context, offset, limit int) ([]domain.BusinessConfig, error) {
+	res, err := b.dao.Find(ctx, offset, limit)
+	return slice.Map(res, func(_ int, src dao.BusinessConfig) domain.BusinessConfig {
+		return b.toDomain(src)
+	}), err
 }
 
 // GetByIDs 根据多个ID批量获取业务配置
