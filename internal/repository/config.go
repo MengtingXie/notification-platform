@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/ecodeclub/ekit/mapx"
 	"github.com/ecodeclub/ekit/slice"
@@ -16,6 +17,7 @@ import (
 )
 
 type BusinessConfigRepository interface {
+	LoadCache(ctx context.Context) error
 	GetByIDs(ctx context.Context, ids []int64) (map[int64]domain.BusinessConfig, error)
 	GetByID(ctx context.Context, id int64) (domain.BusinessConfig, error)
 	Delete(ctx context.Context, id int64) error
@@ -36,11 +38,58 @@ func NewBusinessConfigRepository(
 	localCache *local.Cache,
 	redisCache *redis.Cache,
 ) BusinessConfigRepository {
-	return &businessConfigRepository{
+	res := &businessConfigRepository{
 		dao:        configDao,
 		localCache: localCache,
 		redisCache: redisCache,
+		logger:     elog.DefaultLogger,
 	}
+	// 复杂系统里面，启动非常慢，可以考虑开 goroutine
+	go func() {
+		const preloadTimeout = time.Minute
+		ctx, cancel := context.WithTimeout(context.Background(), preloadTimeout)
+		defer cancel()
+		err := res.LoadCache(ctx)
+		if err != nil {
+			// 缓存预热失败，你可以中断
+			res.logger.Error("缓存预热失败", elog.FieldErr(err))
+		}
+	}()
+	return res
+}
+
+// LoadCache 加载缓存，用 DB 中的数据，填充本地缓存
+func (b *businessConfigRepository) LoadCache(ctx context.Context) error {
+	offset := 0
+	const (
+		limit       = 10
+		loopTimeout = time.Second * 3
+	)
+	for {
+		ctx, cancel := context.WithTimeout(ctx, loopTimeout)
+		cnt, err := b.loadCacheBatch(ctx, offset, limit)
+		cancel()
+		if err != nil {
+			// 继续下一轮
+			// 精细处理：比如说三个循环都是 error，你就判定数据库不可挽回了，你就中断
+			b.logger.Error("分批加载缓存失败", elog.FieldErr(err))
+			continue
+		}
+		if cnt < limit {
+			// 说明没了
+			return nil
+		}
+		offset += cnt
+	}
+}
+
+func (b *businessConfigRepository) loadCacheBatch(ctx context.Context, offset, limit int) (int, error) {
+	res, err := b.Find(ctx, offset, limit)
+	if err != nil {
+		return 0, err
+	}
+	err = b.localCache.SetConfigs(ctx, res)
+	return len(res), err
 }
 
 func (b *businessConfigRepository) Find(ctx context.Context, offset, limit int) ([]domain.BusinessConfig, error) {
@@ -64,6 +113,11 @@ func (b *businessConfigRepository) GetByIDs(ctx context.Context, ids []int64) (m
 	}
 	// 这边就是要尝试从 Redis 里面取
 	// 取 result 当中没有的
+
+	// 叠加可用性的设计，只查询本地缓存
+	// if ctx.Value("downgrade") == true {
+	//	return result, err
+	// }
 
 	missedIDs := b.diffIDs(ids, result)
 	if len(missedIDs) == 0 {
@@ -91,6 +145,14 @@ func (b *businessConfigRepository) GetByIDs(ctx context.Context, ids []int64) (m
 			b.logger.Error("批量回写本地缓存失败", elog.FieldErr(err))
 		}
 	}
+
+	// 叠加可用性的设计，查询 Redis 但是不查询数据库
+	// if ctx.Value("downgrade") == true {
+	// if ctx.Value("rate_limit") == true {
+	// if ctx.Value("high_load") == true {
+	//	return result, err
+	// }
+
 	// 从数据库中获取缓存未找到的配置
 	missedIDs = b.diffIDs(ids, result)
 	// 精确控制，查询更少的 id，回表更少的次数
@@ -149,8 +211,8 @@ func (b *businessConfigRepository) GetByIDsV1(ctx context.Context, ids []int64) 
 		return nil, err
 	}
 
-	for id, config := range configs {
-		result[id] = b.toDomain(config)
+	for id := range configs {
+		result[id] = b.toDomain(configs[id])
 	}
 
 	if len(result) > 0 {

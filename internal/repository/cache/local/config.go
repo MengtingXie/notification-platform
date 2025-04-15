@@ -97,12 +97,13 @@ func (l *Cache) loop(ctx context.Context) {
 		const channelMinLen = 2
 		channel := msg.Channel
 		channelStrList := strings.SplitN(channel, ":", channelMinLen)
-		if len(channelStrList) < 2 {
+		if len(channelStrList) < channelMinLen {
 			l.logger.Error("监听到非法 Redis key", elog.String("channel", msg.Channel))
 			continue
 		}
 		// config:133 => 133
-		key := channelStrList[1]
+		const keyIdx = 1
+		key := channelStrList[keyIdx]
 		ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
 		eventType := msg.Payload
 		l.handleConfigChange(ctx, key, eventType)
