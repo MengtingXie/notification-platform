@@ -47,71 +47,71 @@ services:
       #      集群节点通信端口
       - 2380:2380
 
-#  prometheus:
-#    image: prom/prometheus:latest
-#    volumes:
-#      #  - 将本地的 prometheus 文件映射到容器内的配置文件
-#      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-#    ports:
-#      #  - 访问数据的端口
-#      - 9090:9090
-#    command:
-#      - "--web.enable-remote-write-receiver"
-#      - "--config.file=/etc/prometheus/prometheus.yml"
-#    extra_hosts:
-#      - "host.docker.internal:host-gateway"
-#  grafana:
-#    image: grafana/grafana-enterprise:10.2.0
-#    ports:
-#      - 3000:3000
-#  zipkin:
-#    #    用的是不支持 Kafka 之类的简化版本
-#    image: openzipkin/zipkin-slim:latest
-#    ports:
-#      - '9411:9411'
-#
-#  elasticsearch:
-#    container_name: elasticsearch
-#    image: docker.elastic.co/elasticsearch/elasticsearch:8.8.0
-#    environment:
-#      - discovery.type=single-node
-#      - xpack.security.enabled=false
-#      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-#    ports:
-#      - "9200:9200"
-#      - "9300:9300"
-#    volumes:
-#      - esdata:/usr/share/elasticsearch/data
-#    networks:
-#      default:
-#
-#  logstash:
-#    image: docker.elastic.co/logstash/logstash:8.8.0
-#    environment:
-#      - xpack.monitoring.enabled=false
-#    ports:
-#      - "5001:5000"
-#      - "9600:9600"
-#    volumes:
-##      如果不用filebeat采集日志就需要将日志映射到容器中
-#      - ../logs:/logs
-#      - ./logstash/pipeline:/usr/share/logstash/pipeline
-#    depends_on:
-#      - elasticsearch
-#    networks:
-#      default:
-#
-#  kibana:
-#    image: docker.elastic.co/kibana/kibana:8.8.0
-#    environment:
-#      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-#    ports:
-#      - "5601:5601"
-#    depends_on:
-#      - elasticsearch
-#    networks:
-#      default:
-#
-#volumes:
-#  esdata:
-#    driver: local
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      #  - 将本地的 prometheus 文件映射到容器内的配置文件
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      #  - 访问数据的端口
+      - 9090:9090
+    command:
+      - "--web.enable-remote-write-receiver"
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  grafana:
+    image: grafana/grafana-enterprise:10.2.0
+    ports:
+      - 3000:3000
+  zipkin:
+  
+    image: openzipkin/zipkin-slim:latest
+    ports:
+      - '9411:9411'
+
+  elasticsearch:
+    container_name: elasticsearch
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.8.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    networks:
+      default:
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.8.0
+    environment:
+      - xpack.monitoring.enabled=false
+    ports:
+      - "5001:5000"
+      - "9600:9600"
+    volumes:
+#      如果不用filebeat采集日志就需要将日志映射到容器中
+      - ../logs:/logs
+      - ./logstash/pipeline:/usr/share/logstash/pipeline
+    depends_on:
+      - elasticsearch
+    networks:
+      default:
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.8.0
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      default:
+
+volumes:
+  esdata:
+    driver: local

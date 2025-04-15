@@ -83,8 +83,9 @@ func (s *NotificationServer) buildNotification(n *notificationv1.Notification, b
 		Receivers: n.Receivers,
 		Channel:   s.convertToChannel(n.Channel),
 		Template: domain.Template{
-			ID:     tid,
-			Params: n.TemplateParams,
+			ID:        tid,
+			VersionID: 22,
+			Params:    n.TemplateParams,
 		},
 		SendStrategyConfig: s.buildSendStrategyConfig(n),
 	}, nil

@@ -10,8 +10,11 @@ etcd:
   connectTimeout: "1s"
   secure: false
 server:
+  governor:
+    host: 0.0.0.0
+    port: 9003
   grpc:
-    host: "127.0.0.1"
+    host: "0.0.0.0"
     port: 9002
 
 provider:
@@ -20,6 +23,14 @@ cache:
   defaultExpiration: 60000000000
   cleanupInterval: 60000000000
 
+trace:
+  zipkin:
+    endpoint: "http://localhost:9411/api/v2/spans"
+    serviceName: "notification-platform"
+
+
+jwt:
+  key: "test_key"
 cron:
   quotaMonthlyReset:
     spec: "0 0 1 1 * ?"

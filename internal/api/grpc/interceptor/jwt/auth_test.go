@@ -12,7 +12,7 @@ import (
 
 func TestJwtAuth_Encode(t *testing.T) {
 	// 创建 JwtAuth 实例
-	testKey := "test-secret-key"
+	testKey := "test_key"
 	jwtAuth := NewJwtAuth(testKey)
 
 	// 测试场景
@@ -29,7 +29,7 @@ func TestJwtAuth_Encode(t *testing.T) {
 		{
 			name: "带用户ID的令牌",
 			customClaims: jwt.MapClaims{
-				"user_id": "123456",
+				"biz_id": float64(23456),
 			},
 			wantErr: false,
 		},
