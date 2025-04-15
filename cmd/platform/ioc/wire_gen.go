@@ -25,6 +25,7 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/provider/sequential"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
+	"gitee.com/flycash/notification-platform/internal/service/provider/tracing"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
 	"gitee.com/flycash/notification-platform/internal/service/sendstrategy"
 	manage2 "gitee.com/flycash/notification-platform/internal/service/template/manage"
@@ -35,27 +36,27 @@ import (
 // Injectors from wire.go:
 
 func InitGrpcServer() *ioc.App {
-	db := ioc.InitDB()
-	notificationDAO := dao.NewNotificationDAO(db)
+	v := ioc.InitDB()
+	notificationDAO := dao.NewNotificationDAO(v)
 	notificationRepository := repository.NewNotificationRepository(notificationDAO)
 	sonyflake := ioc.InitIDGenerator()
 	service := notification.NewNotificationService(notificationRepository, sonyflake)
-	channelTemplateDAO := dao.NewChannelTemplateDAO(db)
+	channelTemplateDAO := dao.NewChannelTemplateDAO(v)
 	channelTemplateRepository := repository.NewChannelTemplateRepository(channelTemplateDAO)
 	string2 := ioc.InitProviderEncryptKey()
-	providerDAO := dao.NewProviderDAO(db, string2)
+	providerDAO := dao.NewProviderDAO(v, string2)
 	providerRepository := repository.NewProviderRepository(providerDAO)
 	manageService := manage.NewProviderService(providerRepository)
 	auditService := audit.NewService()
 	channelTemplateService := manage2.NewChannelTemplateService(channelTemplateRepository, manageService, auditService)
-	businessConfigDAO := dao.NewBusinessConfigDAO(db)
+	businessConfigDAO := dao.NewBusinessConfigDAO(v)
 	client := ioc.InitRedisClient()
 	cache := ioc.InitGoCache()
 	localCache := local.NewLocalCache(client, cache)
 	redisCache := redis.NewCache(client)
 	businessConfigRepository := repository.NewBusinessConfigRepository(businessConfigDAO, localCache, redisCache)
 	businessConfigService := config.NewBusinessConfigService(businessConfigRepository)
-	callbackLogDAO := dao.NewCallbackLogDAO(db)
+	callbackLogDAO := dao.NewCallbackLogDAO(v)
 	callbackLogRepository := repository.NewCallbackLogRepository(notificationRepository, callbackLogDAO)
 	callbackService := callback.NewService(businessConfigService, callbackLogRepository)
 	channel := newChannel(manageService, channelTemplateService)
@@ -64,13 +65,14 @@ func InitGrpcServer() *ioc.App {
 	defaultSendStrategy := sendstrategy.NewDefaultStrategy(notificationRepository, businessConfigService)
 	sendStrategy := sendstrategy.NewDispatcher(immediateSendStrategy, defaultSendStrategy)
 	sendService := notification.NewSendService(channelTemplateService, service, sonyflake, sendStrategy)
-	txNotificationDAO := dao.NewTxNotificationDAO(db)
+	txNotificationDAO := dao.NewTxNotificationDAO(v)
 	txNotificationRepository := repository.NewTxNotificationRepository(txNotificationDAO)
 	dlockClient := ioc.InitDistributedLock(client)
 	txNotificationService := notification.NewTxNotificationService(txNotificationRepository, businessConfigService, notificationRepository, dlockClient)
 	notificationServer := grpc.NewServer(service, sendService, txNotificationService)
+	configServer := grpc.NewConfigServer(businessConfigService)
 	component := ioc.InitEtcdClient()
-	egrpcComponent := ioc.InitGrpc(notificationServer, component)
+	egrpcComponent := ioc.InitGrpc(notificationServer, configServer, component)
 	app := &ioc.App{
 		GrpcServer: egrpcComponent,
 	}
@@ -135,4 +137,9 @@ func newSMSSelectorBuilder(
 		))
 	}
 	return sequential.NewSelectorBuilder(providers)
+}
+
+func newMockSMSSelectorBuilder(providerSvc manage.Service,
+	templateSvc manage2.ChannelTemplateService) *sequential.SelectorBuilder {
+	return sequential.NewSelectorBuilder([]provider.Provider{tracing.NewProvider(provider.NewMockProvider())})
 }

@@ -4,6 +4,7 @@ package ioc
 
 import (
 	"context"
+	"gitee.com/flycash/notification-platform/internal/service/provider/tracing"
 	"time"
 
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
@@ -130,6 +131,13 @@ func newSMSSelectorBuilder(
 	return sequential.NewSelectorBuilder(providers)
 }
 
+func newMockSMSSelectorBuilder(providerSvc providersvc.Service,
+	templateSvc templatesvc.ChannelTemplateService) *sequential.SelectorBuilder {
+	return sequential.NewSelectorBuilder([]provider.Provider{
+		tracing.NewProvider(provider.NewMockProvider()),
+	})
+}
+
 func InitGrpcServer() *ioc.App {
 	wire.Build(
 		// 基础设施
@@ -162,6 +170,7 @@ func InitGrpcServer() *ioc.App {
 
 		// GRPC服务器
 		grpcapi.NewServer,
+		grpcapi.NewConfigServer,
 		ioc.InitGrpc,
 		wire.Struct(new(ioc.App), "*"),
 	)

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/pkg/database/tracing"
+
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 
 	"github.com/ecodeclub/ekit/retry"
@@ -16,6 +18,11 @@ func InitDB() *egorm.Component {
 	WaitForDBSetup(econf.GetString("mysql.dsn"))
 	db := egorm.Load("mysql").Build()
 	err := dao.InitTables(db)
+	if err != nil {
+		panic(err)
+	}
+	tracePlugin := tracing.NewGormTracingPlugin()
+	err = db.Use(tracePlugin)
 	if err != nil {
 		panic(err)
 	}

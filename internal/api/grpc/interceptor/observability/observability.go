@@ -7,15 +7,20 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 type Builder struct {
-	// apiDurationHistogram tracks API response times
+	// apiDurationHistogram 跟踪 API 响应时间
 	apiDurationHistogram *prometheus.HistogramVec
+	// requestCounter 跟踪请求总数
+	requestCounter *prometheus.CounterVec
+	// errorCounter 跟踪失败请求数
+	errorCounter *prometheus.CounterVec
 }
 
-// New creates a new Builder with initialized metrics
+// New 创建一个带有初始化指标的 Builder
 func New() *Builder {
 	return &Builder{
 		apiDurationHistogram: promauto.NewHistogramVec(
@@ -26,25 +31,50 @@ func New() *Builder {
 			},
 			[]string{"method", "status"},
 		),
+		requestCounter: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "grpc_server_requests_total",
+				Help: "Total number of gRPC requests received.",
+			},
+			[]string{"method"},
+		),
+		errorCounter: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "grpc_server_errors_total",
+				Help: "Total number of gRPC requests that resulted in errors.",
+			},
+			[]string{"method", "status"},
+		),
 	}
 }
 
 func (b *Builder) Build() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		// Record start time
+		// 记录开始时间
 		startTime := time.Now()
 
-		// Process the request
+		// 增加请求计数器
+		b.requestCounter.WithLabelValues(info.FullMethod).Inc()
+
+		// 处理请求
 		resp, err := handler(ctx, req)
 
-		// Calculate duration
+		// 计算持续时间
 		duration := time.Since(startTime).Seconds()
 
-		// Get status code
+		// 获取状态码
 		st, _ := status.FromError(err)
 		statusCode := st.Code().String()
 
-		// Report to Prometheus
+		// 如果出现错误，则增加错误计数器
+		if st.Code() != codes.OK {
+			b.errorCounter.WithLabelValues(
+				info.FullMethod,
+				statusCode,
+			).Inc()
+		}
+
+		// 向 Prometheus 报告
 		b.apiDurationHistogram.WithLabelValues(
 			info.FullMethod,
 			statusCode,
