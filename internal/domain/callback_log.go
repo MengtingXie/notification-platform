@@ -3,9 +3,10 @@ package domain
 type CallbackLogStatus string
 
 const (
-	CallbackLogStatusPENDING CallbackLogStatus = "PENDING"
+	CallbackLogStatusInit    CallbackLogStatus = "INIT"
+	CallbackLogStatusPending CallbackLogStatus = "PENDING"
 	CallbackLogStatusSuccess CallbackLogStatus = "SUCCESS"
-	CallbackLogStatusFAILED  CallbackLogStatus = "FAILED"
+	CallbackLogStatusFailed  CallbackLogStatus = "FAILED"
 )
 
 func (c CallbackLogStatus) String() string {

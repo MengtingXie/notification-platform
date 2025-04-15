@@ -31,13 +31,13 @@ type staticScheduler struct {
 func NewScheduler(
 	notificationSvc notificationsvc.Service,
 	dispatcher sender.NotificationSender,
-	batchSize int,
 	dclient dlock.Client,
 ) NotificationScheduler {
+	const defaultBatchSize = 10
 	return &staticScheduler{
 		notificationSvc: notificationSvc,
 		sender:          dispatcher,
-		batchSize:       batchSize,
+		batchSize:       defaultBatchSize,
 		dclient:         dclient,
 	}
 }

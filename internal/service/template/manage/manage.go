@@ -6,13 +6,13 @@ import (
 	"fmt"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/audit"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider/manage"
 )
 
 var (
-	ErrInvalidParameter           = errors.New("参数非法")
 	ErrCreateTemplateFailed       = errors.New("创建模版失败")
 	ErrTemplateVersionNotApproved = errors.New("模板版本未审核通过")
 	ErrProviderTemplateNotFound   = errors.New("供应商模板未找到")
@@ -75,7 +75,7 @@ func NewChannelTemplateService(repo repository.ChannelTemplateRepository, provid
 func (t *templateService) GetTemplates(ctx context.Context, ownerID int64, ownerType domain.OwnerType) ([]domain.ChannelTemplate, error) {
 	// 参数校验
 	if ownerID <= 0 {
-		return nil, fmt.Errorf("%w: 业务方ID必须大于0", ErrInvalidParameter)
+		return nil, fmt.Errorf("%w: 业务方ID必须大于0", errs.ErrInvalidParameter)
 	}
 
 	if err := t.isValidateTemplateOwnerType(ownerType); err != nil {
@@ -133,7 +133,7 @@ func (t *templateService) CreateTemplate(ctx context.Context, template domain.Ch
 	// 为每个供应商创建关联
 
 	// 获取当前渠道的供应商列表
-	providers, err := t.providerSvc.GetProvidersByChannel(ctx, template.Channel)
+	providers, err := t.providerSvc.GetByChannel(ctx, template.Channel)
 	if err != nil {
 		return domain.ChannelTemplate{}, fmt.Errorf("%w: 获取供应商列表失败: %w", ErrCreateTemplateFailed, err)
 	}
@@ -166,7 +166,7 @@ func (t *templateService) CreateTemplate(ctx context.Context, template domain.Ch
 
 func (t *templateService) isValidateTemplate(template domain.ChannelTemplate) error {
 	if template.OwnerID <= 0 {
-		return fmt.Errorf("%w: 所有者ID", ErrInvalidParameter)
+		return fmt.Errorf("%w: 所有者ID", errs.ErrInvalidParameter)
 	}
 
 	if err := t.isValidateTemplateOwnerType(template.OwnerType); err != nil {
@@ -184,7 +184,7 @@ func (t *templateService) isValidateTemplate(template domain.ChannelTemplate) er
 	if template.Channel != domain.ChannelSMS &&
 		template.Channel != domain.ChannelEmail &&
 		template.Channel != domain.ChannelInApp {
-		return fmt.Errorf("%w: 渠道类型", ErrInvalidParameter)
+		return fmt.Errorf("%w: 渠道类型", errs.ErrInvalidParameter)
 	}
 
 	if err := t.isValidateTemplateBusinessType(template.BusinessType); err != nil {
@@ -197,7 +197,7 @@ func (t *templateService) isValidateTemplate(template domain.ChannelTemplate) er
 func (t *templateService) isValidateTemplateOwnerType(ownerType domain.OwnerType) error {
 	if ownerType != domain.OwnerTypePerson &&
 		ownerType != domain.OwnerTypeOrganization {
-		return fmt.Errorf("%w: 所有者类型", ErrInvalidParameter)
+		return fmt.Errorf("%w: 所有者类型", errs.ErrInvalidParameter)
 	}
 	return nil
 }
@@ -206,21 +206,21 @@ func (t *templateService) isValidateTemplateBusinessType(businessType domain.Bus
 	if businessType != domain.BusinessTypePromotion &&
 		businessType != domain.BusinessTypeNotification &&
 		businessType != domain.BusinessTypeVerificationCode {
-		return fmt.Errorf("%w: 业务类型", ErrInvalidParameter)
+		return fmt.Errorf("%w: 业务类型", errs.ErrInvalidParameter)
 	}
 	return nil
 }
 
 func (t *templateService) isValidateTemplateName(name string) error {
 	if name == "" {
-		return fmt.Errorf("%w: 模板名称", ErrInvalidParameter)
+		return fmt.Errorf("%w: 模板名称", errs.ErrInvalidParameter)
 	}
 	return nil
 }
 
 func (t *templateService) isValidateTemplateDescription(description string) error {
 	if description == "" {
-		return fmt.Errorf("%w: 模板描述", ErrInvalidParameter)
+		return fmt.Errorf("%w: 模板描述", errs.ErrInvalidParameter)
 	}
 	return nil
 }
@@ -251,7 +251,7 @@ func (t *templateService) UpdateTemplate(ctx context.Context, template domain.Ch
 
 func (t *templateService) isValidateTemplateID(templateID int64) error {
 	if templateID <= 0 {
-		return fmt.Errorf("%w: 模板ID必须大于0", ErrInvalidParameter)
+		return fmt.Errorf("%w: 模板ID必须大于0", errs.ErrInvalidParameter)
 	}
 	return nil
 }
@@ -273,12 +273,12 @@ func (t *templateService) PublishTemplate(ctx context.Context, templateID, versi
 
 	// 确认版本属于该模板
 	if version.ChannelTemplateID != templateID {
-		return fmt.Errorf("%w: 模版ID与版本ID不关联", ErrInvalidParameter)
+		return fmt.Errorf("%w: 模版ID与版本ID不关联", errs.ErrInvalidParameter)
 	}
 
 	// 检查版本是否通过内部审核
 	if version.AuditStatus != "APPROVED" {
-		return fmt.Errorf("%w: 版本ID", ErrInvalidParameter)
+		return fmt.Errorf("%w: 版本ID", errs.ErrInvalidParameter)
 	}
 
 	// 检查是否有通过供应商审核的记录
@@ -299,7 +299,7 @@ func (t *templateService) PublishTemplate(ctx context.Context, templateID, versi
 
 func (t *templateService) isValidateTemplateVersionID(versionID int64) error {
 	if versionID <= 0 {
-		return fmt.Errorf("%w: 版本ID必须大于0", ErrInvalidParameter)
+		return fmt.Errorf("%w: 版本ID必须大于0", errs.ErrInvalidParameter)
 	}
 	return nil
 }

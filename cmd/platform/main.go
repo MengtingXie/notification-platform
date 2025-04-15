@@ -14,7 +14,10 @@ import (
 
 func main() {
 	// 创建 ego 应用实例
-	app := ego.New()
+	app := ioc.InitGrpcServer()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	app.StartTasks(ctx)
 
 	// 初始化 zipkin trace
 	tp := ioc2.InitZipkinTracer()
@@ -23,15 +26,16 @@ func main() {
 		if err != nil {
 			elog.Error("Shutdown zipkinTracer", elog.FieldErr(err))
 		}
-	}(tp, context.Background())
+	}(tp, ctx)
 
 	// 启动服务
-	if err := app.Serve(
+	if err := ego.New().Serve(
 		egovernor.Load("server.governor").Build(),
 		func() server.Server {
-			return ioc.InitGrpcServer().GrpcServer
+			return app.GrpcServer
 		}(),
-	).Run(); err != nil {
+	).Cron(app.Crons...).
+		Run(); err != nil {
 		elog.Panic("startup", elog.FieldErr(err))
 	}
 }

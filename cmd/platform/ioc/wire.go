@@ -4,7 +4,8 @@ package ioc
 
 import (
 	"context"
-	"gitee.com/flycash/notification-platform/internal/service/provider/tracing"
+	"gitee.com/flycash/notification-platform/internal/service/quota"
+	"gitee.com/flycash/notification-platform/internal/service/scheduler"
 	"time"
 
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
@@ -50,11 +51,13 @@ var (
 		notificationsvc.NewNotificationService,
 		repository.NewNotificationRepository,
 		dao.NewNotificationDAO,
+		notificationsvc.NewSendingTimeoutTask,
 	)
 	txNotificationSvcSet = wire.NewSet(
 		notificationsvc.NewTxNotificationService,
 		repository.NewTxNotificationRepository,
 		dao.NewTxNotificationDAO,
+		notificationsvc.NewTxCheckTask,
 	)
 	senderSvcSet = wire.NewSet(
 		newChannel,
@@ -70,6 +73,7 @@ var (
 		callback.NewService,
 		repository.NewCallbackLogRepository,
 		dao.NewCallbackLogDAO,
+		callback.NewAsyncRequestResultCallbackTask,
 	)
 	providerSvcSet = wire.NewSet(
 		providersvc.NewProviderService,
@@ -83,6 +87,12 @@ var (
 		repository.NewChannelTemplateRepository,
 		dao.NewChannelTemplateDAO,
 	)
+	schedulerSet = wire.NewSet(scheduler.NewScheduler)
+	quotaSvcSet  = wire.NewSet(
+		quota.NewService,
+		quota.NewQuotaMonthlyResetCron,
+		repository.NewQuotaRepository,
+		dao.NewQuotaDAO)
 )
 
 func newChannel(
@@ -101,7 +111,7 @@ func newSMSSelectorBuilder(
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
 
-	entities, err := providerSvc.GetProvidersByChannel(ctx, domain.ChannelSMS)
+	entities, err := providerSvc.GetByChannel(ctx, domain.ChannelSMS)
 	if err != nil {
 		panic(err)
 	}
@@ -129,13 +139,6 @@ func newSMSSelectorBuilder(
 		))
 	}
 	return sequential.NewSelectorBuilder(providers)
-}
-
-func newMockSMSSelectorBuilder(providerSvc providersvc.Service,
-	templateSvc templatesvc.ChannelTemplateService) *sequential.SelectorBuilder {
-	return sequential.NewSelectorBuilder([]provider.Provider{
-		tracing.NewProvider(provider.NewMockProvider()),
-	})
 }
 
 func InitGrpcServer() *ioc.App {
@@ -168,10 +171,17 @@ func InitGrpcServer() *ioc.App {
 		// 事务通知服务
 		txNotificationSvcSet,
 
+		// 调度器
+		schedulerSet,
+
+		// 额度控制服务
+		quotaSvcSet,
+
 		// GRPC服务器
 		grpcapi.NewServer,
-		grpcapi.NewConfigServer,
 		ioc.InitGrpc,
+		ioc.InitTasks,
+		ioc.Crons,
 		wire.Struct(new(ioc.App), "*"),
 	)
 

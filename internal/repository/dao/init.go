@@ -12,5 +12,6 @@ func InitTables(db *egorm.Component) error {
 		&ChannelTemplate{},
 		&ChannelTemplateVersion{},
 		&ChannelTemplateProvider{},
+		&Quota{},
 	)
 }

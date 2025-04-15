@@ -14,9 +14,6 @@ import (
 
 // NotificationRepository 通知仓储接口
 type NotificationRepository interface {
-	// MarkTimeoutSendingAsFailed 将超时的 SENDING 状态的通知都标记为失败
-	MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error)
-
 	// Create 创建单条通知记录，但不创建对应的回调记录
 	Create(ctx context.Context, notification domain.Notification) (domain.Notification, error)
 	// CreateWithCallbackLog 创建单条通知记录，同时创建对应的回调记录
@@ -28,16 +25,12 @@ type NotificationRepository interface {
 
 	// GetByID 根据ID获取通知
 	GetByID(ctx context.Context, id uint64) (domain.Notification, error)
-
 	// BatchGetByIDs 根据ID列表获取通知列表
 	BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]domain.Notification, error)
 
-	// GetByBizID 根据业务ID获取通知列表
-	GetByBizID(ctx context.Context, bizID int64) ([]domain.Notification, error)
-
+	GetByKey(ctx context.Context, bizID int64, key string) (domain.Notification, error)
 	// GetByKeys 根据业务ID和业务内唯一标识获取通知列表
 	GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]domain.Notification, error)
-	GetByKey(ctx context.Context, bizID int64, key string) (domain.Notification, error)
 
 	// CASStatus 更新通知状态
 	CASStatus(ctx context.Context, notification domain.Notification) error
@@ -46,15 +39,11 @@ type NotificationRepository interface {
 	// BatchUpdateStatusSucceededOrFailed 批量更新通知状态为成功或失败
 	BatchUpdateStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error
 
-	// BatchUpdateStatus 批量更新通知状态
-	BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.SendStatus) error
-
-	// ListByStatus 根据状态获取通知列表
-	ListByStatus(ctx context.Context, status domain.SendStatus, limit int) ([]domain.Notification, error)
-
-	// ListByScheduleTime 根据计划发送时间范围获取通知列表
-	ListByScheduleTime(ctx context.Context, startTime, endTime time.Time, limit int) ([]domain.Notification, error)
 	FindReadyNotifications(ctx context.Context, offset int, limit int) ([]domain.Notification, error)
+	MarkSuccess(ctx context.Context, entity domain.Notification) error
+	MarkFailed(ctx context.Context, notification domain.Notification) error
+	// MarkTimeoutSendingAsFailed 将超时的 SENDING 状态的通知都标记为失败
+	MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error)
 }
 
 // notificationRepository 通知仓储实现
@@ -62,35 +51,11 @@ type notificationRepository struct {
 	dao dao.NotificationDAO
 }
 
-func (r *notificationRepository) MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error) {
-	return r.dao.MarkTimeoutSendingAsFailed(ctx, batchSize)
-}
-
 // NewNotificationRepository 创建通知仓储实例
 func NewNotificationRepository(d dao.NotificationDAO) NotificationRepository {
 	return &notificationRepository{
 		dao: d,
 	}
-}
-
-func (r *notificationRepository) FindReadyNotifications(ctx context.Context, offset, limit int) ([]domain.Notification, error) {
-	nos, err := r.dao.FindReadyNotifications(ctx, offset, limit)
-	return slice.Map(nos, func(_ int, src dao.Notification) domain.Notification {
-		return r.toDomain(src)
-	}), err
-}
-
-func (r *notificationRepository) BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]domain.Notification, error) {
-	notificationMap, err := r.dao.BatchGetByIDs(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	domainNotificationMap := make(map[uint64]domain.Notification, len(notificationMap))
-	for id := range notificationMap {
-		notification := notificationMap[id]
-		domainNotificationMap[id] = r.toDomain(notification)
-	}
-	return domainNotificationMap, nil
 }
 
 // Create 创建单条通知记录，但不创建对应的回调记录
@@ -119,6 +84,32 @@ func (r *notificationRepository) toEntity(notification domain.Notification) dao.
 		ScheduledSTime:    notification.ScheduledSTime.UnixMilli(),
 		ScheduledETime:    notification.ScheduledETime.UnixMilli(),
 		Version:           notification.Version,
+	}
+}
+
+// toDomain 将DAO实体转换为领域对象
+func (r *notificationRepository) toDomain(n dao.Notification) domain.Notification {
+	var templateParams map[string]string
+	_ = json.Unmarshal([]byte(n.TemplateParams), &templateParams)
+
+	var receivers []string
+	_ = json.Unmarshal([]byte(n.Receivers), &receivers)
+
+	return domain.Notification{
+		ID:        n.ID,
+		BizID:     n.BizID,
+		Key:       n.Key,
+		Receivers: receivers,
+		Channel:   domain.Channel(n.Channel),
+		Template: domain.Template{
+			ID:        n.TemplateID,
+			VersionID: n.TemplateVersionID,
+			Params:    templateParams,
+		},
+		Status:         domain.SendStatus(n.Status),
+		ScheduledSTime: time.UnixMilli(n.ScheduledSTime),
+		ScheduledETime: time.UnixMilli(n.ScheduledETime),
+		Version:        n.Version,
 	}
 }
 
@@ -179,44 +170,17 @@ func (r *notificationRepository) GetByID(ctx context.Context, id uint64) (domain
 	return r.toDomain(n), nil
 }
 
-// toDomain 将DAO实体转换为领域对象
-func (r *notificationRepository) toDomain(n dao.Notification) domain.Notification {
-	var templateParams map[string]string
-	_ = json.Unmarshal([]byte(n.TemplateParams), &templateParams)
-
-	var receivers []string
-	_ = json.Unmarshal([]byte(n.Receivers), &receivers)
-
-	return domain.Notification{
-		ID:        n.ID,
-		BizID:     n.BizID,
-		Key:       n.Key,
-		Receivers: receivers,
-		Channel:   domain.Channel(n.Channel),
-		Template: domain.Template{
-			ID:        n.TemplateID,
-			VersionID: n.TemplateVersionID,
-			Params:    templateParams,
-		},
-		Status:         domain.SendStatus(n.Status),
-		ScheduledSTime: time.UnixMilli(n.ScheduledSTime),
-		ScheduledETime: time.UnixMilli(n.ScheduledETime),
-		Version:        n.Version,
-	}
-}
-
-// GetByBizID 根据业务ID获取通知列表
-func (r *notificationRepository) GetByBizID(ctx context.Context, bizID int64) ([]domain.Notification, error) {
-	ns, err := r.dao.GetByBizID(ctx, bizID)
+func (r *notificationRepository) BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]domain.Notification, error) {
+	notificationMap, err := r.dao.BatchGetByIDs(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
-
-	result := make([]domain.Notification, len(ns))
-	for i := range ns {
-		result[i] = r.toDomain(ns[i])
+	domainNotificationMap := make(map[uint64]domain.Notification, len(notificationMap))
+	for id := range notificationMap {
+		notification := notificationMap[id]
+		domainNotificationMap[id] = r.toDomain(notification)
 	}
-	return result, nil
+	return domainNotificationMap, nil
 }
 
 func (r *notificationRepository) GetByKey(ctx context.Context, bizID int64, key string) (domain.Notification, error) {
@@ -263,34 +227,21 @@ func (r *notificationRepository) BatchUpdateStatusSucceededOrFailed(ctx context.
 	return r.dao.BatchUpdateStatusSucceededOrFailed(ctx, successItems, failedItems)
 }
 
-func (r *notificationRepository) BatchUpdateStatus(ctx context.Context, ids []uint64, status domain.SendStatus) error {
-	return r.dao.BatchUpdateStatus(ctx, ids, status.String())
+func (r *notificationRepository) FindReadyNotifications(ctx context.Context, offset, limit int) ([]domain.Notification, error) {
+	nos, err := r.dao.FindReadyNotifications(ctx, offset, limit)
+	return slice.Map(nos, func(_ int, src dao.Notification) domain.Notification {
+		return r.toDomain(src)
+	}), err
 }
 
-// ListByStatus 根据状态获取通知列表
-func (r *notificationRepository) ListByStatus(ctx context.Context, status domain.SendStatus, limit int) ([]domain.Notification, error) {
-	ns, err := r.dao.ListByStatus(ctx, status.String(), limit)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]domain.Notification, len(ns))
-	for i := range ns {
-		result[i] = r.toDomain(ns[i])
-	}
-	return result, nil
+func (r *notificationRepository) MarkSuccess(ctx context.Context, notification domain.Notification) error {
+	return r.dao.MarkSuccess(ctx, r.toEntity(notification))
 }
 
-// ListByScheduleTime 根据计划发送时间范围获取通知列表
-func (r *notificationRepository) ListByScheduleTime(ctx context.Context, startTime, endTime time.Time, limit int) ([]domain.Notification, error) {
-	ns, err := r.dao.ListByScheduleTime(ctx, startTime.Unix(), endTime.Unix(), limit)
-	if err != nil {
-		return nil, err
-	}
+func (r *notificationRepository) MarkFailed(ctx context.Context, notification domain.Notification) error {
+	return r.dao.MarkFailed(ctx, r.toEntity(notification))
+}
 
-	result := make([]domain.Notification, len(ns))
-	for i := range ns {
-		result[i] = r.toDomain(ns[i])
-	}
-	return result, nil
+func (r *notificationRepository) MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error) {
+	return r.dao.MarkTimeoutSendingAsFailed(ctx, batchSize)
 }

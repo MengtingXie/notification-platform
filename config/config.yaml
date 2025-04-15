@@ -31,3 +31,6 @@ trace:
 
 jwt:
   key: "test_key"
+cron:
+  quotaMonthlyReset:
+    spec: "0 0 1 1 * ?"

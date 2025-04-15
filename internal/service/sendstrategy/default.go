@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/gotomicro/ego/core/elog"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/repository"
@@ -14,6 +16,7 @@ import (
 type DefaultSendStrategy struct {
 	repo      repository.NotificationRepository
 	configSvc configsvc.BusinessConfigService
+	logger    *elog.Component
 }
 
 // NewDefaultStrategy 创建延迟发送策略
@@ -21,6 +24,7 @@ func NewDefaultStrategy(repo repository.NotificationRepository, configSvc config
 	return &DefaultSendStrategy{
 		repo:      repo,
 		configSvc: configSvc,
+		logger:    elog.DefaultLogger,
 	}
 }
 
@@ -47,18 +51,12 @@ func (s *DefaultSendStrategy) create(ctx context.Context, notification domain.No
 }
 
 func (s *DefaultSendStrategy) needCreateCallbackLog(ctx context.Context, notification domain.Notification) bool {
-	// 当前是非立刻发送策略，默认都是创建Callback日志
-	if notification.SendStrategyConfig.IsSync {
-		// 如果是同步非立刻，并且有回调的相关配置，则创建Callback日志
-		bizConfig, err := s.configSvc.GetByID(ctx, notification.BizID)
-		if err != nil {
-			return false
-		}
-		if bizConfig.CallbackConfig == nil {
-			return false
-		}
+	bizConfig, err := s.configSvc.GetByID(ctx, notification.BizID)
+	if err != nil {
+		s.logger.Error("查找 biz config 失败", elog.FieldErr(err))
+		return false
 	}
-	return true
+	return bizConfig.CallbackConfig != nil
 }
 
 // BatchSend 批量发送通知，其中每个通知的发送策略必须相同

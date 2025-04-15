@@ -33,6 +33,17 @@ type TxCheckTask struct {
 	clients   *grpc.Clients[clientv1.TransactionCheckServiceClient]
 }
 
+func NewTxCheckTask(repo repository.TxNotificationRepository, configSvc config.BusinessConfigService, lock dlock.Client) *TxCheckTask {
+	return &TxCheckTask{
+		repo:      repo,
+		configSvc: configSvc,
+		clients: grpc.NewClients[clientv1.TransactionCheckServiceClient](func(conn *egrpc.Component) clientv1.TransactionCheckServiceClient {
+			return clientv1.NewTransactionCheckServiceClient(conn)
+		}),
+		lock: lock,
+	}
+}
+
 const (
 	TxCheckTaskKey  = "check_back_job"
 	defaultTimeout  = 5 * time.Second

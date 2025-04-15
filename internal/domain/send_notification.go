@@ -21,7 +21,6 @@ const (
 // SendStrategyConfig 发送策略配置
 type SendStrategyConfig struct {
 	Type          SendStrategyType // 发送策略类型
-	IsSync        bool             // 是否为同步发送
 	Delay         time.Duration    // 延迟发送策略使用
 	ScheduledTime time.Time        // 定时发送策略使用，计划发送时间
 	StartTime     time.Time        // 窗口发送策略使用，开始时间（毫秒）

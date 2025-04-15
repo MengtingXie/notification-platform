@@ -54,15 +54,20 @@ func (d *sender) Send(ctx context.Context, notification domain.Notification) (do
 		NotificationID: notification.ID,
 	}
 
-	_, err1 := d.channel.Send(ctx, notification)
-	if err1 != nil {
+	_, err := d.channel.Send(ctx, notification)
+	if err != nil {
+		d.logger.Error("发送失败 %w", elog.FieldErr(err))
 		resp.Status = domain.SendStatusFailed
+		notification.Status = domain.SendStatusFailed
+		// 如果是 FAILED，你需要把 quota 加回去
+		err = d.repo.MarkFailed(ctx, notification)
 	} else {
 		resp.Status = domain.SendStatusSucceeded
+		notification.Status = domain.SendStatusSucceeded
+		err = d.repo.MarkSuccess(ctx, notification)
 	}
-	notification.Status = resp.Status
+
 	// 更新发送状态
-	err := d.repo.UpdateStatus(ctx, notification)
 	if err != nil {
 		return domain.SendResponse{}, err
 	}
