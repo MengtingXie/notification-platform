@@ -77,6 +77,9 @@ func (c *Cache) SetConfigs(ctx context.Context, configs []domain.BusinessConfig)
 	}
 
 	// 使用管道批量设置，提高性能
+	// 这边是一个性能优化的写法
+	// 在集群模式下，命中听一个节点的 key 会被打包作为一个 pipeline
+	// 要确保你的 Redis 客户端支持自动分组/智能路由
 	pipe := c.rdb.Pipeline()
 
 	for _, cfg := range configs {
