@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -71,18 +72,19 @@ func (h *TracingHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 		err := next(opCtx, cmd)
 
 		// 处理错误
-		if err != nil && err != redis.Nil {
+		if err != nil && !errors.Is(err, redis.Nil) {
 			span.SetStatus(codes.Error, err.Error())
 			span.RecordError(err)
 		} else {
 			span.SetStatus(codes.Ok, "")
 		}
+		const lenResult = 100
 
 		// 添加命令结果（可能需要限制长度或敏感信息）
 		if err == nil {
-			result := fmt.Sprintf("%v", cmd.String())
+			result := cmd.String()
 			// 避免存储过大的结果
-			if len(result) > 100 {
+			if len(result) > lenResult {
 				result = result[:100] + "... (truncated)"
 			}
 			span.SetAttributes(attribute.String("db.result", result))
@@ -129,7 +131,7 @@ func (h *TracingHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.
 		// 处理错误
 		var hasError bool
 		for _, cmd := range cmds {
-			if cmdErr := cmd.Err(); cmdErr != nil && cmdErr != redis.Nil {
+			if cmdErr := cmd.Err(); cmdErr != nil && !errors.Is(cmdErr, redis.Nil) {
 				hasError = true
 				span.RecordError(cmdErr)
 			}

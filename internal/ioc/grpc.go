@@ -1,7 +1,6 @@
 package ioc
 
 import (
-	configv1 "gitee.com/flycash/notification-platform/api/proto/gen/config/v1"
 	notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/notification/v1"
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
 	"gitee.com/flycash/notification-platform/internal/api/grpc/interceptor/jwt"
@@ -15,7 +14,7 @@ import (
 	"github.com/gotomicro/ego/server/egrpc"
 )
 
-func InitGrpc(noserver *grpcapi.NotificationServer, configServer *grpcapi.ConfigServer, etcdClient *eetcd.Component) *egrpc.Component {
+func InitGrpc(noserver *grpcapi.NotificationServer, etcdClient *eetcd.Component) *egrpc.Component {
 	// 注册全局的注册中心
 	type Config struct {
 		Key string `yaml:"key"`
@@ -42,7 +41,6 @@ func InitGrpc(noserver *grpcapi.NotificationServer, configServer *grpcapi.Config
 
 	notificationv1.RegisterNotificationServiceServer(server.Server, noserver)
 	notificationv1.RegisterNotificationQueryServiceServer(server.Server, noserver)
-	configv1.RegisterBusinessConfigServiceServer(server.Server, configServer)
 
 	return server
 }

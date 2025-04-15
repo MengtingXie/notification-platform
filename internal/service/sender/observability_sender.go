@@ -64,7 +64,7 @@ func (o *ObservabilitySender) BatchSend(ctx context.Context, notifications []dom
 	if len(notifications) > 0 {
 		span.SetAttributes(
 			attribute.String("notification.bizId", strconv.FormatInt(notifications[0].BizID, 10)),
-			attribute.String("notification.keys", strings.Join(slice.Map(notifications, func(idx int, src domain.Notification) string {
+			attribute.String("notification.keys", strings.Join(slice.Map(notifications, func(_ int, src domain.Notification) string {
 				return src.Key
 			}), ",")),
 		)

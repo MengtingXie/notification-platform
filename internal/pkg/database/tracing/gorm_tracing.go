@@ -2,6 +2,7 @@ package tracing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -39,7 +40,6 @@ func (p *GormTracingPlugin) Name() string {
 
 // Initialize 初始化插件，注册GORM回调
 func (p *GormTracingPlugin) Initialize(db *gorm.DB) error {
-	// 为各种GORM操作注册回调
 	// 查询操作
 	if err := db.Callback().Query().Before("gorm:query").Register("tracing:before_query", p.beforeQuery); err != nil {
 		return err
@@ -85,12 +85,10 @@ func (p *GormTracingPlugin) Initialize(db *gorm.DB) error {
 
 // 辅助函数：从GORM DB中提取上下文
 func extractContext(db *gorm.DB) context.Context {
-	ctx, ok := db.Statement.Context.(context.Context)
-	if !ok || ctx == nil {
-		// 如果上下文不存在或无效，返回一个空的上下文
+	if db.Statement == nil {
 		return context.Background()
 	}
-	return ctx
+	return db.Statement.Context
 }
 
 // 辅助函数：设置span的通用属性
@@ -162,7 +160,7 @@ func (p *GormTracingPlugin) afterQuery(db *gorm.DB) {
 		setSpanAttributes(span, db)
 
 		// 记录错误（如果有）
-		if db.Error != nil && db.Error != gorm.ErrRecordNotFound {
+		if db.Error != nil && !errors.Is(db.Error, gorm.ErrRecordNotFound) {
 			span.SetStatus(codes.Error, db.Error.Error())
 		} else {
 			span.SetStatus(codes.Ok, "")
