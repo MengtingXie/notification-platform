@@ -12,9 +12,6 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
 	"gitee.com/flycash/notification-platform/internal/test/ioc"
-	"github.com/meoying/dlock-go"
-	redis2 "github.com/meoying/dlock-go/redis"
-	"github.com/redis/go-redis/v9"
 )
 
 // Injectors from wire.go:
@@ -25,10 +22,10 @@ func InitTxNotificationService(configSvc config.BusinessConfigService) *App {
 	txNotificationRepository := repository.NewTxNotificationRepository(txNotificationDAO)
 	notificationDAO := dao.NewNotificationDAO(db)
 	notificationRepository := repository.NewNotificationRepository(notificationDAO)
-	cmdable := ioc.InitRedis()
-	client := initRedisClient(cmdable)
-	txNotificationService := notification.NewTxNotificationService(txNotificationRepository, configSvc, notificationRepository, client)
-	txCheckTask := notification.NewTask(txNotificationRepository, configSvc, client)
+	client := ioc.InitRedisClient()
+	dlockClient := ioc.InitDistributedLock(client)
+	txNotificationService := notification.NewTxNotificationService(txNotificationRepository, configSvc, notificationRepository, dlockClient)
+	txCheckTask := notification.NewTask(txNotificationRepository, configSvc, dlockClient)
 	app := &App{
 		Svc:  txNotificationService,
 		Task: txCheckTask,
@@ -41,8 +38,4 @@ func InitTxNotificationService(configSvc config.BusinessConfigService) *App {
 type App struct {
 	Svc  notification.TxNotificationService
 	Task *notification.TxCheckTask
-}
-
-func initRedisClient(rdb redis.Cmdable) dlock.Client {
-	return redis2.NewClient(rdb)
 }
