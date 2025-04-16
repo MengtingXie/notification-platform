@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -53,6 +54,7 @@ func (s *NotificationServer) SendNotification(ctx context.Context, req *notifica
 		response.Status = notificationv1.SendStatus_FAILED
 		return response, nil
 	}
+	log.Printf("got jwt, bizID: %d\n", bizID)
 
 	// 构建领域对象
 	notification, err := s.buildNotification(req.Notification, bizID)

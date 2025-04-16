@@ -28,6 +28,8 @@ type ChannelTemplateRepository interface {
 	UpdateTemplate(ctx context.Context, template domain.ChannelTemplate) error
 	// SetActiveVersion 设置激活版本
 	SetActiveVersion(ctx context.Context, templateID, versionID int64) error
+	// GetTemplateByID 根据ID获取特定模板
+	GetTemplateByID(ctx context.Context, templateID int64) (domain.ChannelTemplate, error)
 
 	// 模版版本
 
@@ -42,6 +44,8 @@ type ChannelTemplateRepository interface {
 	BatchCreateTemplateProviders(ctx context.Context, providers []domain.ChannelTemplateProvider) ([]domain.ChannelTemplateProvider, error)
 	// GetApprovedProvidersByTemplateIDAndVersionID 根据模版ID和版本ID获取已通过审核的供应商记录
 	GetApprovedProvidersByTemplateIDAndVersionID(ctx context.Context, templateID, versionID int64) ([]domain.ChannelTemplateProvider, error)
+	// GetProviderByNameAndChannel 根据名称和渠道获取已通过审核的供应商
+	GetProviderByNameAndChannel(ctx context.Context, templateID, versionID int64, providerName string, channel domain.Channel) ([]domain.ChannelTemplateProvider, error)
 }
 
 // channelTemplateRepository 仓储实现
@@ -306,4 +310,24 @@ func (r *channelTemplateRepository) GetApprovedProvidersByTemplateIDAndVersionID
 
 func (r *channelTemplateRepository) SetActiveVersion(ctx context.Context, templateID, versionID int64) error {
 	return r.dao.SetActiveVersion(ctx, templateID, versionID)
+}
+
+func (r *channelTemplateRepository) GetTemplateByID(ctx context.Context, templateID int64) (domain.ChannelTemplate, error) {
+	template, err := r.dao.GetTemplateByID(ctx, templateID)
+	if err != nil {
+		return domain.ChannelTemplate{}, err
+	}
+	return r.convertToTemplateDomain(template), nil
+}
+
+func (r *channelTemplateRepository) GetProviderByNameAndChannel(ctx context.Context, templateID, versionID int64, providerName string, channel domain.Channel) ([]domain.ChannelTemplateProvider, error) {
+	providers, err := r.dao.GetProviderByNameAndChannel(ctx, templateID, versionID, providerName, channel.String())
+	if err != nil {
+		return nil, err
+	}
+	results := make([]domain.ChannelTemplateProvider, len(providers))
+	for i := range providers {
+		results[i] = r.convertToProviderDomain(providers[i])
+	}
+	return results, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/errs"
@@ -27,7 +28,7 @@ type ChannelTemplateService interface {
 	// GetTemplates 查找模版
 	GetTemplates(ctx context.Context, ownerID int64, ownerType domain.OwnerType) ([]domain.ChannelTemplate, error)
 	// GetTemplate 获取模版
-	GetTemplate(ctx context.Context, templateID, versionID int64, providerName string, channel domain.Channel) (domain.ChannelTemplate, error)
+	GetTemplate(ctx context.Context, templateID int64, providerName string, channel domain.Channel) (domain.ChannelTemplate, error)
 	// GetTemplateByID 根据模版ID获取模版
 	GetTemplateByID(ctx context.Context, templateID int64) (domain.ChannelTemplate, error)
 	// CreateTemplate 创建模板
@@ -91,9 +92,44 @@ func (t *templateService) GetTemplates(ctx context.Context, ownerID int64, owner
 	return templates, nil
 }
 
-func (t *templateService) GetTemplate(ctx context.Context, templateID, versionID int64, providerName string, channel domain.Channel) (domain.ChannelTemplate, error) {
-	// TODO implement me
-	panic("implement me" + fmt.Sprintf("%v %v, %v, %v, %v", ctx, templateID, versionID, providerName, channel))
+// GetTemplate 获取特定模板及其版本和供应商信息
+func (t *templateService) GetTemplate(ctx context.Context, templateID int64, providerName string, channel domain.Channel) (domain.ChannelTemplate, error) {
+	log.Printf("GetTemplate ===> templateID = %d, providerName = %s, channel = %s\n", templateID, providerName, channel)
+	// 1. 获取模板基本信息
+	template, err := t.repo.GetTemplateByID(ctx, templateID)
+	if err != nil {
+		return domain.ChannelTemplate{}, err
+	}
+
+	if template.ID == 0 {
+		return domain.ChannelTemplate{}, fmt.Errorf("%w: templateID=%d", repository.ErrTemplateNotFound, templateID)
+	}
+
+	// 2. 获取指定的版本信息
+	version, err := t.repo.GetTemplateVersionByID(ctx, template.ActiveVersionID)
+	if err != nil {
+		return domain.ChannelTemplate{}, err
+	}
+
+	if version.AuditStatus != domain.AuditStatusApproved {
+		return domain.ChannelTemplate{}, fmt.Errorf("%w: versionID=%d", repository.ErrTemplateVersionNotApproved, version.ID)
+	}
+
+	// 3. 获取指定供应商信息
+	providers, err := t.repo.GetProviderByNameAndChannel(ctx, templateID, version.ID, providerName, channel)
+	if err != nil {
+		return domain.ChannelTemplate{}, err
+	}
+
+	if len(providers) == 0 {
+		return domain.ChannelTemplate{}, fmt.Errorf("没有找到符合条件的供应商: providerName=%s, channel=%s", providerName, channel)
+	}
+
+	// 4. 组装完整模板
+	version.Providers = providers
+	template.Versions = []domain.ChannelTemplateVersion{version}
+
+	return template, nil
 }
 
 func (t *templateService) GetTemplateByID(ctx context.Context, templateID int64) (domain.ChannelTemplate, error) {

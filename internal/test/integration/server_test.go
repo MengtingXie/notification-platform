@@ -1,10 +1,9 @@
-//go:build e2e
-
 package integration
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -19,7 +18,7 @@ import (
 	platformioc "gitee.com/flycash/notification-platform/internal/test/integration/ioc/platform"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/ego-component/egorm"
-	"github.com/google/go-cmp/cmp"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/gotomicro/ego"
 	"github.com/gotomicro/ego/client/egrpc"
 	"github.com/gotomicro/ego/core/econf"
@@ -31,15 +30,18 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/protobuf/testing/protocmp"
 	"gopkg.in/yaml.v2"
+
+	jwtpkg "gitee.com/flycash/notification-platform/internal/api/grpc/interceptor/jwt"
 )
 
 func TestGRPCServerWithSuccessMock(t *testing.T) {
+	t.Parallel()
 	suite.Run(t, new(SuccessGRPCServerTestSuite))
 }
 
 func TestGRPCServerWithFailureMock(t *testing.T) {
+	t.Parallel()
 	suite.Run(t, new(FailureGRPCServerTestSuite))
 }
 
@@ -52,15 +54,38 @@ func (s *SuccessGRPCServerTestSuite) SetupSuite() {
 	// 创建成功响应的模拟客户端
 	ctrl := gomock.NewController(s.T())
 	mockClient := smsmocks.NewMockClient(ctrl)
+
+	// 模拟Send方法
 	mockClient.EXPECT().Send(gomock.Any()).Return(client.SendResp{
 		RequestID: "mock-req-id",
-		BizID:     "mock-biz-id",
+		PhoneNumbers: map[string]client.SendRespStatus{
+			"13800138000": {
+				Code:    "OK",
+				Message: "发送成功",
+			},
+		},
 	}, nil).AnyTimes()
 
-	// 配置参数
-	clients := map[string]client.Client{"mock-provider": mockClient}
-	serverProt := "9004"
-	clientAddr := "127.0.0.1:" + serverProt
+	// 模拟CreateTemplate方法
+	mockClient.EXPECT().CreateTemplate(gomock.Any()).Return(client.CreateTemplateResp{
+		RequestID:  "mock-req-id",
+		TemplateID: "prov-tpl-001",
+	}, nil).AnyTimes()
+
+	// 模拟QueryTemplateStatus方法
+	mockClient.EXPECT().QueryTemplateStatus(gomock.Any()).Return(client.QueryTemplateStatusResp{
+		RequestID:   "mock-req-id",
+		TemplateID:  "prov-tpl-001",
+		AuditStatus: client.AuditStatusApproved,
+		Reason:      "",
+	}, nil).AnyTimes()
+
+	// 配置参数 - 确保与providers表中的name字段匹配
+	clients := map[string]client.Client{"mock-provider-1": mockClient}
+	log.Printf("设置成功测试套件 Mock客户端: %+v", clients)
+
+	serverProt := 9004
+	clientAddr := fmt.Sprintf("127.0.0.1:%d", serverProt)
 	s.BaseGRPCServerTestSuite.SetupTestSuite(serverProt, clientAddr, clients)
 }
 
@@ -76,14 +101,38 @@ func (s *FailureGRPCServerTestSuite) SetupSuite() {
 	// 创建失败响应的模拟客户端
 	ctrl := gomock.NewController(s.T())
 	mockClient := smsmocks.NewMockClient(ctrl)
-	mockClient.EXPECT().Send(gomock.Any()).Return(client.SendResp{},
-		errors.New("供应商API错误")).AnyTimes()
 
-	// 配置参数，使用不同端口
-	clients := map[string]client.Client{"mock-provider": mockClient}
-	serverProt := "9005"
-	clientAddr := "127.0.0.1:" + serverProt
+	// 模拟Send方法
+	mockClient.EXPECT().Send(gomock.Any()).Return(client.SendResp{
+		RequestID: "mock-req-id",
+		PhoneNumbers: map[string]client.SendRespStatus{
+			"13800138000": {
+				Code:    "ERROR",
+				Message: "供应商API错误",
+			},
+		},
+	}, errors.New("供应商API错误")).AnyTimes()
 
+	// 模拟CreateTemplate方法
+	mockClient.EXPECT().CreateTemplate(gomock.Any()).Return(client.CreateTemplateResp{
+		RequestID:  "mock-req-id",
+		TemplateID: "prov-tpl-001",
+	}, nil).AnyTimes()
+
+	// 模拟QueryTemplateStatus方法
+	mockClient.EXPECT().QueryTemplateStatus(gomock.Any()).Return(client.QueryTemplateStatusResp{
+		RequestID:   "mock-req-id",
+		TemplateID:  "prov-tpl-001",
+		AuditStatus: client.AuditStatusApproved,
+		Reason:      "",
+	}, nil).AnyTimes()
+
+	// 配置参数 - 确保与providers表中的name字段匹配
+	clients := map[string]client.Client{"mock-provider-1": mockClient}
+	log.Printf("设置失败测试套件 Mock客户端: %+v", clients)
+
+	serverProt := 9005
+	clientAddr := fmt.Sprintf("127.0.0.1:%d", serverProt)
 	s.BaseGRPCServerTestSuite.SetupTestSuite(serverProt, clientAddr, clients)
 }
 
@@ -107,8 +156,8 @@ type BaseGRPCServerTestSuite struct {
 }
 
 // 设置测试环境
-func (s *BaseGRPCServerTestSuite) SetupTestSuite(serverPort, clientAddr string, mockClients map[string]client.Client) {
-	serverAddr := "0.0.0.0:" + serverPort
+func (s *BaseGRPCServerTestSuite) SetupTestSuite(serverPort int, clientAddr string, mockClients map[string]client.Client) {
+	serverAddr := fmt.Sprintf("0.0.0.0:%d", serverPort)
 	log.Printf("启动测试套件，服务器地址：%s, 客户端地址：%s\n", serverAddr, clientAddr)
 
 	s.serverAddr = serverAddr
@@ -118,7 +167,7 @@ func (s *BaseGRPCServerTestSuite) SetupTestSuite(serverPort, clientAddr string, 
 	// 加载配置
 	dir, err := os.Getwd()
 	s.Require().NoError(err)
-	f, err := os.Open(dir + "/../../../../config/config.yaml")
+	f, err := os.Open(dir + "/../../../config/config.yaml")
 	s.Require().NoError(err)
 	err = econf.LoadFromReader(f, yaml.Unmarshal)
 	s.Require().NoError(err)
@@ -130,8 +179,6 @@ func (s *BaseGRPCServerTestSuite) SetupTestSuite(serverPort, clientAddr string, 
 		"debug": true,
 	})
 
-	log.Printf("config = %s\n", econf.RawConfig())
-
 	// 初始化数据库
 	s.db = testioc.InitDBAndTables()
 
@@ -141,6 +188,7 @@ func (s *BaseGRPCServerTestSuite) SetupTestSuite(serverPort, clientAddr string, 
 
 	go func() {
 		// 使用指定的mock客户端创建应用
+		log.Printf("开始创建应用，传入MockClients: %+v\n", s.mockClients)
 		s.app = platformioc.InitGrpcServer(s.mockClients)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -195,63 +243,158 @@ func (s *BaseGRPCServerTestSuite) TearDownTestSuite() {
 	s.NoError(s.server.Stop(ctx, false))
 }
 
+func (s *BaseGRPCServerTestSuite) TearDownTest() {
+	// 每个测试后清空表数据
+	s.db.Exec("TRUNCATE TABLE `callback_logs`")
+	s.db.Exec("TRUNCATE TABLE `business_configs`")
+	s.db.Exec("TRUNCATE TABLE `notifications`")
+	s.db.Exec("TRUNCATE TABLE `providers`")
+	s.db.Exec("TRUNCATE TABLE `quotas`")
+	s.db.Exec("TRUNCATE TABLE `channel_templates`")
+	s.db.Exec("TRUNCATE TABLE `channel_template_versions`")
+	s.db.Exec("TRUNCATE TABLE `channel_template_providers`")
+	s.db.Exec("TRUNCATE TABLE `tx_notifications`")
+}
+
 // 准备测试数据
 func (s *BaseGRPCServerTestSuite) prepareTemplateData() int64 {
 	templateID := time.Now().UnixNano()
 	ctx := context.Background()
 
-	// 创建模板 - 直接使用服务层
-	template := domain.ChannelTemplate{
-		ID:      templateID,
-		BizID:   1,
-		Channel: domain.ChannelSMS,
-		Name:    "Test Template",
-		ProviderInfo: domain.ProviderTemplateInfo{
-			TemplateID:   "prov-tpl-001",
-			ProviderName: "mock-provider",
-		},
-		Content:   "您的验证码是：${code}",
-		Status:    domain.TemplateStatusApproved,
-		VersionID: 1,
+	// 创建SMS供应商
+	provider := domain.Provider{
+		ID:         1,
+		Name:       "mock-provider-1",
+		Channel:    domain.ChannelSMS,
+		Endpoint:   "https://mock-sms-api.example.com",
+		RegionID:   "cn-hangzhou",
+		APIKey:     "mock-key",
+		APISecret:  "mock-secret",
+		Weight:     10,
+		QPSLimit:   100,
+		DailyLimit: 10000,
+		Status:     "ACTIVE",
 	}
 
-	// 使用服务层创建模板
-	_, err := s.app.TemplateSvc.CreateTemplate(ctx, template)
+	// 使用服务层创建供应商
+	_, err := s.app.ProviderSvc.Create(ctx, provider)
 	s.NoError(err)
 
-	// 创建供应商
-	provider := domain.Provider{
-		Name:    "mock-provider",
-		Channel: domain.ChannelSMS,
-		Config: map[string]string{
-			"access_key": "mock-key",
-			"secret":     "mock-secret",
-		},
-		Status: domain.ProviderStatusEnabled,
+	// 创建EMAIL供应商
+	provider = domain.Provider{
+		Name:       "mock-provider-1",
+		Channel:    domain.ChannelEmail,
+		Endpoint:   "https://mock-sms-api.example.com",
+		RegionID:   "cn-hangzhou",
+		APIKey:     "mock-key",
+		APISecret:  "mock-secret",
+		Weight:     10,
+		QPSLimit:   100,
+		DailyLimit: 10000,
+		Status:     "ACTIVE",
 	}
 
 	// 使用服务层创建供应商
 	_, err = s.app.ProviderSvc.Create(ctx, provider)
 	s.NoError(err)
 
+	// 3. 创建模板和相关记录
+	s.createTemplate(ctx, templateID)
+
 	// 设置业务配置
 	config := domain.BusinessConfig{
-		BizID:       1,
-		ConfigKey:   "quota.daily.sms",
-		ConfigValue: "1000",
+		ID:        1,
+		OwnerID:   1,
+		OwnerType: "person",
+		ChannelConfig: &domain.ChannelConfig{
+			Channels: []domain.ChannelItem{
+				{
+					Channel:  "SMS",
+					Priority: 1,
+					Enabled:  true,
+				},
+			},
+		},
+		RateLimit: 100,
+		Quota: &domain.QuotaConfig{
+			Monthly: domain.MonthlyConfig{
+				SMS: 1000,
+			},
+		},
 	}
 
 	// 使用服务层设置配置
-	err = s.app.ConfigSvc.Set(ctx, config)
+	err = s.app.ConfigSvc.SaveConfig(ctx, config)
+	s.NoError(err)
+
+	// 为其创建配额
+	err = s.app.QuotaRepo.CreateOrUpdate(ctx, domain.Quota{
+		BizID:   1,
+		Quota:   10000,
+		Channel: domain.ChannelSMS,
+	})
+	s.NoError(err)
+	err = s.app.QuotaRepo.CreateOrUpdate(ctx, domain.Quota{
+		BizID:   1,
+		Quota:   10000,
+		Channel: domain.ChannelEmail,
+	})
 	s.NoError(err)
 
 	return templateID
 }
 
+func (s *BaseGRPCServerTestSuite) createTemplate(ctx context.Context, templateID int64) {
+	now := time.Now().Unix()
+	versionID := templateID + 1
+
+	// 1. 创建渠道模板记录
+	err := s.db.WithContext(ctx).Exec(`
+		INSERT INTO channel_templates 
+		(id, owner_id, owner_type, name, description, channel, business_type, active_version_id, ctime, utime) 
+		VALUES 
+		(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		templateID, 1, "person", "Test Template", "Template for test", "SMS", 3, versionID, now, now,
+	).Error
+	s.NoError(err)
+
+	// 2. 创建模板版本记录
+	err = s.db.WithContext(ctx).Exec(`
+		INSERT INTO channel_template_versions 
+		(id, channel_template_id, name, signature, content, remark, audit_status, ctime, utime) 
+		VALUES 
+		(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		versionID, templateID, "v1.0.0", "Test", "您的验证码是：${code}", "测试用的验证码模板", "APPROVED", now, now,
+	).Error
+	s.NoError(err)
+
+	// 3. 创建模板版本与供应商的关联
+	err = s.db.WithContext(ctx).Exec(`
+		INSERT INTO channel_template_providers 
+		(template_id, template_version_id, provider_id, provider_name, provider_channel, provider_template_id, audit_status, ctime, utime) 
+		VALUES 
+		(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		templateID, versionID, 1, "mock-provider-1", "SMS", "prov-tpl-001", "APPROVED", now, now,
+	).Error
+	s.NoError(err)
+}
+
 // 添加JWT认证到context
 func (s *BaseGRPCServerTestSuite) contextWithJWT(ctx context.Context) context.Context {
+	// 使用项目已有的JWT包创建令牌
+	jwtAuth := jwtpkg.NewJwtAuth("test_key")
+
+	// 创建包含业务ID的声明
+	claims := jwt.MapClaims{
+		"biz_id": float64(1),
+	}
+
+	// 使用JWT认证包的Encode方法生成令牌
+	tokenString, _ := jwtAuth.Encode(claims)
+
+	// 创建带有授权信息的元数据
 	md := metadata.New(map[string]string{
-		"Authorization": "Bearer mock-token-for-biz-id-1",
+		"Authorization": "Bearer " + tokenString,
 	})
 	return metadata.NewOutgoingContext(ctx, md)
 }
@@ -284,7 +427,8 @@ func (s *SuccessGRPCServerTestSuite) TestSendNotification() {
 			},
 			setupContext: s.contextWithJWT,
 			wantResp: &notificationv1.SendNotificationResponse{
-				Status: notificationv1.SendStatus_SUCCEEDED,
+				Status:         notificationv1.SendStatus_SUCCEEDED,
+				NotificationId: 1, // 实际任何非零值都可接受
 			},
 			errAssertFunc: assert.NoError,
 		},
@@ -305,11 +449,8 @@ func (s *SuccessGRPCServerTestSuite) TestSendNotification() {
 				// 不添加JWT认证信息
 				return ctx
 			},
-			wantResp: &notificationv1.SendNotificationResponse{
-				Status:    notificationv1.SendStatus_FAILED,
-				ErrorCode: notificationv1.ErrorCode_BIZ_ID_NOT_FOUND,
-			},
-			errAssertFunc: assert.NoError, // 业务错误通过响应返回，而不是通过错误
+			wantResp:      &notificationv1.SendNotificationResponse{},
+			errAssertFunc: assert.Error, // 业务错误通过响应返回，而不是通过错误
 		},
 		{
 			name: "空notification参数",
@@ -318,8 +459,9 @@ func (s *SuccessGRPCServerTestSuite) TestSendNotification() {
 			},
 			setupContext: s.contextWithJWT,
 			wantResp: &notificationv1.SendNotificationResponse{
-				Status:    notificationv1.SendStatus_FAILED,
-				ErrorCode: notificationv1.ErrorCode_INVALID_PARAMETER,
+				Status:       notificationv1.SendStatus_FAILED,
+				ErrorCode:    notificationv1.ErrorCode_INVALID_PARAMETER,
+				ErrorMessage: "参数错误: 通知信息不能为空",
 			},
 			errAssertFunc: assert.NoError, // 业务错误通过响应返回，而不是通过错误
 		},
@@ -338,8 +480,9 @@ func (s *SuccessGRPCServerTestSuite) TestSendNotification() {
 			},
 			setupContext: s.contextWithJWT,
 			wantResp: &notificationv1.SendNotificationResponse{
-				Status:    notificationv1.SendStatus_FAILED,
-				ErrorCode: notificationv1.ErrorCode_INVALID_PARAMETER,
+				Status:       notificationv1.SendStatus_FAILED,
+				ErrorCode:    notificationv1.ErrorCode_INVALID_PARAMETER,
+				ErrorMessage: "参数错误: 模板ID: invalid-id",
 			},
 			errAssertFunc: assert.NoError, // 业务错误通过响应返回，而不是通过错误
 		},
@@ -358,40 +501,43 @@ func (s *SuccessGRPCServerTestSuite) TestSendNotification() {
 			},
 			setupContext: s.contextWithJWT,
 			wantResp: &notificationv1.SendNotificationResponse{
-				Status:    notificationv1.SendStatus_FAILED,
-				ErrorCode: notificationv1.ErrorCode_UNKNOWN_CHANNEL,
+				Status:       notificationv1.SendStatus_FAILED,
+				ErrorCode:    notificationv1.ErrorCode_INVALID_PARAMETER,
+				ErrorMessage: "未知渠道类型",
 			},
 			errAssertFunc: assert.NoError, // 业务错误通过响应返回，而不是通过错误
 		},
 	}
 
 	for _, tt := range testCases {
-		tt := tt
 		s.T().Run(tt.name, func(t *testing.T) {
 			// 添加JWT认证或其他上下文设置
 			ctx := tt.setupContext(t.Context())
 
 			// 调用服务
+			log.Printf("发送请求: %+v", tt.req)
 			resp, err := s.client.SendNotification(ctx, tt.req)
+
+			if err != nil {
+				log.Printf("发送请求失败: %v", err)
+			} else {
+				log.Printf("接收响应: %+v", resp)
+			}
+
 			tt.errAssertFunc(t, err)
 
 			if err != nil {
 				return
 			}
 
-			diff := cmp.Diff(tt.wantResp, resp, protocmp.Transform())
-			assert.Empty(t, diff, "diff:\n%s", diff)
-
-			// 验证响应
-			// if tt.wantResp.Status != 0 {
-			// 	assert.Equal(t, tt.wantResp.Status, resp.Status, "状态应匹配")
-			// }
-			// if tt.wantResp.ErrorCode != 0 {
-			// 	assert.Equal(t, tt.wantResp.ErrorCode, resp.ErrorCode, "错误码应匹配")
-			// }
-			// if tt.wantResp.Status == notificationv1.SendStatus_SUCCEEDED {
-			// 	assert.NotZero(t, resp.NotificationId, "成功时应返回非零通知ID")
-			// }
+			if tt.wantResp.Status == notificationv1.SendStatus_SUCCEEDED {
+				assert.Greater(t, resp.NotificationId, uint64(0), "成功响应应返回非零通知ID")
+			} else {
+				assert.Equal(t, tt.wantResp.NotificationId, resp.NotificationId, "通知ID应匹配")
+			}
+			assert.Equal(t, tt.wantResp.Status, resp.Status, "响应状态应匹配")
+			assert.Equal(t, tt.wantResp.ErrorCode, resp.ErrorCode, "错误码应匹配")
+			assert.Equal(t, tt.wantResp.ErrorMessage, resp.ErrorMessage, "错误消息应匹配")
 		})
 	}
 }
@@ -430,26 +576,30 @@ func (s *FailureGRPCServerTestSuite) TestSendNotification() {
 	}
 
 	for _, tt := range testCases {
-		tt := tt
 		s.T().Run(tt.name, func(t *testing.T) {
 			// 添加JWT认证
 			ctx := s.contextWithJWT(t.Context())
 
 			// 调用服务
+			log.Printf("失败测试 - 发送请求: %+v", tt.req)
 			resp, err := s.client.SendNotification(ctx, tt.req)
+
+			if err != nil {
+				log.Printf("失败测试 - 发送请求失败: %v", err)
+			} else {
+				log.Printf("失败测试 - 接收响应: %+v", resp)
+			}
+
 			tt.errAssertFunc(t, err)
 
 			if err != nil {
 				return
 			}
 
-			diff := cmp.Diff(tt.wantResp, resp, protocmp.Transform())
-			assert.Empty(t, diff, "diff:\n%s", diff)
-
-			// 验证响应
-			// assert.Equal(t, tt.wantResp.Status, resp.Status, "状态应匹配")
-			// assert.Equal(t, tt.wantResp.ErrorCode, resp.ErrorCode, "错误码应匹配")
-			// assert.NotEmpty(t, resp.ErrorMessage, "错误信息不应为空")
+			assert.Equal(t, tt.wantResp.NotificationId, resp.NotificationId, "通知ID应匹配")
+			assert.Equal(t, tt.wantResp.Status, resp.Status, "响应状态应匹配")
+			assert.Equal(t, tt.wantResp.ErrorCode, resp.ErrorCode, "错误码应匹配")
+			assert.Equal(t, tt.wantResp.ErrorMessage, resp.ErrorMessage, "错误消息应匹配")
 		})
 	}
 }

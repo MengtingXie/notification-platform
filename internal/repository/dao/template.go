@@ -105,6 +105,8 @@ type ChannelTemplateDAO interface {
 	GetProvidersByVersionIDs(ctx context.Context, versionIDs []int64) ([]ChannelTemplateProvider, error)
 	// GetApprovedProvidersByTemplateIDAndVersionID 根据模版ID和版本ID查找审核通过的供应商
 	GetApprovedProvidersByTemplateIDAndVersionID(ctx context.Context, templateID, versionID int64) ([]ChannelTemplateProvider, error)
+	// GetProviderByNameAndChannel 根据名称和渠道获取已通过审核的供应商
+	GetProviderByNameAndChannel(ctx context.Context, templateID, versionID int64, providerName string, channel string) ([]ChannelTemplateProvider, error)
 }
 
 // channelTemplateDAO DAO层实现
@@ -259,5 +261,14 @@ func (d *channelTemplateDAO) GetApprovedProvidersByTemplateIDAndVersionID(ctx co
 	err := d.db.WithContext(ctx).Model(&ChannelTemplateProvider{}).
 		Where("template_id = ? AND template_version_id = ? AND audit_status = ?",
 			templateID, versionID, "APPROVED").Find(&providers).Error
+	return providers, err
+}
+
+// GetProviderByNameAndChannel 根据名称和渠道获取已通过审核的供应商
+func (d *channelTemplateDAO) GetProviderByNameAndChannel(ctx context.Context, templateID, versionID int64, providerName, channel string) ([]ChannelTemplateProvider, error) {
+	var providers []ChannelTemplateProvider
+	err := d.db.WithContext(ctx).Model(&ChannelTemplateProvider{}).
+		Where("template_id = ? AND template_version_id = ? AND provider_name = ? AND provider_channel = ? AND audit_status = ?",
+			templateID, versionID, providerName, channel, "APPROVED").Find(&providers).Error
 	return providers, err
 }

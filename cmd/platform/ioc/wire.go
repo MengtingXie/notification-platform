@@ -4,9 +4,10 @@ package ioc
 
 import (
 	"context"
+	"time"
+
 	"gitee.com/flycash/notification-platform/internal/service/quota"
 	"gitee.com/flycash/notification-platform/internal/service/scheduler"
-	"time"
 
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -100,7 +101,7 @@ func newChannel(
 	templateSvc templatesvc.ChannelTemplateService,
 ) channel.Channel {
 	return channel.NewDispatcher(map[domain.Channel]channel.Channel{
-		domain.ChannelEmail: channel.NewSMSChannel(newSMSSelectorBuilder(providerSvc, templateSvc)),
+		domain.ChannelSMS: channel.NewSMSChannel(newSMSSelectorBuilder(providerSvc, templateSvc)),
 	})
 }
 

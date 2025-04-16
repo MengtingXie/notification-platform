@@ -33,7 +33,7 @@ func NewSMSProvider(name string, templateSvc manage.ChannelTemplateService, clie
 
 // Send 发送短信
 func (p *smsProvider) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
-	tmpl, err := p.templateSvc.GetTemplate(ctx, notification.Template.ID, notification.Template.VersionID, p.name, domain.ChannelSMS)
+	tmpl, err := p.templateSvc.GetTemplate(ctx, notification.Template.ID, p.name, domain.ChannelSMS)
 	if err != nil {
 		return domain.SendResponse{}, fmt.Errorf("%w: %w", errs.ErrSendNotificationFailed, err)
 	}

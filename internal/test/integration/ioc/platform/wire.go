@@ -99,7 +99,7 @@ func newChannel(
 	clients map[string]client.Client,
 ) channel.Channel {
 	return channel.NewDispatcher(map[domain.Channel]channel.Channel{
-		domain.ChannelEmail: channel.NewSMSChannel(newSMSSelectorBuilder(templateSvc, clients)),
+		domain.ChannelSMS: channel.NewSMSChannel(newSMSSelectorBuilder(templateSvc, clients)),
 	})
 }
 

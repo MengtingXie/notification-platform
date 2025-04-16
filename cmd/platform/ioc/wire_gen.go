@@ -113,7 +113,7 @@ func newChannel(
 	providerSvc manage.Service,
 	templateSvc manage2.ChannelTemplateService,
 ) channel.Channel {
-	return channel.NewDispatcher(map[domain.Channel]channel.Channel{domain.ChannelEmail: channel.NewSMSChannel(newSMSSelectorBuilder(providerSvc, templateSvc))})
+	return channel.NewDispatcher(map[domain.Channel]channel.Channel{domain.ChannelSMS: channel.NewSMSChannel(newSMSSelectorBuilder(providerSvc, templateSvc))})
 }
 
 func newSMSSelectorBuilder(
