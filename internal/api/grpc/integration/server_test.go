@@ -41,7 +41,7 @@ import (
 )
 
 const (
-	batchSizeLimit = 100 // 与server.go中定义的值保持一致
+	batchSizeLimit = 100
 )
 
 func TestGRPCServerWithSuccessMock(t *testing.T) {
@@ -177,7 +177,7 @@ func (s *BaseGRPCServerTestSuite) SetupTestSuite(serverPort int, clientAddr stri
 	// 加载配置
 	dir, err := os.Getwd()
 	s.Require().NoError(err)
-	f, err := os.Open(dir + "/../../../config/config.yaml")
+	f, err := os.Open(dir + "/../../../../config/config.yaml")
 	s.Require().NoError(err)
 	err = econf.LoadFromReader(f, yaml.Unmarshal)
 	s.Require().NoError(err)
@@ -251,6 +251,17 @@ func (s *BaseGRPCServerTestSuite) TearDownTestSuite() {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
 	s.NoError(s.server.Stop(ctx, false))
+
+	// 测试完成后清空表数据
+	s.db.Exec("DELETE TABLE `callback_logs`")
+	s.db.Exec("DELETE TABLE `business_configs`")
+	s.db.Exec("DELETE TABLE `notifications`")
+	s.db.Exec("DELETE TABLE `providers`")
+	s.db.Exec("DELETE TABLE `quotas`")
+	s.db.Exec("DELETE TABLE `channel_templates`")
+	s.db.Exec("DELETE TABLE `channel_template_versions`")
+	s.db.Exec("DELETE TABLE `channel_template_providers`")
+	s.db.Exec("DELETE TABLE `tx_notifications`")
 }
 
 func (s *BaseGRPCServerTestSuite) TearDownTest() {
