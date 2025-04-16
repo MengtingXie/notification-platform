@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/errs"
@@ -44,68 +43,95 @@ func NewServer(notificationSvc notificationsvc.Service,
 
 // SendNotification 处理同步发送通知请求
 func (s *NotificationServer) SendNotification(ctx context.Context, req *notificationv1.SendNotificationRequest) (*notificationv1.SendNotificationResponse, error) {
+	response := &notificationv1.SendNotificationResponse{}
+
 	// 从metadata中解析Authorization JWT Token
 	bizID, err := jwt.GetBizIDFromContext(ctx)
 	if err != nil {
-		return nil, err
+		response.ErrorCode = notificationv1.ErrorCode_BIZ_ID_NOT_FOUND
+		response.ErrorMessage = err.Error()
+		response.Status = notificationv1.SendStatus_FAILED
+		return response, nil
 	}
 
 	// 构建领域对象
 	notification, err := s.buildNotification(req.Notification, bizID)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
+		response.ErrorCode = notificationv1.ErrorCode_INVALID_PARAMETER
+		response.ErrorMessage = err.Error()
+		response.Status = notificationv1.SendStatus_FAILED
+		return response, nil
 	}
 
 	// 调用发送服务
 	result, err := s.sendSvc.SendNotification(ctx, notification)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "发送通知失败: %v", err)
+		if s.isSystemError(err) {
+			return nil, status.Errorf(codes.Internal, "%v", err)
+		} else {
+			response.ErrorCode = s.convertToGRPCErrorCode(err)
+			response.ErrorMessage = err.Error()
+			response.Status = notificationv1.SendStatus_FAILED
+			return response, nil
+		}
 	}
 
-	// 将结果转换为响应
-	return s.buildGRPCSendResponse(result, err)
+	response.NotificationId = result.NotificationID
+	response.Status = s.convertToGRPCSendStatus(result.Status)
+	return response, nil
+}
+
+// isSystemError 判断错误是否为系统错误
+func (s *NotificationServer) isSystemError(err error) bool {
+	return errors.Is(err, errs.ErrDatabaseError) ||
+		errors.Is(err, errs.ErrExternalServiceError) ||
+		errors.Is(err, errs.ErrNotificationDuplicate) ||
+		errors.Is(err, errs.ErrNotificationVersionMismatch)
 }
 
 func (s *NotificationServer) buildNotification(n *notificationv1.Notification, bizID int64) (domain.Notification, error) {
 	if n == nil {
-		return domain.Notification{}, errors.New("通知不能为空")
+		return domain.Notification{}, fmt.Errorf("%w: 通知信息不能为空", errs.ErrInvalidParameter)
 	}
 
-	// 转换TemplateID
 	tid, err := strconv.ParseInt(n.TemplateId, 10, 64)
 	if err != nil {
-		return domain.Notification{}, fmt.Errorf("无效的模板ID: %s", n.TemplateId)
+		return domain.Notification{}, fmt.Errorf("%w: 模板ID: %s", errs.ErrInvalidParameter, n.TemplateId)
 	}
 
-	//receivers := n.Receivers
-	//if n.Receiver != "" {
+	channel, err := s.convertToChannel(n.Channel)
+	if err != nil {
+		return domain.Notification{}, err
+	}
+
+	// receivers := n.Receivers
+	// if n.Receiver != "" {
 	//	receivers = append(receivers, n.Receiver)
-	//}
+	// }
 	receivers := n.FindReceivers()
 	return domain.Notification{
 		BizID:     bizID,
 		Key:       n.Key,
 		Receivers: receivers,
-		Channel:   s.convertToChannel(n.Channel),
+		Channel:   channel,
 		Template: domain.Template{
-			ID:        tid,
-			VersionID: 22,
-			Params:    n.TemplateParams,
+			ID:     tid,
+			Params: n.TemplateParams,
 		},
 		SendStrategyConfig: s.buildSendStrategyConfig(n),
 	}, nil
 }
 
-func (s *NotificationServer) convertToChannel(channel notificationv1.Channel) domain.Channel {
+func (s *NotificationServer) convertToChannel(channel notificationv1.Channel) (domain.Channel, error) {
 	switch channel {
 	case notificationv1.Channel_SMS:
-		return domain.ChannelSMS
+		return domain.ChannelSMS, nil
 	case notificationv1.Channel_EMAIL:
-		return domain.ChannelEmail
+		return domain.ChannelEmail, nil
 	case notificationv1.Channel_IN_APP:
-		return domain.ChannelInApp
+		return domain.ChannelInApp, nil
 	default:
-		return ""
+		return "", errs.ErrUnknownChannel
 	}
 }
 
@@ -166,7 +192,7 @@ func (s *NotificationServer) buildGRPCSendResponse(result domain.SendResponse, e
 	// 如果有错误，提取错误代码和消息
 	if err != nil {
 		response.ErrorMessage = err.Error()
-		response.ErrorCode = s.convertToGRPCErrorCodeAndErrorMessage(err)
+		response.ErrorCode = s.convertToGRPCErrorCode(err)
 
 		// 如果状态不是失败，但有错误，更新状态为失败
 		if response.Status != notificationv1.SendStatus_FAILED {
@@ -195,30 +221,58 @@ func (s *NotificationServer) convertToGRPCSendStatus(status domain.SendStatus) n
 	}
 }
 
-// convertToGRPCErrorCodeAndErrorMessage 将错误映射为gRPC错误代码
-func (s *NotificationServer) convertToGRPCErrorCodeAndErrorMessage(err error) notificationv1.ErrorCode {
-	if err == nil {
-		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
-	}
-	// 根据错误类型进行匹配
+// convertToGRPCErrorCode 将错误映射为gRPC错误代码
+func (s *NotificationServer) convertToGRPCErrorCode(err error) notificationv1.ErrorCode {
+	// 注意：这个函数只处理业务错误，系统错误由isSystemError判断后直接通过gRPC status返回
 	switch {
 	case errors.Is(err, errs.ErrInvalidParameter):
 		return notificationv1.ErrorCode_INVALID_PARAMETER
 
-	case errors.Is(err, errs.ErrNotificationNotFound):
-		// 目前我们没有专门的"NotFound"错误码，所以这里暂时使用通用错误码
-		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
+	case errors.Is(err, errs.ErrTemplateNotFound):
+		return notificationv1.ErrorCode_TEMPLATE_NOT_FOUND
+
+	case errors.Is(err, errs.ErrChannelDisabled):
+		return notificationv1.ErrorCode_CHANNEL_DISABLED
+
+	case errors.Is(err, errs.ErrRateLimited):
+		return notificationv1.ErrorCode_RATE_LIMITED
+
+	case errors.Is(err, errs.ErrBizIDNotFound):
+		return notificationv1.ErrorCode_BIZ_ID_NOT_FOUND
 
 	case errors.Is(err, errs.ErrSendNotificationFailed):
-		// 如果是发送失败错误，需要进一步判断具体原因
-		if strings.Contains(err.Error(), "创建通知失败") {
-			return notificationv1.ErrorCode_CREATE_NOTIFICATION_FAILED
-		}
-		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
+		return notificationv1.ErrorCode_SEND_NOTIFICATION_FAILED
+
+	case errors.Is(err, errs.ErrCreateNotificationFailed):
+		return notificationv1.ErrorCode_CREATE_NOTIFICATION_FAILED
 
 	case errors.Is(err, errs.ErrNotificationNotFound):
-		// 查询失败暂时使用通用错误码
-		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
+		return notificationv1.ErrorCode_NOTIFICATION_NOT_FOUND
+
+	case errors.Is(err, errs.ErrNoAvailableProvider):
+		return notificationv1.ErrorCode_NO_AVAILABLE_PROVIDER
+
+	case errors.Is(err, errs.ErrNoAvailableChannel):
+		return notificationv1.ErrorCode_NO_AVAILABLE_CHANNEL
+
+	case errors.Is(err, errs.ErrConfigNotFound):
+		return notificationv1.ErrorCode_CONFIG_NOT_FOUND
+
+	case errors.Is(err, errs.ErrNoQuotaConfig):
+		return notificationv1.ErrorCode_NO_QUOTA_CONFIG
+
+	case errors.Is(err, errs.ErrNoQuota):
+		return notificationv1.ErrorCode_NO_QUOTA
+
+	case errors.Is(err, errs.ErrQuotaNotFound):
+		return notificationv1.ErrorCode_QUOTA_NOT_FOUND
+
+	case errors.Is(err, errs.ErrProviderNotFound):
+		return notificationv1.ErrorCode_PROVIDER_NOT_FOUND
+
+	case errors.Is(err, errs.ErrUnknownChannel):
+		return notificationv1.ErrorCode_UNKNOWN_CHANNEL
+
 	default:
 		return notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED
 	}
@@ -226,35 +280,41 @@ func (s *NotificationServer) convertToGRPCErrorCodeAndErrorMessage(err error) no
 
 // SendNotificationAsync 处理异步发送通知请求
 func (s *NotificationServer) SendNotificationAsync(ctx context.Context, req *notificationv1.SendNotificationAsyncRequest) (*notificationv1.SendNotificationAsyncResponse, error) {
-	// 1. 从metadata中解析Authorization JWT Token
+	response := &notificationv1.SendNotificationAsyncResponse{}
+
+	// 从metadata中解析Authorization JWT Token
 	bizID, err := jwt.GetBizIDFromContext(ctx)
 	if err != nil {
-		return nil, err
+		response.ErrorCode = notificationv1.ErrorCode_BIZ_ID_NOT_FOUND
+		response.ErrorMessage = err.Error()
+		return response, nil
 	}
 
 	// 构建领域对象
 	notification, err := s.buildNotification(req.Notification, bizID)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
+		response.ErrorCode = notificationv1.ErrorCode_INVALID_PARAMETER
+		response.ErrorMessage = fmt.Sprintf("无效的请求参数: %v", err)
+		return response, nil
 	}
 
 	// 执行发送
 	result, err := s.sendSvc.SendNotificationAsync(ctx, notification)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "异步发送通知失败: %v", err)
+		// 区分系统错误和业务错误
+		if s.isSystemError(err) {
+			// 系统错误通过gRPC错误返回
+			return nil, status.Errorf(codes.Internal, "系统错误: %v", err)
+		} else {
+			// 业务错误通过ErrorCode返回
+			response.ErrorCode = s.convertToGRPCErrorCode(err)
+			response.ErrorMessage = err.Error()
+			return response, nil
+		}
 	}
 
 	// 将结果转换为响应
-	response := &notificationv1.SendNotificationAsyncResponse{
-		NotificationId: result.NotificationID,
-	}
-
-	// 如果有错误，提取错误代码和消息
-	if err != nil {
-		response.ErrorMessage = err.Error()
-		response.ErrorCode = s.convertToGRPCErrorCodeAndErrorMessage(err)
-	}
-
+	response.NotificationId = result.NotificationID
 	return response, nil
 }
 

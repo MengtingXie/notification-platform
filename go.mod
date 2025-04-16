@@ -13,6 +13,7 @@ require (
 	github.com/ego-component/egorm v1.1.4
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/golang-jwt/jwt/v4 v4.5.0
+	github.com/google/go-cmp v0.7.0
 	github.com/google/wire v0.6.0
 	github.com/gotomicro/ego v1.2.3
 	github.com/hashicorp/go-multierror v1.1.1
@@ -33,6 +34,7 @@ require (
 	golang.org/x/sync v0.12.0
 	google.golang.org/grpc v1.71.0
 	google.golang.org/protobuf v1.36.5
+	gopkg.in/yaml.v2 v2.4.0
 	gorm.io/gorm v1.25.12
 )
 
@@ -121,7 +123,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20250106144421-5f5ef82da422 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250115164207-1a7da9e5054f // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gorm.io/driver/clickhouse v0.3.2 // indirect
 	gorm.io/driver/mysql v1.5.7 // indirect

@@ -122,7 +122,7 @@ func (c *MockServiceGetByChannelCall) DoAndReturn(f func(context.Context, domain
 // GetByID mocks base method.
 func (m *MockService) GetByID(ctx context.Context, id int64) (domain.Provider, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetByID", ctx, id)
+	ret := m.ctrl.Call(m, "GetTemplateByID", ctx, id)
 	ret0, _ := ret[0].(domain.Provider)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
@@ -131,7 +131,7 @@ func (m *MockService) GetByID(ctx context.Context, id int64) (domain.Provider, e
 // GetByID indicates an expected call of GetByID.
 func (mr *MockServiceMockRecorder) GetByID(ctx, id any) *MockServiceGetByIDCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByID", reflect.TypeOf((*MockService)(nil).GetByID), ctx, id)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTemplateByID", reflect.TypeOf((*MockService)(nil).GetByID), ctx, id)
 	return &MockServiceGetByIDCall{Call: call}
 }
 

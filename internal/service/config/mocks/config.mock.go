@@ -80,7 +80,7 @@ func (c *BusinessConfigServiceDeleteCall) DoAndReturn(f func(context.Context, in
 // GetByID mocks base method.
 func (m *MockBusinessConfigService) GetByID(ctx context.Context, id int64) (domain.BusinessConfig, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetByID", ctx, id)
+	ret := m.ctrl.Call(m, "GetTemplateByID", ctx, id)
 	ret0, _ := ret[0].(domain.BusinessConfig)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
@@ -89,7 +89,7 @@ func (m *MockBusinessConfigService) GetByID(ctx context.Context, id int64) (doma
 // GetByID indicates an expected call of GetByID.
 func (mr *MockBusinessConfigServiceMockRecorder) GetByID(ctx, id any) *BusinessConfigServiceGetByIDCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByID", reflect.TypeOf((*MockBusinessConfigService)(nil).GetByID), ctx, id)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTemplateByID", reflect.TypeOf((*MockBusinessConfigService)(nil).GetByID), ctx, id)
 	return &BusinessConfigServiceGetByIDCall{Call: call}
 }
 

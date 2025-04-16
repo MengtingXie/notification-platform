@@ -48,6 +48,28 @@ enum ErrorCode {
   CHANNEL_DISABLED = 4;
   // 创建通知失败
   CREATE_NOTIFICATION_FAILED = 5;
+  // 业务ID未找到
+  BIZ_ID_NOT_FOUND = 6;
+  // 通知未找到
+  NOTIFICATION_NOT_FOUND = 7;
+  // 无可用供应商
+  NO_AVAILABLE_PROVIDER = 8;
+  // 无可用渠道
+  NO_AVAILABLE_CHANNEL = 9;
+  // 发送通知失败
+  SEND_NOTIFICATION_FAILED = 10;
+  // 业务配置不存在
+  CONFIG_NOT_FOUND = 11;
+  // 没有提供配额相关配置
+  NO_QUOTA_CONFIG = 12;
+  // 额度已用完
+  NO_QUOTA = 13;
+  // 额度记录不存在
+  QUOTA_NOT_FOUND = 14;
+  // 供应商记录不存在
+  PROVIDER_NOT_FOUND = 15;
+  // 未知渠道类型
+  UNKNOWN_CHANNEL = 16;
 }
 
 // 通知发送策略定义

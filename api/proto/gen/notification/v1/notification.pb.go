@@ -161,17 +161,50 @@ const (
 	ErrorCode_CHANNEL_DISABLED ErrorCode = 4
 	// 创建通知失败
 	ErrorCode_CREATE_NOTIFICATION_FAILED ErrorCode = 5
+	// 业务ID未找到
+	ErrorCode_BIZ_ID_NOT_FOUND ErrorCode = 6
+	// 通知未找到
+	ErrorCode_NOTIFICATION_NOT_FOUND ErrorCode = 7
+	// 无可用供应商
+	ErrorCode_NO_AVAILABLE_PROVIDER ErrorCode = 8
+	// 无可用渠道
+	ErrorCode_NO_AVAILABLE_CHANNEL ErrorCode = 9
+	// 发送通知失败
+	ErrorCode_SEND_NOTIFICATION_FAILED ErrorCode = 10
+	// 业务配置不存在
+	ErrorCode_CONFIG_NOT_FOUND ErrorCode = 11
+	// 没有提供配额相关配置
+	ErrorCode_NO_QUOTA_CONFIG ErrorCode = 12
+	// 额度已用完
+	ErrorCode_NO_QUOTA ErrorCode = 13
+	// 额度记录不存在
+	ErrorCode_QUOTA_NOT_FOUND ErrorCode = 14
+	// 供应商记录不存在
+	ErrorCode_PROVIDER_NOT_FOUND ErrorCode = 15
+	// 未知渠道类型
+	ErrorCode_UNKNOWN_CHANNEL ErrorCode = 16
 )
 
 // Enum value maps for ErrorCode.
 var (
 	ErrorCode_name = map[int32]string{
-		0: "ERROR_CODE_UNSPECIFIED",
-		1: "INVALID_PARAMETER",
-		2: "RATE_LIMITED",
-		3: "TEMPLATE_NOT_FOUND",
-		4: "CHANNEL_DISABLED",
-		5: "CREATE_NOTIFICATION_FAILED",
+		0:  "ERROR_CODE_UNSPECIFIED",
+		1:  "INVALID_PARAMETER",
+		2:  "RATE_LIMITED",
+		3:  "TEMPLATE_NOT_FOUND",
+		4:  "CHANNEL_DISABLED",
+		5:  "CREATE_NOTIFICATION_FAILED",
+		6:  "BIZ_ID_NOT_FOUND",
+		7:  "NOTIFICATION_NOT_FOUND",
+		8:  "NO_AVAILABLE_PROVIDER",
+		9:  "NO_AVAILABLE_CHANNEL",
+		10: "SEND_NOTIFICATION_FAILED",
+		11: "CONFIG_NOT_FOUND",
+		12: "NO_QUOTA_CONFIG",
+		13: "NO_QUOTA",
+		14: "QUOTA_NOT_FOUND",
+		15: "PROVIDER_NOT_FOUND",
+		16: "UNKNOWN_CHANNEL",
 	}
 	ErrorCode_value = map[string]int32{
 		"ERROR_CODE_UNSPECIFIED":     0,
@@ -180,6 +213,17 @@ var (
 		"TEMPLATE_NOT_FOUND":         3,
 		"CHANNEL_DISABLED":           4,
 		"CREATE_NOTIFICATION_FAILED": 5,
+		"BIZ_ID_NOT_FOUND":           6,
+		"NOTIFICATION_NOT_FOUND":     7,
+		"NO_AVAILABLE_PROVIDER":      8,
+		"NO_AVAILABLE_CHANNEL":       9,
+		"SEND_NOTIFICATION_FAILED":   10,
+		"CONFIG_NOT_FOUND":           11,
+		"NO_QUOTA_CONFIG":            12,
+		"NO_QUOTA":                   13,
+		"QUOTA_NOT_FOUND":            14,
+		"PROVIDER_NOT_FOUND":         15,
+		"UNKNOWN_CHANNEL":            16,
 	}
 )
 
@@ -1435,14 +1479,26 @@ const file_notification_v1_notification_proto_rawDesc = "" +
 	"\aPENDING\x10\x03\x12\r\n" +
 	"\tSUCCEEDED\x10\x04\x12\n" +
 	"\n" +
-	"\x06FAILED\x10\x05*\x9e\x01\n" +
+	"\x06FAILED\x10\x05*\x9e\x03\n" +
 	"\tErrorCode\x12\x1a\n" +
 	"\x16ERROR_CODE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11INVALID_PARAMETER\x10\x01\x12\x10\n" +
 	"\fRATE_LIMITED\x10\x02\x12\x16\n" +
 	"\x12TEMPLATE_NOT_FOUND\x10\x03\x12\x14\n" +
 	"\x10CHANNEL_DISABLED\x10\x04\x12\x1e\n" +
-	"\x1aCREATE_NOTIFICATION_FAILED\x10\x052\xf2\x05\n" +
+	"\x1aCREATE_NOTIFICATION_FAILED\x10\x05\x12\x14\n" +
+	"\x10BIZ_ID_NOT_FOUND\x10\x06\x12\x1a\n" +
+	"\x16NOTIFICATION_NOT_FOUND\x10\a\x12\x19\n" +
+	"\x15NO_AVAILABLE_PROVIDER\x10\b\x12\x18\n" +
+	"\x14NO_AVAILABLE_CHANNEL\x10\t\x12\x1c\n" +
+	"\x18SEND_NOTIFICATION_FAILED\x10\n" +
+	"\x12\x14\n" +
+	"\x10CONFIG_NOT_FOUND\x10\v\x12\x13\n" +
+	"\x0fNO_QUOTA_CONFIG\x10\f\x12\f\n" +
+	"\bNO_QUOTA\x10\r\x12\x13\n" +
+	"\x0fQUOTA_NOT_FOUND\x10\x0e\x12\x16\n" +
+	"\x12PROVIDER_NOT_FOUND\x10\x0f\x12\x13\n" +
+	"\x0fUNKNOWN_CHANNEL\x10\x102\xf2\x05\n" +
 	"\x13NotificationService\x12g\n" +
 	"\x10SendNotification\x12(.notification.v1.SendNotificationRequest\x1a).notification.v1.SendNotificationResponse\x12v\n" +
 	"\x15SendNotificationAsync\x12-.notification.v1.SendNotificationAsyncRequest\x1a..notification.v1.SendNotificationAsyncResponse\x12y\n" +
