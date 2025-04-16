@@ -133,8 +133,7 @@ func (t *templateService) GetTemplate(ctx context.Context, templateID int64, pro
 }
 
 func (t *templateService) GetTemplateByID(ctx context.Context, templateID int64) (domain.ChannelTemplate, error) {
-	// TODO implement me
-	panic("implement me" + fmt.Sprintf("%v %v", ctx, templateID))
+	return t.repo.GetTemplateByID(ctx, templateID)
 }
 
 func (t *templateService) CreateTemplate(ctx context.Context, template domain.ChannelTemplate) (domain.ChannelTemplate, error) {

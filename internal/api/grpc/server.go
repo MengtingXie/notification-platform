@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/errs"
+	templatesvc "gitee.com/flycash/notification-platform/internal/service/template/manage"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 
@@ -31,17 +32,20 @@ type NotificationServer struct {
 	notificationSvc notificationsvc.Service
 	sendSvc         notificationsvc.SendService
 	txnSvc          notificationsvc.TxNotificationService
+	templateSvc     templatesvc.ChannelTemplateService
 }
 
 // NewServer 创建通知平台gRPC服务器
 func NewServer(notificationSvc notificationsvc.Service,
 	sendSvc notificationsvc.SendService,
 	txnSvc notificationsvc.TxNotificationService,
+	templateSvc templatesvc.ChannelTemplateService,
 ) *NotificationServer {
 	return &NotificationServer{
 		notificationSvc: notificationSvc,
 		sendSvc:         sendSvc,
 		txnSvc:          txnSvc,
+		templateSvc:     templateSvc,
 	}
 }
 
@@ -56,7 +60,7 @@ func (s *NotificationServer) SendNotification(ctx context.Context, req *notifica
 	}
 
 	// 构建领域对象
-	notification, err := s.buildNotification(req.Notification, bizID)
+	notification, err := s.buildNotification(ctx, req.Notification, bizID)
 	if err != nil {
 		response.ErrorCode = notificationv1.ErrorCode_INVALID_PARAMETER
 		response.ErrorMessage = err.Error()
@@ -90,7 +94,7 @@ func (s *NotificationServer) isSystemError(err error) bool {
 		errors.Is(err, errs.ErrNotificationVersionMismatch)
 }
 
-func (s *NotificationServer) buildNotification(n *notificationv1.Notification, bizID int64) (domain.Notification, error) {
+func (s *NotificationServer) buildNotification(ctx context.Context, n *notificationv1.Notification, bizID int64) (domain.Notification, error) {
 	if n == nil {
 		return domain.Notification{}, fmt.Errorf("%w: 通知信息不能为空", errs.ErrInvalidParameter)
 	}
@@ -98,6 +102,15 @@ func (s *NotificationServer) buildNotification(n *notificationv1.Notification, b
 	tid, err := strconv.ParseInt(n.TemplateId, 10, 64)
 	if err != nil {
 		return domain.Notification{}, fmt.Errorf("%w: 模板ID: %s", errs.ErrInvalidParameter, n.TemplateId)
+	}
+
+	tmpl, err := s.templateSvc.GetTemplateByID(ctx, tid)
+	if err != nil {
+		return domain.Notification{}, fmt.Errorf("%w: 模板ID: %s", errs.ErrInvalidParameter, n.TemplateId)
+	}
+
+	if !tmpl.HasPublished() {
+		return domain.Notification{}, fmt.Errorf("%w: 模板ID: %s 未发布", errs.ErrInvalidParameter, n.TemplateId)
 	}
 
 	channel, err := s.convertToChannel(n.Channel)
@@ -116,8 +129,9 @@ func (s *NotificationServer) buildNotification(n *notificationv1.Notification, b
 		Receivers: receivers,
 		Channel:   channel,
 		Template: domain.Template{
-			ID:     tid,
-			Params: n.TemplateParams,
+			ID:        tid,
+			VersionID: tmpl.ActiveVersionID,
+			Params:    n.TemplateParams,
 		},
 		SendStrategyConfig: s.buildSendStrategyConfig(n),
 	}, nil
@@ -269,7 +283,7 @@ func (s *NotificationServer) SendNotificationAsync(ctx context.Context, req *not
 	}
 
 	// 构建领域对象
-	notification, err := s.buildNotification(req.Notification, bizID)
+	notification, err := s.buildNotification(ctx, req.Notification, bizID)
 	if err != nil {
 		response.ErrorCode = notificationv1.ErrorCode_INVALID_PARAMETER
 		response.ErrorMessage = err.Error()
@@ -322,7 +336,7 @@ func (s *NotificationServer) BatchSendNotifications(ctx context.Context, req *no
 	// 构建领域对象
 	notifications := make([]domain.Notification, 0, len(req.Notifications))
 	for i := range req.Notifications {
-		notification, err1 := s.buildNotification(req.Notifications[i], bizID)
+		notification, err1 := s.buildNotification(ctx, req.Notifications[i], bizID)
 		if err1 != nil {
 			results[i] = &notificationv1.SendNotificationResponse{
 				ErrorCode:    notificationv1.ErrorCode_INVALID_PARAMETER,
@@ -419,7 +433,7 @@ func (s *NotificationServer) BatchSendNotificationsAsync(ctx context.Context, re
 	// 构建领域对象
 	notifications := make([]domain.Notification, 0, len(req.Notifications))
 	for i := range req.Notifications {
-		notification, err1 := s.buildNotification(req.Notifications[i], bizID)
+		notification, err1 := s.buildNotification(ctx, req.Notifications[i], bizID)
 		if err1 != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "%v: %#v", err1, req.Notifications[i])
 		}
@@ -451,7 +465,7 @@ func (s *NotificationServer) TxPrepare(ctx context.Context, request *notificatio
 	}
 
 	// 构建领域对象
-	txn, err := s.buildTxNotification(request.Notification, bizID)
+	txn, err := s.buildTxNotification(ctx, request.Notification, bizID)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)
 	}
@@ -461,13 +475,13 @@ func (s *NotificationServer) TxPrepare(ctx context.Context, request *notificatio
 	return &notificationv1.TxPrepareResponse{}, err
 }
 
-func (s *NotificationServer) buildTxNotification(n *notificationv1.Notification, bizID int64) (domain.TxNotification, error) {
+func (s *NotificationServer) buildTxNotification(ctx context.Context, n *notificationv1.Notification, bizID int64) (domain.TxNotification, error) {
 	if n == nil {
 		return domain.TxNotification{}, errors.New("通知不能为空")
 	}
 
 	// 构建基本Notification
-	noti, err := s.buildNotification(n, bizID)
+	noti, err := s.buildNotification(ctx, n, bizID)
 	noti.Status = domain.SendStatusPrepare
 	if err != nil {
 		return domain.TxNotification{}, status.Errorf(codes.InvalidArgument, "无效的请求参数: %v", err)

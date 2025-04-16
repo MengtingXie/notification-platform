@@ -69,7 +69,7 @@ func InitGrpcServer(clients map[string]client.Client) *ioc.App {
 	txNotificationRepository := repository.NewTxNotificationRepository(txNotificationDAO)
 	dlockClient := ioc2.InitDistributedLock(redisClient)
 	txNotificationService := notification.NewTxNotificationService(txNotificationRepository, businessConfigService, notificationRepository, dlockClient, notificationSender)
-	notificationServer := grpc.NewServer(service, sendService, txNotificationService)
+	notificationServer := grpc.NewServer(service, sendService, txNotificationService, channelTemplateService)
 	component := ioc2.InitEtcdClient()
 	egrpcComponent := ioc2.InitGrpc(notificationServer, component)
 	asyncRequestResultCallbackTask := callback.NewAsyncRequestResultCallbackTask(dlockClient, callbackService)

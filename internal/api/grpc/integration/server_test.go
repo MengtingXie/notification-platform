@@ -2621,14 +2621,14 @@ func (s *SuccessGRPCServerTestSuite) TestBatchQueryNotifications() {
 	ctx := s.contextWithJWT(context.Background())
 
 	// 发送多条通知以创建记录
-	keys := []string{"batch-query-key-1", "batch-query-key-2", "batch-query-key-3"}
+	keys := []string{"batch-query-key-x", "batch-query-key-y", "batch-query-key-z"}
 	notificationIDs := make([]uint64, len(keys))
 
 	for i, key := range keys {
 		sendReq := &notificationv1.SendNotificationRequest{
 			Notification: &notificationv1.Notification{
 				Key:        key,
-				Receivers:  []string{"1380013800" + strconv.Itoa(i)},
+				Receivers:  []string{"1394601380" + strconv.Itoa(i)},
 				Channel:    notificationv1.Channel_SMS,
 				TemplateId: strconv.FormatInt(templateID, 10),
 				TemplateParams: map[string]string{

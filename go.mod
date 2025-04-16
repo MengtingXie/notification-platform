@@ -13,7 +13,6 @@ require (
 	github.com/ego-component/egorm v1.1.4
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/golang-jwt/jwt/v4 v4.5.0
-	github.com/google/go-cmp v0.7.0
 	github.com/google/wire v0.6.0
 	github.com/gotomicro/ego v1.2.3
 	github.com/hashicorp/go-multierror v1.1.1
