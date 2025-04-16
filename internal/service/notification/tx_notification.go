@@ -41,6 +41,7 @@ func NewTxNotificationService(
 	configSvc config.BusinessConfigService,
 	notiRepo repository.NotificationRepository,
 	lock dlock.Client,
+	sender sender.NotificationSender,
 ) TxNotificationService {
 	return &txNotificationService{
 		repo:      repo,
@@ -48,6 +49,7 @@ func NewTxNotificationService(
 		logger:    elog.DefaultLogger,
 		notiRepo:  notiRepo,
 		lock:      lock,
+		sender:    sender,
 	}
 }
 
@@ -82,9 +84,10 @@ func (t *txNotificationService) Prepare(ctx context.Context, notification domain
 	if err == nil {
 		now := time.Now().UnixMilli()
 		const second = 1000
-		txn.NextCheckTime = now + int64(cfg.TxnConfig.InitialDelay*second)
+		if cfg.TxnConfig != nil {
+			txn.NextCheckTime = now + int64(cfg.TxnConfig.InitialDelay*second)
+		}
 	}
-
 	return t.repo.Create(ctx, txn)
 }
 

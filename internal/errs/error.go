@@ -30,4 +30,5 @@ var (
 	ErrCreateCallbackLogFailed     = errors.New("创建回调记录失败")
 	ErrDatabaseError               = errors.New("数据库错误")
 	ErrExternalServiceError        = errors.New("外部服务调用错误")
+	ErrBatchSizeOverLimit          = errors.New("批量大小超过限制")
 )

@@ -11,12 +11,13 @@ import (
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
+	"gitee.com/flycash/notification-platform/internal/service/sender"
 	"gitee.com/flycash/notification-platform/internal/test/ioc"
 )
 
 // Injectors from wire.go:
 
-func InitTxNotificationService(configSvc config.BusinessConfigService) *App {
+func InitTxNotificationService(configSvc config.BusinessConfigService, sender2 sender.NotificationSender) *App {
 	db := ioc.InitDBAndTables()
 	txNotificationDAO := dao.NewTxNotificationDAO(db)
 	txNotificationRepository := repository.NewTxNotificationRepository(txNotificationDAO)
@@ -24,7 +25,7 @@ func InitTxNotificationService(configSvc config.BusinessConfigService) *App {
 	notificationRepository := repository.NewNotificationRepository(notificationDAO)
 	client := ioc.InitRedisClient()
 	dlockClient := ioc.InitDistributedLock(client)
-	txNotificationService := notification.NewTxNotificationService(txNotificationRepository, configSvc, notificationRepository, dlockClient)
+	txNotificationService := notification.NewTxNotificationService(txNotificationRepository, configSvc, notificationRepository, dlockClient, sender2)
 	txCheckTask := notification.NewTask(txNotificationRepository, configSvc, dlockClient)
 	app := &App{
 		Svc:  txNotificationService,

@@ -7,6 +7,7 @@ import (
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
+	"gitee.com/flycash/notification-platform/internal/service/sender"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/google/wire"
 )
@@ -16,7 +17,7 @@ type App struct {
 	Task *notification.TxCheckTask
 }
 
-func InitTxNotificationService(configSvc config.BusinessConfigService) *App {
+func InitTxNotificationService(configSvc config.BusinessConfigService, sender sender.NotificationSender) *App {
 	wire.Build(
 		testioc.BaseSet,
 		dao.NewTxNotificationDAO,
