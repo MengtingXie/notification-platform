@@ -28,6 +28,9 @@ type Template struct {
 	ID        int64             // 模板ID
 	VersionID int64             // 版本ID
 	Params    map[string]string // 渲染模版时使用的参数
+
+	// 只做版本兼容演示代码用，其余忽略
+	Version string
 }
 
 // Notification 通知领域模型

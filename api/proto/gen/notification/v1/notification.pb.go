@@ -357,10 +357,18 @@ type Notification struct {
 	Channel Channel `protobuf:"varint,3,opt,name=channel,proto3,enum=notification.v1.Channel" json:"channel,omitempty"`
 	// 模板ID
 	TemplateId string `protobuf:"bytes,4,opt,name=template_id,json=templateId,proto3" json:"template_id,omitempty"`
+	// v0.0.1 v0.0.2
+	// template_version = 5;
 	// 模板参数
 	TemplateParams map[string]string `protobuf:"bytes,5,rep,name=template_params,json=templateParams,proto3" json:"template_params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// 发送策略
-	Strategy      *SendStrategy `protobuf:"bytes,6,opt,name=strategy,proto3" json:"strategy,omitempty"`
+	Strategy *SendStrategy `protobuf:"bytes,6,opt,name=strategy,proto3" json:"strategy,omitempty"`
+	// 只能往后加
+	// string field1 = 7;
+	// string field2 = 8;
+	// 重要，并且几乎大家都要传
+	// string importantField = 2;
+	Receiver      string `protobuf:"bytes,7,opt,name=receiver,proto3" json:"receiver,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -435,6 +443,13 @@ func (x *Notification) GetStrategy() *SendStrategy {
 		return x.Strategy
 	}
 	return nil
+}
+
+func (x *Notification) GetReceiver() string {
+	if x != nil {
+		return x.Receiver
+	}
+	return ""
 }
 
 // 同步单条发送通知请求
@@ -1358,7 +1373,7 @@ const file_notification_v1_notification_proto_rawDesc = "" +
 	"\x15end_time_milliseconds\x18\x02 \x01(\x03R\x13endTimeMilliseconds\x1aJ\n" +
 	"\x10DeadlineStrategy\x126\n" +
 	"\bdeadline\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\bdeadlineB\x0f\n" +
-	"\rstrategy_type\"\xed\x02\n" +
+	"\rstrategy_type\"\x89\x03\n" +
 	"\fNotification\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x1c\n" +
 	"\treceivers\x18\x02 \x03(\tR\treceivers\x122\n" +
@@ -1366,7 +1381,8 @@ const file_notification_v1_notification_proto_rawDesc = "" +
 	"\vtemplate_id\x18\x04 \x01(\tR\n" +
 	"templateId\x12Z\n" +
 	"\x0ftemplate_params\x18\x05 \x03(\v21.notification.v1.Notification.TemplateParamsEntryR\x0etemplateParams\x129\n" +
-	"\bstrategy\x18\x06 \x01(\v2\x1d.notification.v1.SendStrategyR\bstrategy\x1aA\n" +
+	"\bstrategy\x18\x06 \x01(\v2\x1d.notification.v1.SendStrategyR\bstrategy\x12\x1a\n" +
+	"\breceiver\x18\a \x01(\tR\breceiver\x1aA\n" +
 	"\x13TemplateParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\\\n" +

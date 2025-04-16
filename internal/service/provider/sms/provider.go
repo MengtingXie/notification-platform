@@ -17,6 +17,8 @@ type smsProvider struct {
 	name        string
 	templateSvc manage.ChannelTemplateService
 	client      client.Client
+
+	// baseProvider
 }
 
 // NewSMSProvider SMS供应商

@@ -122,10 +122,18 @@ message Notification {
   Channel channel = 3;
   // 模板ID
   string template_id = 4;
+  // v0.0.1 v0.0.2
+  // template_version = 5;
   // 模板参数
   map<string, string> template_params = 5;
   // 发送策略
   SendStrategy strategy = 6;
+  // 只能往后加
+  // string field1 = 7;
+  // string field2 = 8;
+  // 重要，并且几乎大家都要传
+  // string importantField = 2;
+  string receiver = 7;
 }
 
 // 同步单条发送通知请求

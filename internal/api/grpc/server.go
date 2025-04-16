@@ -77,10 +77,15 @@ func (s *NotificationServer) buildNotification(n *notificationv1.Notification, b
 		return domain.Notification{}, fmt.Errorf("无效的模板ID: %s", n.TemplateId)
 	}
 
+	//receivers := n.Receivers
+	//if n.Receiver != "" {
+	//	receivers = append(receivers, n.Receiver)
+	//}
+	receivers := n.FindReceivers()
 	return domain.Notification{
 		BizID:     bizID,
 		Key:       n.Key,
-		Receivers: n.Receivers,
+		Receivers: receivers,
 		Channel:   s.convertToChannel(n.Channel),
 		Template: domain.Template{
 			ID:        tid,
