@@ -5,7 +5,7 @@ type CallbackLogStatus string
 const (
 	CallbackLogStatusInit    CallbackLogStatus = "INIT"
 	CallbackLogStatusPending CallbackLogStatus = "PENDING"
-	CallbackLogStatusSuccess CallbackLogStatus = "SUCCESS"
+	CallbackLogStatusSuccess CallbackLogStatus = "SUCCEEDED"
 	CallbackLogStatusFailed  CallbackLogStatus = "FAILED"
 )
 

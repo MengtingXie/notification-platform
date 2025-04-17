@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/domain"
 	"github.com/ego-component/egorm"
 	"gorm.io/gorm"
 )
@@ -43,7 +44,7 @@ func (c *callbackLogDAO) Find(ctx context.Context, startTime, batchSize, startID
 
 	result := c.db.WithContext(ctx).Model(&CallbackLog{}).
 		Where("next_retry_time <= ?", startTime).
-		Where("status = ?", "PENDING").
+		Where("status = ?", domain.CallbackLogStatusPending).
 		Where("id > ?", startID).
 		Order("id ASC").
 		Limit(int(batchSize)).
