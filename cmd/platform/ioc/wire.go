@@ -4,11 +4,10 @@ package ioc
 
 import (
 	"context"
-	"gitee.com/flycash/notification-platform/internal/service/provider/metrics"
-	"gitee.com/flycash/notification-platform/internal/service/provider/tracing"
+	"time"
+
 	"gitee.com/flycash/notification-platform/internal/service/quota"
 	"gitee.com/flycash/notification-platform/internal/service/scheduler"
-	"time"
 
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -102,7 +101,7 @@ func newChannel(
 	templateSvc templatesvc.ChannelTemplateService,
 ) channel.Channel {
 	return channel.NewDispatcher(map[domain.Channel]channel.Channel{
-		domain.ChannelEmail: channel.NewSMSChannel(newMockSMSSelectorBuilder(providerSvc, templateSvc)),
+		domain.ChannelSMS: channel.NewSMSChannel(newSMSSelectorBuilder(providerSvc, templateSvc)),
 	})
 }
 
@@ -143,15 +142,6 @@ func newSMSSelectorBuilder(
 	return sequential.NewSelectorBuilder(providers)
 }
 
-func newMockSMSSelectorBuilder(
-	providerSvc providersvc.Service,
-	templateSvc templatesvc.ChannelTemplateService,
-) *sequential.SelectorBuilder {
-	return sequential.NewSelectorBuilder([]provider.Provider{
-		metrics.NewProvider("ali", tracing.NewProvider(provider.NewMockProvider())),
-	})
-}
-
 func InitGrpcServer() *ioc.App {
 	wire.Build(
 		// 基础设施
@@ -190,7 +180,6 @@ func InitGrpcServer() *ioc.App {
 
 		// GRPC服务器
 		grpcapi.NewServer,
-		grpcapi.NewConfigServer,
 		ioc.InitGrpc,
 		ioc.InitTasks,
 		ioc.Crons,

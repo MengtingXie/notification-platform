@@ -3,6 +3,7 @@ package sender
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -55,6 +56,7 @@ func (d *sender) Send(ctx context.Context, notification domain.Notification) (do
 	}
 
 	_, err := d.channel.Send(ctx, notification)
+	log.Printf("Sender channel.Send = %#v\n", err)
 	if err != nil {
 		d.logger.Error("发送失败 %w", elog.FieldErr(err))
 		resp.Status = domain.SendStatusFailed

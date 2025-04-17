@@ -403,6 +403,8 @@ func (m *Notification) validate(all bool) error {
 		}
 	}
 
+	// no validation rules for Receiver
+
 	if len(errors) > 0 {
 		return NotificationMultiError(errors)
 	}

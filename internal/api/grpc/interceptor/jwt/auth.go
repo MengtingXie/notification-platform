@@ -15,8 +15,6 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-var ErrBizIDNotFound = errors.New("biz_id not found")
-
 const BizIDName = "biz_id"
 
 type InterceptorBuilder struct {

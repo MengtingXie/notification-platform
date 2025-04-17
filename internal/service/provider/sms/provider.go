@@ -3,6 +3,7 @@ package sms
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"gitee.com/flycash/notification-platform/internal/service/provider"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
@@ -17,6 +18,8 @@ type smsProvider struct {
 	name        string
 	templateSvc manage.ChannelTemplateService
 	client      client.Client
+
+	// baseProvider
 }
 
 // NewSMSProvider SMS供应商
@@ -30,7 +33,7 @@ func NewSMSProvider(name string, templateSvc manage.ChannelTemplateService, clie
 
 // Send 发送短信
 func (p *smsProvider) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
-	tmpl, err := p.templateSvc.GetTemplate(ctx, notification.Template.ID, notification.Template.VersionID, p.name, domain.ChannelSMS)
+	tmpl, err := p.templateSvc.GetTemplate(ctx, notification.Template.ID, p.name, domain.ChannelSMS)
 	if err != nil {
 		return domain.SendResponse{}, fmt.Errorf("%w: %w", errs.ErrSendNotificationFailed, err)
 	}
@@ -52,7 +55,7 @@ func (p *smsProvider) Send(ctx context.Context, notification domain.Notification
 	}
 
 	for _, status := range resp.PhoneNumbers {
-		if status.Code != "OK" {
+		if !strings.EqualFold(status.Code, "OK") {
 			return domain.SendResponse{}, fmt.Errorf("%w: Code = %s, Message = %s", errs.ErrSendNotificationFailed, status.Code, status.Message)
 		}
 	}

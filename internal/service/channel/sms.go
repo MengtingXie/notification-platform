@@ -24,7 +24,7 @@ func (s *baseChannel) Send(ctx context.Context, notification domain.Notification
 		p, err1 := selector.Next(ctx, notification)
 		if err1 != nil {
 			// 没有可用的供应商
-			return domain.SendResponse{}, err1
+			return domain.SendResponse{}, fmt.Errorf("%w: %w", errs.ErrSendNotificationFailed, err1)
 		}
 
 		// 使用当前供应商发送

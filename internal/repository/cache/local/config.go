@@ -78,32 +78,34 @@ func NewLocalCache(rdb *redis.Client, c *ca.Cache) *Cache {
 		c:      c,
 	}
 	// 开启监控redis里的内容
+	// 我要在这里监听 Redis 的 key 变更，更新本地缓存
 	go localCache.loop(context.Background())
 	return localCache
 }
 
 // 监控redis里的东西
 func (l *Cache) loop(ctx context.Context) {
+	// 就这个 channel 的表达式，你去问 deepseek
 	pubsub := l.rdb.PSubscribe(ctx, "__keyspace@*__:config:*")
 	defer pubsub.Close()
-	// 开始监听消息
 	ch := pubsub.Channel()
 	for msg := range ch {
-		const (
-			channelListMinLen = 2
-			n                 = 2
-		)
+		// 在线上环境，小心别把敏感数据打出来了
+		// 比如说你的 channel 里面包含了手机号码，你就别打了
+		l.logger.Info("监控到 Redis 更新消息",
+			elog.String("key", msg.Channel), elog.String("payload", msg.Payload))
+		const channelMinLen = 2
 		channel := msg.Channel
-		eventType := msg.Payload
-
-		l.logger.Info("监控到redis更新消息", elog.String("key", msg.Channel), elog.String("payload", msg.Payload))
-		channelStrList := strings.SplitN(channel, ":", n)
-		if len(channelStrList) < channelListMinLen {
-			l.logger.Error("监听redis键不正确", elog.String("channel", channel))
+		channelStrList := strings.SplitN(channel, ":", channelMinLen)
+		if len(channelStrList) < channelMinLen {
+			l.logger.Error("监听到非法 Redis key", elog.String("channel", msg.Channel))
 			continue
 		}
-		key := channelStrList[1]
+		// config:133 => 133
+		const keyIdx = 1
+		key := channelStrList[keyIdx]
 		ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+		eventType := msg.Payload
 		l.handleConfigChange(ctx, key, eventType)
 		cancel()
 	}
