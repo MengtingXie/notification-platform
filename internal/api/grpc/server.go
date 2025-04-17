@@ -378,10 +378,16 @@ func (s *NotificationServer) BatchSendNotifications(ctx context.Context, req *no
 	}
 
 	// 将结果转换为响应
+	const first = 0
 	successCount := int32(0)
 	for i := range responses.Results {
 		results[i] = s.buildGRPCSendResponse(responses.Results[i], nil)
-		if domain.SendStatusSucceeded == responses.Results[i].Status {
+		if notifications[first].SendStrategyConfig.Type == domain.SendStrategyImmediate &&
+			domain.SendStatusSucceeded == responses.Results[i].Status {
+			successCount++
+		}
+		if notifications[first].SendStrategyConfig.Type != domain.SendStrategyImmediate &&
+			domain.SendStatusPending == responses.Results[i].Status {
 			successCount++
 		}
 	}

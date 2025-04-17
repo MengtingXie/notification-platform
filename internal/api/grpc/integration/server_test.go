@@ -12,17 +12,22 @@ import (
 	"testing"
 	"time"
 
+	clientv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/notification/v1"
 	"gitee.com/flycash/notification-platform/internal/domain"
 	prodioc "gitee.com/flycash/notification-platform/internal/ioc"
+	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
 	smsmocks "gitee.com/flycash/notification-platform/internal/service/provider/sms/client/mocks"
 	platformioc "gitee.com/flycash/notification-platform/internal/test/integration/ioc/platform"
+	"gitee.com/flycash/notification-platform/internal/test/integration/testgrpc"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
+	"github.com/ego-component/eetcd/registry"
 	"github.com/ego-component/egorm"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/gotomicro/ego"
 	"github.com/gotomicro/ego/client/egrpc"
+	"github.com/gotomicro/ego/client/egrpc/resolver"
 	"github.com/gotomicro/ego/core/econf"
 	"github.com/gotomicro/ego/core/elog"
 	"github.com/gotomicro/ego/server"
@@ -31,6 +36,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/yaml.v2"
@@ -41,7 +47,8 @@ import (
 )
 
 const (
-	batchSizeLimit = 100
+	batchSizeLimit            = 100
+	callbackServerServiceName = "client.notification.callback.service"
 )
 
 func TestGRPCServerWithSuccessMock(t *testing.T) {
@@ -157,6 +164,8 @@ type BaseGRPCServerTestSuite struct {
 	server *ego.Ego
 	app    *testioc.App
 
+	clientGRPCServer *testgrpc.Server[clientv1.CallbackServiceServer]
+
 	client      notificationv1.NotificationServiceClient
 	queryClient notificationv1.NotificationQueryServiceClient
 
@@ -188,6 +197,20 @@ func (s *BaseGRPCServerTestSuite) SetupTestSuite(serverPort int, clientAddr stri
 		"addr":  clientAddr,
 		"debug": true,
 	})
+
+	// 初始化注册中心
+	etcdClient := testioc.InitEtcdClient()
+	reg := registry.Load("").Build(registry.WithClientEtcd(etcdClient))
+	go func() {
+		s.clientGRPCServer = testgrpc.NewServer[clientv1.CallbackServiceServer](callbackServerServiceName, reg, &MockClientGRPCServer{}, func(s grpc.ServiceRegistrar, srv clientv1.CallbackServiceServer) {
+			clientv1.RegisterCallbackServiceServer(s, srv)
+		})
+		err = s.clientGRPCServer.Start("127.0.0.1:30002")
+		s.NoError(err)
+	}()
+	// 等待启动完成
+	time.Sleep(1 * time.Second)
+	resolver.Register("etcd", reg)
 
 	// 初始化数据库
 	s.db = testioc.InitDBAndTables()
@@ -245,12 +268,22 @@ func (s *BaseGRPCServerTestSuite) SetupTestSuite(serverPort int, clientAddr stri
 	s.queryClient = notificationv1.NewNotificationQueryServiceClient(conn)
 }
 
+type MockClientGRPCServer struct {
+	clientv1.UnsafeCallbackServiceServer
+}
+
+func (m *MockClientGRPCServer) HandleNotificationResult(_ context.Context, request *clientv1.HandleNotificationResultRequest) (*clientv1.HandleNotificationResultResponse, error) {
+	return &clientv1.HandleNotificationResultResponse{Success: true}, nil
+}
+
 // 关闭测试环境
 func (s *BaseGRPCServerTestSuite) TearDownTestSuite() {
 	log.Printf("关闭测试套件，服务器地址：%s\n", s.serverAddr)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
 	s.NoError(s.server.Stop(ctx, false))
+
+	s.clientGRPCServer.Stop()
 
 	// 测试完成后清空表数据
 	s.db.Exec("DELETE TABLE `callback_logs`")
@@ -323,6 +356,8 @@ func (s *BaseGRPCServerTestSuite) prepareTemplateData() int64 {
 	s.createTemplate(ctx, templateID)
 
 	// 设置业务配置
+	const retryInterval = 10 * time.Second
+	const maxRetries = 10
 	config := domain.BusinessConfig{
 		ID:        1,
 		OwnerID:   1,
@@ -334,6 +369,21 @@ func (s *BaseGRPCServerTestSuite) prepareTemplateData() int64 {
 					Priority: 1,
 					Enabled:  true,
 				},
+			},
+		},
+		TxnConfig: &domain.TxnConfig{
+			ServiceName:  "order.notification.callback.service",
+			InitialDelay: int(time.Hour),
+			RetryPolicy: &retry.Config{
+				Type:          "fixed",
+				FixedInterval: &retry.FixedIntervalConfig{Interval: retryInterval, MaxRetries: maxRetries},
+			},
+		},
+		CallbackConfig: &domain.CallbackConfig{
+			ServiceName: callbackServerServiceName,
+			RetryPolicy: &retry.Config{
+				Type:          "fixed",
+				FixedInterval: &retry.FixedIntervalConfig{Interval: retryInterval, MaxRetries: maxRetries},
 			},
 		},
 		RateLimit: 100,
@@ -1688,6 +1738,14 @@ func (s *SuccessGRPCServerTestSuite) TestBatchSendNotifications() {
 			},
 			setupContext: s.contextWithJWT,
 			wantResp: &notificationv1.BatchSendNotificationsResponse{
+				Results: []*notificationv1.SendNotificationResponse{
+					{
+						Status: notificationv1.SendStatus_SUCCEEDED,
+					},
+					{
+						Status: notificationv1.SendStatus_SUCCEEDED,
+					},
+				},
 				TotalCount:   2,
 				SuccessCount: 2,
 			},
@@ -1783,7 +1841,269 @@ func (s *SuccessGRPCServerTestSuite) TestBatchSendNotifications() {
 			wantResp:      nil,
 			errAssertFunc: assert.Error, // 超过限制返回错误
 		},
-		// TODO 不同渠道混合发送
+		{
+			name: "使用立即发送策略批量发送通知",
+			req: &notificationv1.BatchSendNotificationsRequest{
+				Notifications: []*notificationv1.Notification{
+					{
+						Key:        "batch-immediate-key-1",
+						Receivers:  []string{"13800138010"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "101010",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Immediate{
+								Immediate: &notificationv1.SendStrategy_ImmediateStrategy{},
+							},
+						},
+					},
+					{
+						Key:        "batch-immediate-key-2",
+						Receivers:  []string{"13800138011"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "111111",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Immediate{
+								Immediate: &notificationv1.SendStrategy_ImmediateStrategy{},
+							},
+						},
+					},
+				},
+			},
+			setupContext: s.contextWithJWT,
+			wantResp: &notificationv1.BatchSendNotificationsResponse{
+				TotalCount:   2,
+				SuccessCount: 2,
+				Results: []*notificationv1.SendNotificationResponse{
+					{
+						Status: notificationv1.SendStatus_SUCCEEDED,
+					},
+					{
+						Status: notificationv1.SendStatus_SUCCEEDED,
+					},
+				},
+			},
+			errAssertFunc: assert.NoError,
+		},
+		{
+			name: "使用截止日期策略批量发送通知",
+			req: &notificationv1.BatchSendNotificationsRequest{
+				Notifications: []*notificationv1.Notification{
+					{
+						Key:        "batch-deadline-key-1",
+						Receivers:  []string{"13800138012"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "121212",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Deadline{
+								Deadline: &notificationv1.SendStrategy_DeadlineStrategy{
+									Deadline: timestamppb.New(time.Now().Add(1 * time.Hour)),
+								},
+							},
+						},
+					},
+					{
+						Key:        "batch-deadline-key-2",
+						Receivers:  []string{"13800138013"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "131313",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Deadline{
+								Deadline: &notificationv1.SendStrategy_DeadlineStrategy{
+									Deadline: timestamppb.New(time.Now().Add(2 * time.Hour)),
+								},
+							},
+						},
+					},
+				},
+			},
+			setupContext: s.contextWithJWT,
+			wantResp: &notificationv1.BatchSendNotificationsResponse{
+				TotalCount:   2,
+				SuccessCount: 2,
+				Results: []*notificationv1.SendNotificationResponse{
+					{
+						Status: notificationv1.SendStatus_PENDING,
+					},
+					{
+						Status: notificationv1.SendStatus_PENDING,
+					},
+				},
+			},
+			errAssertFunc: assert.NoError,
+		},
+		{
+			name: "使用延迟发送策略批量发送通知",
+			req: &notificationv1.BatchSendNotificationsRequest{
+				Notifications: []*notificationv1.Notification{
+					{
+						Key:        "batch-delayed-key-1",
+						Receivers:  []string{"13800138014"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "141414",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Delayed{
+								Delayed: &notificationv1.SendStrategy_DelayedStrategy{
+									DelaySeconds: 60, // 延迟60秒
+								},
+							},
+						},
+					},
+					{
+						Key:        "batch-delayed-key-2",
+						Receivers:  []string{"13800138015"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "151515",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Delayed{
+								Delayed: &notificationv1.SendStrategy_DelayedStrategy{
+									DelaySeconds: 120, // 延迟120秒
+								},
+							},
+						},
+					},
+				},
+			},
+			setupContext: s.contextWithJWT,
+			wantResp: &notificationv1.BatchSendNotificationsResponse{
+				TotalCount:   2,
+				SuccessCount: 2,
+				Results: []*notificationv1.SendNotificationResponse{
+					{
+						Status: notificationv1.SendStatus_PENDING,
+					},
+					{
+						Status: notificationv1.SendStatus_PENDING,
+					},
+				},
+			},
+			errAssertFunc: assert.NoError,
+		},
+		{
+			name: "使用定时发送策略批量发送通知",
+			req: &notificationv1.BatchSendNotificationsRequest{
+				Notifications: []*notificationv1.Notification{
+					{
+						Key:        "batch-scheduled-key-1",
+						Receivers:  []string{"13800138016"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "161616",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Scheduled{
+								Scheduled: &notificationv1.SendStrategy_ScheduledStrategy{
+									SendTime: timestamppb.New(time.Now().Add(30 * time.Minute)),
+								},
+							},
+						},
+					},
+					{
+						Key:        "batch-scheduled-key-2",
+						Receivers:  []string{"13800138017"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "171717",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Scheduled{
+								Scheduled: &notificationv1.SendStrategy_ScheduledStrategy{
+									SendTime: timestamppb.New(time.Now().Add(45 * time.Minute)),
+								},
+							},
+						},
+					},
+				},
+			},
+			setupContext: s.contextWithJWT,
+			wantResp: &notificationv1.BatchSendNotificationsResponse{
+				TotalCount:   2,
+				SuccessCount: 2,
+				Results: []*notificationv1.SendNotificationResponse{
+					{
+						Status: notificationv1.SendStatus_PENDING,
+					},
+					{
+						Status: notificationv1.SendStatus_PENDING,
+					},
+				},
+			},
+			errAssertFunc: assert.NoError,
+		},
+		{
+			name: "使用时间窗口策略批量发送通知",
+			req: &notificationv1.BatchSendNotificationsRequest{
+				Notifications: []*notificationv1.Notification{
+					{
+						Key:        "batch-timewindow-key-1",
+						Receivers:  []string{"13800138018"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "181818",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_TimeWindow{
+								TimeWindow: &notificationv1.SendStrategy_TimeWindowStrategy{
+									StartTimeMilliseconds: time.Now().Unix() * 1000,
+									EndTimeMilliseconds:   time.Now().Add(2*time.Hour).Unix() * 1000,
+								},
+							},
+						},
+					},
+					{
+						Key:        "batch-timewindow-key-2",
+						Receivers:  []string{"13800138019"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "191919",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_TimeWindow{
+								TimeWindow: &notificationv1.SendStrategy_TimeWindowStrategy{
+									StartTimeMilliseconds: time.Now().Unix() * 1000,
+									EndTimeMilliseconds:   time.Now().Add(3*time.Hour).Unix() * 1000,
+								},
+							},
+						},
+					},
+				},
+			},
+			setupContext: s.contextWithJWT,
+			wantResp: &notificationv1.BatchSendNotificationsResponse{
+				TotalCount:   2,
+				SuccessCount: 2,
+				Results: []*notificationv1.SendNotificationResponse{
+					{
+						Status: notificationv1.SendStatus_PENDING,
+					},
+					{
+						Status: notificationv1.SendStatus_PENDING,
+					},
+				},
+			},
+			errAssertFunc: assert.NoError,
+		},
 		{
 			name: "不同发送策略混合发送",
 			req: &notificationv1.BatchSendNotificationsRequest{
@@ -1827,6 +2147,98 @@ func (s *SuccessGRPCServerTestSuite) TestBatchSendNotifications() {
 			},
 			errAssertFunc: assert.NoError,
 		},
+		{
+			name: "五种发送策略完整混合发送",
+			req: &notificationv1.BatchSendNotificationsRequest{
+				Notifications: []*notificationv1.Notification{
+					{
+						Key:        "batch-immediate-mix-key",
+						Receivers:  []string{"13800138020"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "202020",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Immediate{
+								Immediate: &notificationv1.SendStrategy_ImmediateStrategy{},
+							},
+						},
+					},
+					{
+						Key:        "batch-deadline-mix-key",
+						Receivers:  []string{"13800138021"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "212121",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Deadline{
+								Deadline: &notificationv1.SendStrategy_DeadlineStrategy{
+									Deadline: timestamppb.New(time.Now().Add(1 * time.Hour)),
+								},
+							},
+						},
+					},
+					{
+						Key:        "batch-delayed-mix-key",
+						Receivers:  []string{"13800138022"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "222222",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Delayed{
+								Delayed: &notificationv1.SendStrategy_DelayedStrategy{
+									DelaySeconds: 60,
+								},
+							},
+						},
+					},
+					{
+						Key:        "batch-scheduled-mix-key",
+						Receivers:  []string{"13800138023"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "232323",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Scheduled{
+								Scheduled: &notificationv1.SendStrategy_ScheduledStrategy{
+									SendTime: timestamppb.New(time.Now().Add(30 * time.Minute)),
+								},
+							},
+						},
+					},
+					{
+						Key:        "batch-timewindow-mix-key",
+						Receivers:  []string{"13800138024"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "242424",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_TimeWindow{
+								TimeWindow: &notificationv1.SendStrategy_TimeWindowStrategy{
+									StartTimeMilliseconds: time.Now().Unix() * 1000,
+									EndTimeMilliseconds:   time.Now().Add(2*time.Hour).Unix() * 1000,
+								},
+							},
+						},
+					},
+				},
+			},
+			setupContext: s.contextWithJWT,
+			wantResp: &notificationv1.BatchSendNotificationsResponse{
+				TotalCount:   5,
+				SuccessCount: 5,
+			},
+			errAssertFunc: assert.NoError,
+		},
 	}
 
 	for _, tt := range testCases {
@@ -1841,7 +2253,7 @@ func (s *SuccessGRPCServerTestSuite) TestBatchSendNotifications() {
 			if err != nil {
 				log.Printf("发送批量请求失败: %v", err)
 			} else {
-				log.Printf("接收批量响应: %+v", resp)
+				log.Printf("接收批量响应: %#v", resp)
 			}
 
 			tt.errAssertFunc(t, err)
@@ -1861,7 +2273,8 @@ func (s *SuccessGRPCServerTestSuite) TestBatchSendNotifications() {
 			// 检查成功的通知是否有非零ID
 			successCount := int32(0)
 			for _, result := range resp.Results {
-				if result.Status == notificationv1.SendStatus_SUCCEEDED {
+				if result.Status == notificationv1.SendStatus_SUCCEEDED ||
+					result.Status == notificationv1.SendStatus_PENDING {
 					assert.Greater(t, result.NotificationId, uint64(0), "成功的通知应有非零ID")
 					successCount++
 				}
@@ -2430,7 +2843,7 @@ func (s *SuccessGRPCServerTestSuite) TestQueryNotification() {
 	// 发送通知以创建记录
 	sendReq := &notificationv1.SendNotificationRequest{
 		Notification: &notificationv1.Notification{
-			Key:        "query-notification-key",
+			Key:        "query-notification-key-x",
 			Receivers:  []string{"13800138000"},
 			Channel:    notificationv1.Channel_SMS,
 			TemplateId: strconv.FormatInt(templateID, 10),
@@ -2457,7 +2870,7 @@ func (s *SuccessGRPCServerTestSuite) TestQueryNotification() {
 		{
 			name: "成功查询存在的通知",
 			req: &notificationv1.QueryNotificationRequest{
-				Key: "query-notification-key",
+				Key: "query-notification-key-x",
 			},
 			setupContext: s.contextWithJWT,
 			wantResp: &notificationv1.QueryNotificationResponse{

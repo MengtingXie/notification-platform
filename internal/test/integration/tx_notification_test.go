@@ -9,16 +9,16 @@ import (
 	"testing"
 	"time"
 
-	"gitee.com/flycash/notification-platform/internal/pkg/retry"
-	"gitee.com/flycash/notification-platform/internal/service/sender"
-	sendermocks "gitee.com/flycash/notification-platform/internal/service/sender/mocks"
-
 	clientv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
+	txnotificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	configmocks "gitee.com/flycash/notification-platform/internal/service/config/mocks"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
+	"gitee.com/flycash/notification-platform/internal/service/sender"
+	sendermocks "gitee.com/flycash/notification-platform/internal/service/sender/mocks"
 	"gitee.com/flycash/notification-platform/internal/test/integration/ioc/tx_notification"
 	"gitee.com/flycash/notification-platform/internal/test/integration/testgrpc"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/mock/gomock"
+	grpc "google.golang.org/grpc"
 	"gorm.io/gorm"
 )
 
@@ -236,7 +237,6 @@ func (s *TxNotificationServiceTestSuite) TestCommit() {
 			},
 			sender: func(t *testing.T, ctrl *gomock.Controller) sender.NotificationSender {
 				mockSender := sendermocks.NewMockNotificationSender(ctrl)
-				mockSender.EXPECT().Send(gomock.Any(), gomock.Any()).Return(domain.SendResponse{}, nil)
 				return mockSender
 			},
 			before: func(t *testing.T) (int64, string) {
@@ -300,8 +300,8 @@ func (s *TxNotificationServiceTestSuite) TestCommit() {
 			bizID, key := tc.before(t)
 
 			configSvc := tc.configSvc(t, ctrl)
-			sender := tc.sender(t, ctrl)
-			svc := tx_notification.InitTxNotificationService(configSvc, sender)
+			senderSvc := tc.sender(t, ctrl)
+			svc := tx_notification.InitTxNotificationService(configSvc, senderSvc)
 			err := svc.Svc.Commit(ctx, bizID, key)
 			hasError := tc.checkErr(t, err)
 			if !hasError {
@@ -480,7 +480,9 @@ func (s *TxNotificationServiceTestSuite) TestCheckBackTask() {
 	etcdClient := testioc.InitEtcdClient()
 	reg := registry.Load("").Build(registry.WithClientEtcd(etcdClient))
 	go func() {
-		server := testgrpc.NewServer("order.notification.callback.service", reg, &MockGrpcServer{})
+		server := testgrpc.NewServer[txnotificationv1.TransactionCheckServiceServer]("order.notification.callback.service", reg, &MockGrpcServer{}, func(s grpc.ServiceRegistrar, srv clientv1.TransactionCheckServiceServer) {
+			txnotificationv1.RegisterTransactionCheckServiceServer(s, srv)
+		})
 		err = server.Start("127.0.0.1:30001")
 		if err != nil {
 			require.NoError(t, err)
