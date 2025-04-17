@@ -157,45 +157,6 @@ func (c *MockChannelTemplateServiceForkVersionCall) DoAndReturn(f func(context.C
 	return c
 }
 
-// GetTemplate mocks base method.
-func (m *MockChannelTemplateService) GetTemplate(ctx context.Context, templateID int64, providerName string, channel domain.Channel) (domain.ChannelTemplate, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTemplate", ctx, templateID, providerName, channel)
-	ret0, _ := ret[0].(domain.ChannelTemplate)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetTemplate indicates an expected call of GetTemplate.
-func (mr *MockChannelTemplateServiceMockRecorder) GetTemplate(ctx, templateID, providerName, channel any) *MockChannelTemplateServiceGetTemplateCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTemplate", reflect.TypeOf((*MockChannelTemplateService)(nil).GetTemplate), ctx, templateID, providerName, channel)
-	return &MockChannelTemplateServiceGetTemplateCall{Call: call}
-}
-
-// MockChannelTemplateServiceGetTemplateCall wrap *gomock.Call
-type MockChannelTemplateServiceGetTemplateCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockChannelTemplateServiceGetTemplateCall) Return(arg0 domain.ChannelTemplate, arg1 error) *MockChannelTemplateServiceGetTemplateCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockChannelTemplateServiceGetTemplateCall) Do(f func(context.Context, int64, string, domain.Channel) (domain.ChannelTemplate, error)) *MockChannelTemplateServiceGetTemplateCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockChannelTemplateServiceGetTemplateCall) DoAndReturn(f func(context.Context, int64, string, domain.Channel) (domain.ChannelTemplate, error)) *MockChannelTemplateServiceGetTemplateCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // GetTemplateByID mocks base method.
 func (m *MockChannelTemplateService) GetTemplateByID(ctx context.Context, templateID int64) (domain.ChannelTemplate, error) {
 	m.ctrl.T.Helper()
@@ -235,41 +196,80 @@ func (c *MockChannelTemplateServiceGetTemplateByIDCall) DoAndReturn(f func(conte
 	return c
 }
 
-// GetTemplates mocks base method.
-func (m *MockChannelTemplateService) GetTemplates(ctx context.Context, ownerID int64, ownerType domain.OwnerType) ([]domain.ChannelTemplate, error) {
+// GetTemplateByIDAndProviderInfo mocks base method.
+func (m *MockChannelTemplateService) GetTemplateByIDAndProviderInfo(ctx context.Context, templateID int64, providerName string, channel domain.Channel) (domain.ChannelTemplate, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTemplates", ctx, ownerID, ownerType)
-	ret0, _ := ret[0].([]domain.ChannelTemplate)
+	ret := m.ctrl.Call(m, "GetTemplateByIDAndProviderInfo", ctx, templateID, providerName, channel)
+	ret0, _ := ret[0].(domain.ChannelTemplate)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetTemplates indicates an expected call of GetTemplates.
-func (mr *MockChannelTemplateServiceMockRecorder) GetTemplates(ctx, ownerID, ownerType any) *MockChannelTemplateServiceGetTemplatesCall {
+// GetTemplateByIDAndProviderInfo indicates an expected call of GetTemplateByIDAndProviderInfo.
+func (mr *MockChannelTemplateServiceMockRecorder) GetTemplateByIDAndProviderInfo(ctx, templateID, providerName, channel any) *MockChannelTemplateServiceGetTemplateByIDAndProviderInfoCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTemplates", reflect.TypeOf((*MockChannelTemplateService)(nil).GetTemplates), ctx, ownerID, ownerType)
-	return &MockChannelTemplateServiceGetTemplatesCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTemplateByIDAndProviderInfo", reflect.TypeOf((*MockChannelTemplateService)(nil).GetTemplateByIDAndProviderInfo), ctx, templateID, providerName, channel)
+	return &MockChannelTemplateServiceGetTemplateByIDAndProviderInfoCall{Call: call}
 }
 
-// MockChannelTemplateServiceGetTemplatesCall wrap *gomock.Call
-type MockChannelTemplateServiceGetTemplatesCall struct {
+// MockChannelTemplateServiceGetTemplateByIDAndProviderInfoCall wrap *gomock.Call
+type MockChannelTemplateServiceGetTemplateByIDAndProviderInfoCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockChannelTemplateServiceGetTemplatesCall) Return(arg0 []domain.ChannelTemplate, arg1 error) *MockChannelTemplateServiceGetTemplatesCall {
+func (c *MockChannelTemplateServiceGetTemplateByIDAndProviderInfoCall) Return(arg0 domain.ChannelTemplate, arg1 error) *MockChannelTemplateServiceGetTemplateByIDAndProviderInfoCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockChannelTemplateServiceGetTemplatesCall) Do(f func(context.Context, int64, domain.OwnerType) ([]domain.ChannelTemplate, error)) *MockChannelTemplateServiceGetTemplatesCall {
+func (c *MockChannelTemplateServiceGetTemplateByIDAndProviderInfoCall) Do(f func(context.Context, int64, string, domain.Channel) (domain.ChannelTemplate, error)) *MockChannelTemplateServiceGetTemplateByIDAndProviderInfoCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockChannelTemplateServiceGetTemplatesCall) DoAndReturn(f func(context.Context, int64, domain.OwnerType) ([]domain.ChannelTemplate, error)) *MockChannelTemplateServiceGetTemplatesCall {
+func (c *MockChannelTemplateServiceGetTemplateByIDAndProviderInfoCall) DoAndReturn(f func(context.Context, int64, string, domain.Channel) (domain.ChannelTemplate, error)) *MockChannelTemplateServiceGetTemplateByIDAndProviderInfoCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// GetTemplatesByOwner mocks base method.
+func (m *MockChannelTemplateService) GetTemplatesByOwner(ctx context.Context, ownerID int64, ownerType domain.OwnerType) ([]domain.ChannelTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTemplatesByOwner", ctx, ownerID, ownerType)
+	ret0, _ := ret[0].([]domain.ChannelTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTemplatesByOwner indicates an expected call of GetTemplatesByOwner.
+func (mr *MockChannelTemplateServiceMockRecorder) GetTemplatesByOwner(ctx, ownerID, ownerType any) *MockChannelTemplateServiceGetTemplatesByOwnerCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTemplatesByOwner", reflect.TypeOf((*MockChannelTemplateService)(nil).GetTemplatesByOwner), ctx, ownerID, ownerType)
+	return &MockChannelTemplateServiceGetTemplatesByOwnerCall{Call: call}
+}
+
+// MockChannelTemplateServiceGetTemplatesByOwnerCall wrap *gomock.Call
+type MockChannelTemplateServiceGetTemplatesByOwnerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockChannelTemplateServiceGetTemplatesByOwnerCall) Return(arg0 []domain.ChannelTemplate, arg1 error) *MockChannelTemplateServiceGetTemplatesByOwnerCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockChannelTemplateServiceGetTemplatesByOwnerCall) Do(f func(context.Context, int64, domain.OwnerType) ([]domain.ChannelTemplate, error)) *MockChannelTemplateServiceGetTemplatesByOwnerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockChannelTemplateServiceGetTemplatesByOwnerCall) DoAndReturn(f func(context.Context, int64, domain.OwnerType) ([]domain.ChannelTemplate, error)) *MockChannelTemplateServiceGetTemplatesByOwnerCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

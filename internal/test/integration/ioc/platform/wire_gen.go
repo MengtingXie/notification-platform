@@ -48,7 +48,7 @@ func InitGrpcServer(clients map[string]client.Client) *ioc.App {
 	providerRepository := repository.NewProviderRepository(providerDAO)
 	manageService := manage.NewProviderService(providerRepository)
 	auditService := audit.NewService()
-	channelTemplateService := manage2.NewChannelTemplateService(channelTemplateRepository, manageService, auditService)
+	channelTemplateService := manage2.NewChannelTemplateService(channelTemplateRepository, manageService, auditService, clients)
 	businessConfigDAO := dao.NewBusinessConfigDAO(db)
 	redisClient := ioc2.InitRedisClient()
 	cache := ioc2.InitGoCache()

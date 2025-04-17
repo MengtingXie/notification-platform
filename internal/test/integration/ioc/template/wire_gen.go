@@ -11,16 +11,28 @@ import (
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/audit"
 	"gitee.com/flycash/notification-platform/internal/service/provider/manage"
+	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
 	manage2 "gitee.com/flycash/notification-platform/internal/service/template/manage"
 	"gitee.com/flycash/notification-platform/internal/test/ioc"
 )
 
 // Injectors from wire.go:
 
-func Init(providerSvc manage.Service, auditSvc audit.Service) manage2.ChannelTemplateService {
+func Init(providerSvc manage.Service, auditSvc audit.Service, clients map[string]client.Client) *Service {
 	db := ioc.InitDBAndTables()
 	channelTemplateDAO := dao.NewChannelTemplateDAO(db)
 	channelTemplateRepository := repository.NewChannelTemplateRepository(channelTemplateDAO)
-	channelTemplateService := manage2.NewChannelTemplateService(channelTemplateRepository, providerSvc, auditSvc)
-	return channelTemplateService
+	channelTemplateService := manage2.NewChannelTemplateService(channelTemplateRepository, providerSvc, auditSvc, clients)
+	service := &Service{
+		Svc:  channelTemplateService,
+		Repo: channelTemplateRepository,
+	}
+	return service
+}
+
+// wire.go:
+
+type Service struct {
+	Svc  manage2.ChannelTemplateService
+	Repo repository.ChannelTemplateRepository
 }

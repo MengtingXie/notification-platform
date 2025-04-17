@@ -37,36 +37,37 @@ import (
 // Injectors from wire.go:
 
 func InitGrpcServer() *ioc.App {
-	v := ioc.InitDB()
-	notificationDAO := dao.NewNotificationDAO(v)
+	db := ioc.InitDB()
+	notificationDAO := dao.NewNotificationDAO(db)
 	notificationRepository := repository.NewNotificationRepository(notificationDAO)
 	sonyflake := ioc.InitIDGenerator()
 	service := notification.NewNotificationService(notificationRepository, sonyflake)
-	channelTemplateDAO := dao.NewChannelTemplateDAO(v)
+	channelTemplateDAO := dao.NewChannelTemplateDAO(db)
 	channelTemplateRepository := repository.NewChannelTemplateRepository(channelTemplateDAO)
 	string2 := ioc.InitProviderEncryptKey()
-	providerDAO := dao.NewProviderDAO(v, string2)
+	providerDAO := dao.NewProviderDAO(db, string2)
 	providerRepository := repository.NewProviderRepository(providerDAO)
 	manageService := manage.NewProviderService(providerRepository)
 	auditService := audit.NewService()
-	channelTemplateService := manage2.NewChannelTemplateService(channelTemplateRepository, manageService, auditService)
-	businessConfigDAO := dao.NewBusinessConfigDAO(v)
+	v := newSMSClients(manageService)
+	channelTemplateService := manage2.NewChannelTemplateService(channelTemplateRepository, manageService, auditService, v)
+	businessConfigDAO := dao.NewBusinessConfigDAO(db)
 	client := ioc.InitRedisClient()
 	cache := ioc.InitGoCache()
 	localCache := local.NewLocalCache(client, cache)
 	redisCache := redis.NewCache(client)
 	businessConfigRepository := repository.NewBusinessConfigRepository(businessConfigDAO, localCache, redisCache)
 	businessConfigService := config.NewBusinessConfigService(businessConfigRepository)
-	callbackLogDAO := dao.NewCallbackLogDAO(v)
+	callbackLogDAO := dao.NewCallbackLogDAO(db)
 	callbackLogRepository := repository.NewCallbackLogRepository(notificationRepository, callbackLogDAO)
 	callbackService := callback.NewService(businessConfigService, callbackLogRepository)
-	channel := newChannel(manageService, channelTemplateService)
+	channel := newChannel(v, channelTemplateService)
 	notificationSender := sender.NewSender(notificationRepository, businessConfigService, callbackService, channel)
 	immediateSendStrategy := sendstrategy.NewImmediateStrategy(notificationRepository, notificationSender)
 	defaultSendStrategy := sendstrategy.NewDefaultStrategy(notificationRepository, businessConfigService)
 	sendStrategy := sendstrategy.NewDispatcher(immediateSendStrategy, defaultSendStrategy)
 	sendService := notification.NewSendService(channelTemplateService, service, sonyflake, sendStrategy)
-	txNotificationDAO := dao.NewTxNotificationDAO(v)
+	txNotificationDAO := dao.NewTxNotificationDAO(db)
 	txNotificationRepository := repository.NewTxNotificationRepository(txNotificationDAO)
 	dlockClient := ioc.InitDistributedLock(client)
 	txNotificationService := notification.NewTxNotificationService(txNotificationRepository, businessConfigService, notificationRepository, dlockClient, notificationSender)
@@ -78,7 +79,7 @@ func InitGrpcServer() *ioc.App {
 	sendingTimeoutTask := notification.NewSendingTimeoutTask(dlockClient, notificationRepository)
 	txCheckTask := notification.NewTxCheckTask(txNotificationRepository, businessConfigService, dlockClient)
 	v2 := ioc.InitTasks(asyncRequestResultCallbackTask, notificationScheduler, sendingTimeoutTask, txCheckTask)
-	quotaDAO := dao.NewQuotaDAO(v)
+	quotaDAO := dao.NewQuotaDAO(db)
 	quotaRepository := repository.NewQuotaRepository(quotaDAO)
 	quotaService := quota.NewService(quotaRepository)
 	monthlyResetCron := quota.NewQuotaMonthlyResetCron(businessConfigRepository, quotaService)
@@ -99,6 +100,7 @@ var (
 	notificationSvcSet   = wire.NewSet(notification.NewNotificationService, repository.NewNotificationRepository, dao.NewNotificationDAO, notification.NewSendingTimeoutTask)
 	txNotificationSvcSet = wire.NewSet(notification.NewTxNotificationService, repository.NewTxNotificationRepository, dao.NewTxNotificationDAO, notification.NewTxCheckTask)
 	senderSvcSet         = wire.NewSet(
+		newSMSClients,
 		newChannel, sender.NewSender,
 	)
 	sendNotificationSvcSet = wire.NewSet(notification.NewSendService, sendstrategy.NewDispatcher, sendstrategy.NewImmediateStrategy, sendstrategy.NewDefaultStrategy)
@@ -110,16 +112,29 @@ var (
 )
 
 func newChannel(
-	providerSvc manage.Service,
+	clients map[string]client.Client,
 	templateSvc manage2.ChannelTemplateService,
 ) channel.Channel {
-	return channel.NewDispatcher(map[domain.Channel]channel.Channel{domain.ChannelSMS: channel.NewSMSChannel(newSMSSelectorBuilder(providerSvc, templateSvc))})
+	return channel.NewDispatcher(map[domain.Channel]channel.Channel{domain.ChannelSMS: channel.NewSMSChannel(newSMSSelectorBuilder(clients, templateSvc))})
 }
 
 func newSMSSelectorBuilder(
-	providerSvc manage.Service,
+	clients map[string]client.Client,
 	templateSvc manage2.ChannelTemplateService,
 ) *sequential.SelectorBuilder {
+
+	providers := make([]provider.Provider, 0, len(clients))
+	for name := range clients {
+		providers = append(providers, sms.NewSMSProvider(
+			name,
+			templateSvc,
+			clients[name],
+		))
+	}
+	return sequential.NewSelectorBuilder(providers)
+}
+
+func newSMSClients(providerSvc manage.Service) map[string]client.Client {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
 
@@ -127,8 +142,7 @@ func newSMSSelectorBuilder(
 	if err != nil {
 		panic(err)
 	}
-
-	providers := make([]provider.Provider, 0, len(entities))
+	clients := make(map[string]client.Client)
 	for i := range entities {
 		var cli client.Client
 		if entities[i].Name == "aliyun" {
@@ -137,18 +151,15 @@ func newSMSSelectorBuilder(
 				panic(err1)
 			}
 			cli = c
-		} else if entities[i].Name == "gitee" {
+			clients[entities[i].Name] = cli
+		} else if entities[i].Name == "tencentcloud" {
 			c, err1 := client.NewTencentCloudSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret, entities[i].APPID)
 			if err1 != nil {
 				panic(err1)
 			}
 			cli = c
+			clients[entities[i].Name] = cli
 		}
-		providers = append(providers, sms.NewSMSProvider(
-			entities[i].Name,
-			templateSvc,
-			cli,
-		))
 	}
-	return sequential.NewSelectorBuilder(providers)
+	return clients
 }
