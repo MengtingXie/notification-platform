@@ -11,7 +11,9 @@ import (
 )
 
 const (
-	RequestType = "requestType" //
+	RequestType    = "requestType"
+	readWeightStr  = "read_weight"
+	writeWeightStr = "write_weight"
 )
 
 type rwServiceNode struct {
@@ -107,8 +109,14 @@ type WeightBalancerBuilder struct{}
 func (w *WeightBalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 	nodes := make([]*rwServiceNode, 0, len(info.ReadySCs))
 	for sub, subInfo := range info.ReadySCs {
-		readWeight := subInfo.Address.Attributes.Value("read_weight").(int32)
-		writeWeight := subInfo.Address.Attributes.Value("write_weight").(int32)
+		readWeight, ok := subInfo.Address.Attributes.Value(readWeightStr).(int32)
+		if !ok {
+			continue
+		}
+		writeWeight, ok := subInfo.Address.Attributes.Value(writeWeightStr).(int32)
+		if !ok {
+			continue
+		}
 
 		nodes = append(nodes, &rwServiceNode{
 			mutex:                &sync.RWMutex{},

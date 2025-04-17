@@ -19,11 +19,16 @@ type MetricsSender struct {
 
 // NewMetricsSender 创建一个新的带有指标收集的发送器
 func NewMetricsSender(sender NotificationSender) *MetricsSender {
+	const (
+		exponentStart  = 0.01
+		exponentFactor = 2
+		exponentCount  = 10
+	)
 	sendDurationHistogram := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "notification_send_duration_seconds",
 			Help:    "通知发送耗时统计（秒）",
-			Buckets: prometheus.ExponentialBuckets(0.01, 2, 10), // 10ms到约10秒
+			Buckets: prometheus.ExponentialBuckets(exponentStart, exponentFactor, exponentCount), // 10ms到约10秒
 		},
 		[]string{"channel", "status"},
 	)

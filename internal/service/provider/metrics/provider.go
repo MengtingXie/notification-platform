@@ -19,13 +19,19 @@ type Provider struct {
 	name                  string
 }
 
+const (
+	exStart  = 0.01
+	exFactor = 2
+	exCount  = 10
+)
+
 // NewProvider 创建一个新的带有指标收集的供应商
 func NewProvider(name string, p provider.Provider) *Provider {
 	sendDurationHistogram := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "provider_send_duration_seconds",
 			Help:    "供应商发送通知耗时统计（秒）",
-			Buckets: prometheus.ExponentialBuckets(0.01, 2, 10), // 10ms到约10秒
+			Buckets: prometheus.ExponentialBuckets(exStart, exFactor, exCount), // 10ms到约10秒
 		},
 		[]string{"provider", "channel", "status"},
 	)

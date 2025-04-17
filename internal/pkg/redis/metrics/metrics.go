@@ -10,6 +10,12 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+const (
+	exponentStart  = 0.001
+	exponentFactor = 2
+	exponentCount  = 10
+)
+
 var (
 	// Redis命令计数器
 	commandCounter = prometheus.NewCounterVec(
@@ -25,7 +31,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "redis_command_duration_seconds",
 			Help:    "Redis command execution time in seconds",
-			Buckets: prometheus.ExponentialBuckets(0.001, 2, 10), // 1ms to ~1s
+			Buckets: prometheus.ExponentialBuckets(exponentStart, exponentFactor, exponentCount), // 1ms to ~1s
 		},
 		[]string{"command"},
 	)
@@ -52,7 +58,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "redis_pipeline_duration_seconds",
 			Help:    "Redis pipeline execution time in seconds",
-			Buckets: prometheus.ExponentialBuckets(0.001, 2, 10), // 1ms to ~1s
+			Buckets: prometheus.ExponentialBuckets(exponentStart, exponentFactor, exponentCount), // 1ms to ~1s
 		},
 	)
 
@@ -78,16 +84,16 @@ func init() {
 	)
 }
 
-// MetricsHook 实现了 redis.Hook 接口，为所有 Redis 操作添加指标收集
-type MetricsHook struct{}
+// Hook 实现了 redis.Hook 接口，为所有 Redis 操作添加指标收集
+type Hook struct{}
 
 // NewMetricsHook 创建一个新的 Redis 指标收集钩子
-func NewMetricsHook() *MetricsHook {
-	return &MetricsHook{}
+func NewMetricsHook() *Hook {
+	return &Hook{}
 }
 
 // ProcessHook 处理Redis命令的指标收集
-func (h *MetricsHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+func (h *Hook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 	return func(ctx context.Context, cmd redis.Cmder) error {
 		cmdName := cmd.Name()
 
@@ -103,10 +109,14 @@ func (h *MetricsHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 		// 记录命令执行时间
 		commandDuration.WithLabelValues(cmdName).Observe(duration.Seconds())
 
+		const (
+			successStatus = "success"
+			errorStatus   = "error"
+		)
 		// 记录命令执行状态
-		status := "success"
+		status := successStatus
 		if err != nil && !errors.Is(err, redis.Nil) {
-			status = "error"
+			status = errorStatus
 		}
 
 		// 增加命令计数
@@ -117,7 +127,7 @@ func (h *MetricsHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 }
 
 // ProcessPipelineHook 处理Redis管道命令的指标收集
-func (h *MetricsHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+func (h *Hook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
 	return func(ctx context.Context, cmds []redis.Cmder) error {
 		if len(cmds) == 0 {
 			return next(ctx, cmds)
@@ -137,18 +147,21 @@ func (h *MetricsHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.
 
 		// 记录管道命令数量
 		pipelineCommandsCounter.Add(float64(len(cmds)))
-
+		const (
+			successStr = "success"
+			errorStr   = "error"
+		)
 		// 检查是否有错误
-		status := "success"
+		status := successStr
 		for _, cmd := range cmds {
 			if cmdErr := cmd.Err(); cmdErr != nil && !errors.Is(cmdErr, redis.Nil) {
-				status = "error"
+				status = errorStr
 				break
 			}
 		}
 
-		if status == "success" && err != nil {
-			status = "error"
+		if status == successStr && err != nil {
+			status = errorStr
 		}
 
 		// 增加管道计数
@@ -159,7 +172,7 @@ func (h *MetricsHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.
 }
 
 // DialHook 处理Redis连接的指标收集
-func (h *MetricsHook) DialHook(next redis.DialHook) redis.DialHook {
+func (h *Hook) DialHook(next redis.DialHook) redis.DialHook {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		// 执行连接操作
 		conn, err := next(ctx, network, addr)

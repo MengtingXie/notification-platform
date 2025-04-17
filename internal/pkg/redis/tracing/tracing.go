@@ -20,21 +20,21 @@ const (
 	instrumentationName = "internal/pkg/redis/tracing"
 )
 
-// TracingHook 实现了 redis.Hook 接口，为所有 Redis 操作添加 OpenTelemetry 追踪
-type TracingHook struct {
+// Hook 实现了 redis.Hook 接口，为所有 Redis 操作添加 OpenTelemetry 追踪
+type Hook struct {
 	// 可选的追踪器，如果为nil则使用全局追踪器
 	tracer trace.Tracer
 }
 
 // NewTracingHook 创建一个新的 Redis 追踪钩子
-func NewTracingHook() *TracingHook {
-	return &TracingHook{
+func NewTracingHook() *Hook {
+	return &Hook{
 		tracer: otel.GetTracerProvider().Tracer(instrumentationName),
 	}
 }
 
 // ProcessHook 处理Redis命令的追踪
-func (h *TracingHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+func (h *Hook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 	return func(ctx context.Context, cmd redis.Cmder) error {
 		cmdName := cmd.Name()
 		spanName := fmt.Sprintf("Redis %s", cmdName)
@@ -96,7 +96,7 @@ func (h *TracingHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 }
 
 // ProcessPipelineHook 处理Redis管道命令的追踪
-func (h *TracingHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+func (h *Hook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
 	return func(ctx context.Context, cmds []redis.Cmder) error {
 		if len(cmds) == 0 {
 			return next(ctx, cmds)
@@ -155,7 +155,7 @@ func (h *TracingHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.
 }
 
 // DialHook 处理Redis连接的追踪
-func (h *TracingHook) DialHook(next redis.DialHook) redis.DialHook {
+func (h *Hook) DialHook(next redis.DialHook) redis.DialHook {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		spanName := fmt.Sprintf("Redis CONNECT %s", addr)
 		opCtx, span := h.tracer.Start(

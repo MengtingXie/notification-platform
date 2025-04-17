@@ -9,8 +9,12 @@ import (
 )
 
 const (
-	// 用于GORM度量的仪器名称
-	instrumentationName = "internal/pkg/database/metrics"
+	exponentStart  = 0.001
+	exponentFactor = 2
+	exponentCount  = 10
+	linearStart    = 1
+	linearFactor   = 10
+	linearCount    = 10
 )
 
 // GormMetricsPlugin 是一个实现了gorm.Plugin接口的度量插件
@@ -44,7 +48,7 @@ func NewGormMetricsPlugin() *GormMetricsPlugin {
 			Namespace: "gorm",
 			Name:      "response_time_seconds",
 			Help:      "Response time of GORM database operations in seconds.",
-			Buckets:   prometheus.ExponentialBuckets(0.001, 2, 10), // 从1ms开始，指数级增长
+			Buckets:   prometheus.ExponentialBuckets(exponentStart, exponentFactor, exponentCount), // 从1ms开始，指数级增长
 		},
 		[]string{"operation", "table", "status"},
 	)
@@ -63,7 +67,7 @@ func NewGormMetricsPlugin() *GormMetricsPlugin {
 			Namespace: "gorm",
 			Name:      "rows_affected",
 			Help:      "Number of rows affected by GORM database operations.",
-			Buckets:   prometheus.LinearBuckets(1, 10, 10), // 1, 11, 21, ...
+			Buckets:   prometheus.LinearBuckets(linearStart, linearFactor, linearCount), // 1, 11, 21, ...
 		},
 		[]string{"operation", "table"},
 	)
@@ -131,9 +135,10 @@ func (p *GormMetricsPlugin) Initialize(db *gorm.DB) error {
 }
 
 // 辅助函数：从GORM DB中获取表名和操作类型
-func getTableAndOperation(db *gorm.DB) (string, string) {
-	tableName := "unknown"
-	operation := "unknown"
+func getTableAndOperation(db *gorm.DB) (tableName, operation string) {
+	const unknowStr = "unknow"
+	tableName = unknowStr
+	operation = unknowStr
 
 	// 获取表名
 	if db.Statement.Schema != nil {
