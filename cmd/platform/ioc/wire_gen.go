@@ -64,9 +64,7 @@ func InitGrpcServer() *ioc.App {
 	callbackService := callback.NewService(businessConfigService, callbackLogRepository)
 	channel := newChannel(manageService, channelTemplateService)
 	notificationSender := sender.NewSender(notificationRepository, businessConfigService, callbackService, channel)
-	tracingSender := sender.NewTracingSender(notificationSender)
-	metricSender := sender.NewMetricsSender(tracingSender)
-	immediateSendStrategy := sendstrategy.NewImmediateStrategy(notificationRepository, metricSender)
+	immediateSendStrategy := sendstrategy.NewImmediateStrategy(notificationRepository, notificationSender)
 	defaultSendStrategy := sendstrategy.NewDefaultStrategy(notificationRepository, businessConfigService)
 	sendStrategy := sendstrategy.NewDispatcher(immediateSendStrategy, defaultSendStrategy)
 	sendService := notification.NewSendService(channelTemplateService, service, sonyflake, sendStrategy)
@@ -162,5 +160,5 @@ func newMockSMSSelectorBuilder(
 	providerSvc manage.Service,
 	templateSvc manage2.ChannelTemplateService,
 ) *sequential.SelectorBuilder {
-	return sequential.NewSelectorBuilder([]provider.Provider{metrics.NewProvider("ali",tracing.NewProvider(provider.NewMockProvider()))})
+	return sequential.NewSelectorBuilder([]provider.Provider{metrics.NewProvider("ali", tracing.NewProvider(provider.NewMockProvider()))})
 }
