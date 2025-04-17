@@ -90,8 +90,12 @@ func (l *InfiniteLoop) Run(ctx context.Context) {
 }
 
 func (l *InfiniteLoop) bizLoop(ctx context.Context, lock dlock.Lock) error {
+	const bizTimeout = 50 * time.Second
 	for {
-		err := l.biz(ctx)
+		// 可以确保业务在分布式锁过期之前结束
+		bizCtx, cancel := context.WithTimeout(ctx, bizTimeout)
+		err := l.biz(bizCtx)
+		cancel()
 		if err != nil {
 			l.logger.Error("业务执行失败", elog.FieldErr(err))
 		}

@@ -53,7 +53,6 @@ func (d *sender) Send(ctx context.Context, notification domain.Notification) (do
 	resp := domain.SendResponse{
 		NotificationID: notification.ID,
 	}
-
 	_, err := d.channel.Send(ctx, notification)
 	if err != nil {
 		d.logger.Error("发送失败 %w", elog.FieldErr(err))

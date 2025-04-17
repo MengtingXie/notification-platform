@@ -16,12 +16,15 @@ import (
 type Provider struct {
 	provider provider.Provider
 	tracer   trace.Tracer
+	name     string
 }
 
 // NewProvider 创建一个新的带有链路追踪的供应商
-func NewProvider(p provider.Provider) *Provider {
+// name 应该传入类似于 tencent, ali 这种名字
+func NewProvider(p provider.Provider, name string) *Provider {
 	return &Provider{
 		provider: p,
+		name:     name,
 		tracer:   otel.Tracer("notification-platform/provider"),
 	}
 }
@@ -29,6 +32,7 @@ func NewProvider(p provider.Provider) *Provider {
 func (p *Provider) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
 	ctx, span := p.tracer.Start(ctx, "Provider.Send",
 		trace.WithAttributes(
+			attribute.String("provider.name", strconv.FormatUint(notification.ID, 10)),
 			attribute.String("notification.id", strconv.FormatUint(notification.ID, 10)),
 			attribute.String("notification.bizId", strconv.FormatInt(notification.BizID, 10)),
 			attribute.String("notification.key", notification.Key),
