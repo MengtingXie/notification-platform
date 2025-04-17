@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
+	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	sms "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms/v20210111"
 )
 
@@ -26,7 +27,7 @@ type TencentCloudSMS struct {
 
 // NewTencentCloudSMS 创建腾讯云短信客户端
 func NewTencentCloudSMS(regionID, secretID, secretKey, appID string) (*TencentCloudSMS, error) {
-	client, err := sms.NewClient(common.NewCredential(secretID, secretKey), regionID, nil) // 区域
+	client, err := sms.NewClient(common.NewCredential(secretID, secretKey), regionID, profile.NewClientProfile()) // 区域
 	if err != nil {
 		return nil, err
 	}

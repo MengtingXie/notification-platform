@@ -27,7 +27,7 @@ lint:
 # 单元测试
 .PHONY: ut
 ut:
-	@go test -race -shuffle=on -short -failfast ./...
+	@go test -race -shuffle=on -short -failfast -tags=unit ./...
 
 # 集成测试
 .PHONY: e2e_up

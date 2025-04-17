@@ -7,10 +7,9 @@
 package ioc
 
 import (
-	"context"
 	"gitee.com/flycash/notification-platform/internal/api/grpc"
 	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/ioc"
+	ioc2 "gitee.com/flycash/notification-platform/internal/ioc"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/repository/cache/local"
 	"gitee.com/flycash/notification-platform/internal/repository/cache/redis"
@@ -30,37 +29,37 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/sender"
 	"gitee.com/flycash/notification-platform/internal/service/sendstrategy"
 	manage2 "gitee.com/flycash/notification-platform/internal/service/template/manage"
+	"gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/google/wire"
-	"time"
 )
 
 // Injectors from wire.go:
 
-func InitGrpcServer() *ioc.App {
-	db := ioc.InitDB()
+func InitGrpcServer(clients map[string]client.Client) *ioc.App {
+	db := ioc2.InitDB()
 	notificationDAO := dao.NewNotificationDAO(db)
 	notificationRepository := repository.NewNotificationRepository(notificationDAO)
-	sonyflake := ioc.InitIDGenerator()
+	sonyflake := ioc2.InitIDGenerator()
 	service := notification.NewNotificationService(notificationRepository, sonyflake)
 	channelTemplateDAO := dao.NewChannelTemplateDAO(db)
 	channelTemplateRepository := repository.NewChannelTemplateRepository(channelTemplateDAO)
-	string2 := ioc.InitProviderEncryptKey()
+	string2 := ioc2.InitProviderEncryptKey()
 	providerDAO := dao.NewProviderDAO(db, string2)
 	providerRepository := repository.NewProviderRepository(providerDAO)
 	manageService := manage.NewProviderService(providerRepository)
 	auditService := audit.NewService()
 	channelTemplateService := manage2.NewChannelTemplateService(channelTemplateRepository, manageService, auditService)
 	businessConfigDAO := dao.NewBusinessConfigDAO(db)
-	client := ioc.InitRedisClient()
-	cache := ioc.InitGoCache()
-	localCache := local.NewLocalCache(client, cache)
-	redisCache := redis.NewCache(client)
+	redisClient := ioc2.InitRedisClient()
+	cache := ioc2.InitGoCache()
+	localCache := local.NewLocalCache(redisClient, cache)
+	redisCache := redis.NewCache(redisClient)
 	businessConfigRepository := repository.NewBusinessConfigRepository(businessConfigDAO, localCache, redisCache)
 	businessConfigService := config.NewBusinessConfigService(businessConfigRepository)
 	callbackLogDAO := dao.NewCallbackLogDAO(db)
 	callbackLogRepository := repository.NewCallbackLogRepository(notificationRepository, callbackLogDAO)
 	callbackService := callback.NewService(businessConfigService, callbackLogRepository)
-	channel := newChannel(manageService, channelTemplateService)
+	channel := newChannel(channelTemplateService, clients)
 	notificationSender := sender.NewSender(notificationRepository, businessConfigService, callbackService, channel)
 	immediateSendStrategy := sendstrategy.NewImmediateStrategy(notificationRepository, notificationSender)
 	defaultSendStrategy := sendstrategy.NewDefaultStrategy(notificationRepository, businessConfigService)
@@ -68,25 +67,40 @@ func InitGrpcServer() *ioc.App {
 	sendService := notification.NewSendService(channelTemplateService, service, sonyflake, sendStrategy)
 	txNotificationDAO := dao.NewTxNotificationDAO(db)
 	txNotificationRepository := repository.NewTxNotificationRepository(txNotificationDAO)
-	dlockClient := ioc.InitDistributedLock(client)
+	dlockClient := ioc2.InitDistributedLock(redisClient)
 	txNotificationService := notification.NewTxNotificationService(txNotificationRepository, businessConfigService, notificationRepository, dlockClient, notificationSender)
 	notificationServer := grpc.NewServer(service, sendService, txNotificationService, channelTemplateService)
-	component := ioc.InitEtcdClient()
-	egrpcComponent := ioc.InitGrpc(notificationServer, component)
+	component := ioc2.InitEtcdClient()
+	egrpcComponent := ioc2.InitGrpc(notificationServer, component)
 	asyncRequestResultCallbackTask := callback.NewAsyncRequestResultCallbackTask(dlockClient, callbackService)
 	notificationScheduler := scheduler.NewScheduler(service, notificationSender, dlockClient)
 	sendingTimeoutTask := notification.NewSendingTimeoutTask(dlockClient, notificationRepository)
 	txCheckTask := notification.NewTxCheckTask(txNotificationRepository, businessConfigService, dlockClient)
-	v := ioc.InitTasks(asyncRequestResultCallbackTask, notificationScheduler, sendingTimeoutTask, txCheckTask)
+	v := ioc2.InitTasks(asyncRequestResultCallbackTask, notificationScheduler, sendingTimeoutTask, txCheckTask)
 	quotaDAO := dao.NewQuotaDAO(db)
 	quotaRepository := repository.NewQuotaRepository(quotaDAO)
 	quotaService := quota.NewService(quotaRepository)
 	monthlyResetCron := quota.NewQuotaMonthlyResetCron(businessConfigRepository, quotaService)
-	v2 := ioc.Crons(monthlyResetCron, businessConfigRepository)
+	v2 := ioc2.Crons(monthlyResetCron, businessConfigRepository)
 	app := &ioc.App{
-		GrpcServer: egrpcComponent,
-		Tasks:      v,
-		Crons:      v2,
+		GrpcServer:          egrpcComponent,
+		Tasks:               v,
+		Crons:               v2,
+		CallbackSvc:         callbackService,
+		CallbackLogRepo:     callbackLogRepository,
+		ConfigSvc:           businessConfigService,
+		ConfigRepo:          businessConfigRepository,
+		NotificationSvc:     service,
+		SendNotificationSvc: sendService,
+		NotificationRepo:    notificationRepository,
+		ProviderSvc:         manageService,
+		ProviderRepo:        providerRepository,
+		QuotaSvc:            quotaService,
+		QuotaRepo:           quotaRepository,
+		TemplateSvc:         channelTemplateService,
+		TemplateRepo:        channelTemplateRepository,
+		TxNotificationSvc:   txNotificationService,
+		TxNotificationRepo:  txNotificationRepository,
 	}
 	return app
 }
@@ -94,7 +108,7 @@ func InitGrpcServer() *ioc.App {
 // wire.go:
 
 var (
-	BaseSet              = wire.NewSet(ioc.InitDB, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitIDGenerator, ioc.InitRedisClient, ioc.InitGoCache, local.NewLocalCache, redis.NewCache)
+	BaseSet              = wire.NewSet(ioc2.InitDB, ioc2.InitDistributedLock, ioc2.InitEtcdClient, ioc2.InitIDGenerator, ioc2.InitRedisClient, ioc2.InitGoCache, local.NewLocalCache, redis.NewCache)
 	configSvcSet         = wire.NewSet(config.NewBusinessConfigService, repository.NewBusinessConfigRepository, dao.NewBusinessConfigDAO)
 	notificationSvcSet   = wire.NewSet(notification.NewNotificationService, repository.NewNotificationRepository, dao.NewNotificationDAO, notification.NewSendingTimeoutTask)
 	txNotificationSvcSet = wire.NewSet(notification.NewTxNotificationService, repository.NewTxNotificationRepository, dao.NewTxNotificationDAO, notification.NewTxCheckTask)
@@ -103,51 +117,29 @@ var (
 	)
 	sendNotificationSvcSet = wire.NewSet(notification.NewSendService, sendstrategy.NewDispatcher, sendstrategy.NewImmediateStrategy, sendstrategy.NewDefaultStrategy)
 	callbackSvcSet         = wire.NewSet(callback.NewService, repository.NewCallbackLogRepository, dao.NewCallbackLogDAO, callback.NewAsyncRequestResultCallbackTask)
-	providerSvcSet         = wire.NewSet(manage.NewProviderService, repository.NewProviderRepository, dao.NewProviderDAO, ioc.InitProviderEncryptKey)
+	providerSvcSet         = wire.NewSet(manage.NewProviderService, repository.NewProviderRepository, dao.NewProviderDAO, ioc2.InitProviderEncryptKey)
 	templateSvcSet         = wire.NewSet(manage2.NewChannelTemplateService, repository.NewChannelTemplateRepository, dao.NewChannelTemplateDAO)
 	schedulerSet           = wire.NewSet(scheduler.NewScheduler)
 	quotaSvcSet            = wire.NewSet(quota.NewService, quota.NewQuotaMonthlyResetCron, repository.NewQuotaRepository, dao.NewQuotaDAO)
 )
 
 func newChannel(
-	providerSvc manage.Service,
 	templateSvc manage2.ChannelTemplateService,
+	clients map[string]client.Client,
 ) channel.Channel {
-	return channel.NewDispatcher(map[domain.Channel]channel.Channel{domain.ChannelSMS: channel.NewSMSChannel(newSMSSelectorBuilder(providerSvc, templateSvc))})
+	return channel.NewDispatcher(map[domain.Channel]channel.Channel{domain.ChannelSMS: channel.NewSMSChannel(newSMSSelectorBuilder(templateSvc, clients))})
 }
 
 func newSMSSelectorBuilder(
-	providerSvc manage.Service,
 	templateSvc manage2.ChannelTemplateService,
+	clients map[string]client.Client,
 ) *sequential.SelectorBuilder {
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelFunc()
-
-	entities, err := providerSvc.GetByChannel(ctx, domain.ChannelSMS)
-	if err != nil {
-		panic(err)
-	}
-
-	providers := make([]provider.Provider, 0, len(entities))
-	for i := range entities {
-		var cli client.Client
-		if entities[i].Name == "aliyun" {
-			c, err1 := client.NewAliyunSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret)
-			if err1 != nil {
-				panic(err1)
-			}
-			cli = c
-		} else if entities[i].Name == "gitee" {
-			c, err1 := client.NewTencentCloudSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret, entities[i].APPID)
-			if err1 != nil {
-				panic(err1)
-			}
-			cli = c
-		}
+	providers := make([]provider.Provider, 0, len(clients))
+	for k := range clients {
 		providers = append(providers, sms.NewSMSProvider(
-			entities[i].Name,
+			k,
 			templateSvc,
-			cli,
+			clients[k],
 		))
 	}
 	return sequential.NewSelectorBuilder(providers)

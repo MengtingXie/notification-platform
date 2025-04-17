@@ -3,15 +3,13 @@
 package ioc
 
 import (
-	"context"
-	"time"
-
 	"gitee.com/flycash/notification-platform/internal/service/quota"
 	"gitee.com/flycash/notification-platform/internal/service/scheduler"
+	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
 
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
 	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/ioc"
+	prodioc "gitee.com/flycash/notification-platform/internal/ioc"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/repository/cache/local"
 	"gitee.com/flycash/notification-platform/internal/repository/cache/redis"
@@ -34,12 +32,12 @@ import (
 
 var (
 	BaseSet = wire.NewSet(
-		ioc.InitDB,
-		ioc.InitDistributedLock,
-		ioc.InitEtcdClient,
-		ioc.InitIDGenerator,
-		ioc.InitRedisClient,
-		ioc.InitGoCache,
+		prodioc.InitDB,
+		prodioc.InitDistributedLock,
+		prodioc.InitEtcdClient,
+		prodioc.InitIDGenerator,
+		prodioc.InitRedisClient,
+		prodioc.InitGoCache,
 
 		local.NewLocalCache,
 		redis.NewCache,
@@ -81,7 +79,7 @@ var (
 		repository.NewProviderRepository,
 		dao.NewProviderDAO,
 		// 加密密钥
-		ioc.InitProviderEncryptKey,
+		prodioc.InitProviderEncryptKey,
 	)
 	templateSvcSet = wire.NewSet(
 		templatesvc.NewChannelTemplateService,
@@ -97,52 +95,31 @@ var (
 )
 
 func newChannel(
-	providerSvc providersvc.Service,
 	templateSvc templatesvc.ChannelTemplateService,
+	clients map[string]client.Client,
 ) channel.Channel {
 	return channel.NewDispatcher(map[domain.Channel]channel.Channel{
-		domain.ChannelSMS: channel.NewSMSChannel(newSMSSelectorBuilder(providerSvc, templateSvc)),
+		domain.ChannelSMS: channel.NewSMSChannel(newSMSSelectorBuilder(templateSvc, clients)),
 	})
 }
 
 func newSMSSelectorBuilder(
-	providerSvc providersvc.Service,
 	templateSvc templatesvc.ChannelTemplateService,
+	clients map[string]client.Client,
 ) *sequential.SelectorBuilder {
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelFunc()
-
-	entities, err := providerSvc.GetByChannel(ctx, domain.ChannelSMS)
-	if err != nil {
-		panic(err)
-	}
 	// 构建SMS供应商
-	providers := make([]provider.Provider, 0, len(entities))
-	for i := range entities {
-		var cli client.Client
-		if entities[i].Name == "aliyun" {
-			c, err1 := client.NewAliyunSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret)
-			if err1 != nil {
-				panic(err1)
-			}
-			cli = c
-		} else if entities[i].Name == "gitee" {
-			c, err1 := client.NewTencentCloudSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret, entities[i].APPID)
-			if err1 != nil {
-				panic(err1)
-			}
-			cli = c
-		}
+	providers := make([]provider.Provider, 0, len(clients))
+	for k := range clients {
 		providers = append(providers, sms.NewSMSProvider(
-			entities[i].Name,
+			k,
 			templateSvc,
-			cli,
+			clients[k],
 		))
 	}
 	return sequential.NewSelectorBuilder(providers)
 }
 
-func InitGrpcServer() *ioc.App {
+func InitGrpcServer(clients map[string]client.Client) *testioc.App {
 	wire.Build(
 		// 基础设施
 		BaseSet,
@@ -180,11 +157,11 @@ func InitGrpcServer() *ioc.App {
 
 		// GRPC服务器
 		grpcapi.NewServer,
-		ioc.InitGrpc,
-		ioc.InitTasks,
-		ioc.Crons,
-		wire.Struct(new(ioc.App), "*"),
+		prodioc.InitGrpc,
+		prodioc.InitTasks,
+		prodioc.Crons,
+		wire.Struct(new(testioc.App), "*"),
 	)
 
-	return new(ioc.App)
+	return new(testioc.App)
 }
