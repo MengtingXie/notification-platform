@@ -1,11 +1,12 @@
 package ioc
 
 import (
+	configv1 "gitee.com/flycash/notification-platform/api/proto/gen/config/v1"
 	notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/notification/v1"
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
 	"gitee.com/flycash/notification-platform/internal/api/grpc/interceptor/jwt"
 	"gitee.com/flycash/notification-platform/internal/api/grpc/interceptor/log"
-	"gitee.com/flycash/notification-platform/internal/api/grpc/interceptor/observability"
+	"gitee.com/flycash/notification-platform/internal/api/grpc/interceptor/metrics"
 	"gitee.com/flycash/notification-platform/internal/api/grpc/interceptor/tracing"
 	"github.com/ego-component/eetcd"
 	"github.com/ego-component/eetcd/registry"
@@ -14,12 +15,13 @@ import (
 	"github.com/gotomicro/ego/server/egrpc"
 )
 
-func InitGrpc(noserver *grpcapi.NotificationServer, etcdClient *eetcd.Component) *egrpc.Component {
+func InitGrpc(noserver *grpcapi.NotificationServer, configSvc *grpcapi.ConfigServer, etcdClient *eetcd.Component) *egrpc.Component {
 	// 注册全局的注册中心
 	type Config struct {
 		Key string `yaml:"key"`
 	}
 	var cfg Config
+
 	err := econf.UnmarshalKey("jwt", &cfg)
 	if err != nil {
 		panic("config err:" + err.Error())
@@ -29,18 +31,19 @@ func InitGrpc(noserver *grpcapi.NotificationServer, etcdClient *eetcd.Component)
 	resolver.Register("etcd", reg)
 
 	// 创建observability拦截器
-	obsInterceptor := observability.New().Build()
+	metricsInterceptor := metrics.New().Build()
 	// 创建日志拦截器
 	logInterceptor := log.New().Build()
 
 	traceInterceptor := tracing.UnaryServerInterceptor()
 	jwtinterceter := jwt.NewJwtAuth(cfg.Key)
 	server := egrpc.Load("server.grpc").Build(
-		egrpc.WithUnaryInterceptor(obsInterceptor, logInterceptor, traceInterceptor, jwtinterceter.JwtAuthInterceptor()),
+		egrpc.WithUnaryInterceptor(metricsInterceptor, logInterceptor, traceInterceptor, jwtinterceter.JwtAuthInterceptor()),
 	)
 
 	notificationv1.RegisterNotificationServiceServer(server.Server, noserver)
 	notificationv1.RegisterNotificationQueryServiceServer(server.Server, noserver)
+	configv1.RegisterBusinessConfigServiceServer(server.Server, configSvc)
 
 	return server
 }

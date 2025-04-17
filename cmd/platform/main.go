@@ -14,11 +14,10 @@ import (
 
 func main() {
 	// 创建 ego 应用实例
-	app := ioc.InitGrpcServer()
+	egoApp := ego.New()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	app.StartTasks(ctx)
-
 	// 初始化 zipkin trace
 	tp := ioc2.InitZipkinTracer()
 	defer func(tp *trace.TracerProvider, ctx context.Context) {
@@ -28,8 +27,12 @@ func main() {
 		}
 	}(tp, ctx)
 
+	app := ioc.InitGrpcServer()
+
+	app.StartTasks(ctx)
+
 	// 启动服务
-	if err := ego.New().Serve(
+	if err := egoApp.Serve(
 		egovernor.Load("server.governor").Build(),
 		func() server.Server {
 			return app.GrpcServer

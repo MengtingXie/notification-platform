@@ -6,6 +6,6 @@ import (
 )
 
 func Crons(q *quota.MonthlyResetCron) []ecron.Ecron {
-	q1 := ecron.Load("cron").Build(ecron.WithJob(q.Do))
+	q1 := ecron.Load("cron.quotaMonthlyReset").Build(ecron.WithJob(q.Do))
 	return []ecron.Ecron{q1}
 }

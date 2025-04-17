@@ -14,21 +14,21 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// ObservabilitySender 为通知发送添加链路追踪的装饰器
-type ObservabilitySender struct {
+// TracingSender 为通知发送添加链路追踪的装饰器
+type TracingSender struct {
 	sender NotificationSender
 	tracer trace.Tracer
 }
 
-// NewObservabilitySender 创建一个新的带有链路追踪的发送器
-func NewObservabilitySender(sender NotificationSender) *ObservabilitySender {
-	return &ObservabilitySender{
+// NewTracingSender 创建一个新的带有链路追踪的发送器
+func NewTracingSender(sender NotificationSender) *TracingSender {
+	return &TracingSender{
 		sender: sender,
 		tracer: otel.Tracer("notification-platform/sender"),
 	}
 }
 
-func (o *ObservabilitySender) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
+func (o *TracingSender) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
 	ctx, span := o.tracer.Start(ctx, "NotificationSender.Send",
 		trace.WithAttributes(
 			attribute.String("notification.id", strconv.FormatUint(notification.ID, 10)),
@@ -53,7 +53,7 @@ func (o *ObservabilitySender) Send(ctx context.Context, notification domain.Noti
 	return response, err
 }
 
-func (o *ObservabilitySender) BatchSend(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error) {
+func (o *TracingSender) BatchSend(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error) {
 	ctx, span := o.tracer.Start(ctx, "NotificationSender.BatchSend",
 		trace.WithAttributes(
 			attribute.Int("notification.count", len(notifications)),

@@ -3,8 +3,9 @@ package ioc
 import (
 	"context"
 
-	"github.com/gotomicro/ego/server/egrpc"
 	"github.com/gotomicro/ego/task/ecron"
+
+	"github.com/gotomicro/ego/server/egrpc"
 )
 
 type Task interface {

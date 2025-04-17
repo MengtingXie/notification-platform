@@ -22,9 +22,11 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/notification/callback"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
 	"gitee.com/flycash/notification-platform/internal/service/provider/manage"
+	"gitee.com/flycash/notification-platform/internal/service/provider/metrics"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sequential"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
+	"gitee.com/flycash/notification-platform/internal/service/provider/tracing"
 	"gitee.com/flycash/notification-platform/internal/service/quota"
 	"gitee.com/flycash/notification-platform/internal/service/scheduler"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
@@ -62,7 +64,9 @@ func InitGrpcServer() *ioc.App {
 	callbackService := callback.NewService(businessConfigService, callbackLogRepository)
 	channel := newChannel(manageService, channelTemplateService)
 	notificationSender := sender.NewSender(notificationRepository, businessConfigService, callbackService, channel)
-	immediateSendStrategy := sendstrategy.NewImmediateStrategy(notificationRepository, notificationSender)
+	tracingSender := sender.NewTracingSender(notificationSender)
+	metricSender := sender.NewMetricsSender(tracingSender)
+	immediateSendStrategy := sendstrategy.NewImmediateStrategy(notificationRepository, metricSender)
 	defaultSendStrategy := sendstrategy.NewDefaultStrategy(notificationRepository, businessConfigService)
 	sendStrategy := sendstrategy.NewDispatcher(immediateSendStrategy, defaultSendStrategy)
 	sendService := notification.NewSendService(channelTemplateService, service, sonyflake, sendStrategy)
@@ -71,8 +75,9 @@ func InitGrpcServer() *ioc.App {
 	dlockClient := ioc.InitDistributedLock(client)
 	txNotificationService := notification.NewTxNotificationService(txNotificationRepository, businessConfigService, notificationRepository, dlockClient)
 	notificationServer := grpc.NewServer(service, sendService, txNotificationService)
+	configServer := grpc.NewConfigServer(businessConfigService)
 	component := ioc.InitEtcdClient()
-	egrpcComponent := ioc.InitGrpc(notificationServer, component)
+	egrpcComponent := ioc.InitGrpc(notificationServer, configServer, component)
 	asyncRequestResultCallbackTask := callback.NewAsyncRequestResultCallbackTask(dlockClient, callbackService)
 	notificationScheduler := scheduler.NewScheduler(service, notificationSender, dlockClient)
 	sendingTimeoutTask := notification.NewSendingTimeoutTask(dlockClient, notificationRepository)
@@ -113,7 +118,7 @@ func newChannel(
 	providerSvc manage.Service,
 	templateSvc manage2.ChannelTemplateService,
 ) channel.Channel {
-	return channel.NewDispatcher(map[domain.Channel]channel.Channel{domain.ChannelEmail: channel.NewSMSChannel(newSMSSelectorBuilder(providerSvc, templateSvc))})
+	return channel.NewDispatcher(map[domain.Channel]channel.Channel{domain.ChannelEmail: channel.NewSMSChannel(newMockSMSSelectorBuilder(providerSvc, templateSvc))})
 }
 
 func newSMSSelectorBuilder(
@@ -151,4 +156,11 @@ func newSMSSelectorBuilder(
 		))
 	}
 	return sequential.NewSelectorBuilder(providers)
+}
+
+func newMockSMSSelectorBuilder(
+	providerSvc manage.Service,
+	templateSvc manage2.ChannelTemplateService,
+) *sequential.SelectorBuilder {
+	return sequential.NewSelectorBuilder([]provider.Provider{metrics.NewProvider("ali",tracing.NewProvider(provider.NewMockProvider()))})
 }

@@ -5,13 +5,15 @@ import (
 	"database/sql"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/pkg/database/metrics"
+	"github.com/gotomicro/ego/core/econf"
+
 	"gitee.com/flycash/notification-platform/internal/pkg/database/tracing"
 
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 
 	"github.com/ecodeclub/ekit/retry"
 	"github.com/ego-component/egorm"
-	"github.com/gotomicro/ego/core/econf"
 )
 
 func InitDB() *egorm.Component {
@@ -22,7 +24,12 @@ func InitDB() *egorm.Component {
 		panic(err)
 	}
 	tracePlugin := tracing.NewGormTracingPlugin()
+	metricsPlugin := metrics.NewGormMetricsPlugin()
 	err = db.Use(tracePlugin)
+	if err != nil {
+		panic(err)
+	}
+	err = db.Use(metricsPlugin)
 	if err != nil {
 		panic(err)
 	}

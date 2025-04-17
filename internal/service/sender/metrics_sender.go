@@ -1,0 +1,140 @@
+package sender
+
+import (
+	"context"
+	"time"
+
+	"gitee.com/flycash/notification-platform/internal/domain"
+	"github.com/prometheus/client_golang/prometheus"
+)
+
+// MetricsSender 为通知发送添加指标收集的装饰器
+type MetricsSender struct {
+	sender                 NotificationSender
+	sendDurationHistogram  *prometheus.HistogramVec
+	sendCounter            *prometheus.CounterVec
+	batchSendCounter       *prometheus.CounterVec
+	notificationSentStatus *prometheus.CounterVec
+}
+
+// NewMetricsSender 创建一个新的带有指标收集的发送器
+func NewMetricsSender(sender NotificationSender) *MetricsSender {
+	sendDurationHistogram := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "notification_send_duration_seconds",
+			Help:    "通知发送耗时统计（秒）",
+			Buckets: prometheus.ExponentialBuckets(0.01, 2, 10), // 10ms到约10秒
+		},
+		[]string{"channel", "status"},
+	)
+
+	sendCounter := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "notification_send_total",
+			Help: "通知发送总数",
+		},
+		[]string{"channel"},
+	)
+
+	batchSendCounter := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "notification_batch_send_total",
+			Help: "批量通知发送总数",
+		},
+		[]string{"channel"},
+	)
+
+	notificationSentStatus := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "notification_sent_status_total",
+			Help: "通知发送状态统计",
+		},
+		[]string{"channel", "status"},
+	)
+
+	// 注册指标
+	prometheus.MustRegister(sendDurationHistogram, sendCounter, batchSendCounter, notificationSentStatus)
+
+	return &MetricsSender{
+		sender:                 sender,
+		sendDurationHistogram:  sendDurationHistogram,
+		sendCounter:            sendCounter,
+		batchSendCounter:       batchSendCounter,
+		notificationSentStatus: notificationSentStatus,
+	}
+}
+
+// Send 发送单条通知并记录指标
+func (m *MetricsSender) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
+	// 开始计时
+	startTime := time.Now()
+
+	// 累加发送计数
+	m.sendCounter.WithLabelValues(string(notification.Channel)).Inc()
+
+	// 调用实际的发送方法
+	response, err := m.sender.Send(ctx, notification)
+
+	// 计算耗时
+	duration := time.Since(startTime).Seconds()
+
+	// 记录发送状态
+	m.notificationSentStatus.WithLabelValues(
+		string(notification.Channel),
+		string(response.Status),
+	).Inc()
+
+	// 记录耗时
+	m.sendDurationHistogram.WithLabelValues(
+		string(notification.Channel),
+		string(response.Status),
+	).Observe(duration)
+
+	return response, err
+}
+
+// BatchSend 批量发送通知并记录指标
+func (m *MetricsSender) BatchSend(ctx context.Context, notifications []domain.Notification) ([]domain.SendResponse, error) {
+	if len(notifications) == 0 {
+		return nil, nil
+	}
+
+	// 开始计时
+	startTime := time.Now()
+
+	// 获取通知的渠道（假设所有通知都是同一渠道）
+	channel := string(notifications[0].Channel)
+
+	// 累加批量发送计数
+	m.batchSendCounter.WithLabelValues(channel).Inc()
+
+	// 调用实际的批量发送方法
+	responses, err := m.sender.BatchSend(ctx, notifications)
+
+	// 记录各状态的数量
+	if err == nil && len(responses) > 0 {
+		var succeeded, failed int
+		for _, resp := range responses {
+			if resp.Status == domain.SendStatusSucceeded {
+				succeeded++
+			} else {
+				failed++
+			}
+		}
+
+		// 记录成功和失败的通知数量
+		m.notificationSentStatus.WithLabelValues(channel, string(domain.SendStatusSucceeded)).Add(float64(succeeded))
+		m.notificationSentStatus.WithLabelValues(channel, string(domain.SendStatusFailed)).Add(float64(failed))
+	}
+
+	// 计算耗时
+	duration := time.Since(startTime).Seconds()
+
+	// 记录平均耗时（每条通知）
+	m.sendDurationHistogram.WithLabelValues(
+		channel,
+		"batch", // 使用特殊标签来标识批量发送的耗时
+	).Observe(duration / float64(len(notifications)))
+
+	return responses, err
+}

@@ -74,7 +74,7 @@ func (d *sender) Send(ctx context.Context, notification domain.Notification) (do
 
 	// 得到准确的发送结果，发起回调，发送成功和失败都应该回调
 
-	_ = d.callbackSvc.SendCallbackByNotification(ctx, notification)
+	//_ = d.callbackSvc.SendCallbackByNotification(ctx, notification)
 
 	return resp, nil
 }
