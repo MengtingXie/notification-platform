@@ -3,8 +3,12 @@ package dao
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/errs"
+	"github.com/ecodeclub/ekit/slice"
 	"github.com/ego-component/egorm"
 	"gorm.io/gorm"
 )
@@ -77,36 +81,61 @@ func (ChannelTemplateProvider) TableName() string {
 type ChannelTemplateDAO interface {
 	// 模版
 
-	// CreateTemplate 创建模板
-	CreateTemplate(ctx context.Context, template ChannelTemplate) (ChannelTemplate, error)
-	// GetTemplatesByOwner 根据所有者获取模板列表
+	// GetTemplatesByOwner DONE
 	GetTemplatesByOwner(ctx context.Context, ownerID int64, ownerType string) ([]ChannelTemplate, error)
-	// GetTemplateByID 根据ID获取模板
+
+	// GetTemplateByID DONE
 	GetTemplateByID(ctx context.Context, id int64) (ChannelTemplate, error)
-	// UpdateTemplate 更新模板
+
+	// CreateTemplate DONE
+	CreateTemplate(ctx context.Context, template ChannelTemplate) (ChannelTemplate, error)
+
+	// UpdateTemplate DONE
 	UpdateTemplate(ctx context.Context, template ChannelTemplate) error
-	// SetActiveVersion 设置模板活跃版本
-	SetActiveVersion(ctx context.Context, templateID, versionID int64) error
+
+	// SetTemplateActiveVersion DONE
+	SetTemplateActiveVersion(ctx context.Context, templateID, versionID int64) error
 
 	// 模版版本
 
-	// CreateTemplateVersion 创建模板版本
-	CreateTemplateVersion(ctx context.Context, version ChannelTemplateVersion) (ChannelTemplateVersion, error)
-	// GetVersionsByTemplateIDs 根据模板IDs获取版本列表
-	GetVersionsByTemplateIDs(ctx context.Context, templateIDs []int64) ([]ChannelTemplateVersion, error)
-	// GetTemplateVersionByID 根据ID获取模板版本
+	// GetTemplateVersionsByTemplateIDs DONE
+	GetTemplateVersionsByTemplateIDs(ctx context.Context, templateIDs []int64) ([]ChannelTemplateVersion, error)
+
+	// GetTemplateVersionByID DONE
 	GetTemplateVersionByID(ctx context.Context, versionID int64) (ChannelTemplateVersion, error)
+
+	// CreateTemplateVersion DONE
+	CreateTemplateVersion(ctx context.Context, version ChannelTemplateVersion) (ChannelTemplateVersion, error)
+
+	ForkTemplateVersion(ctx context.Context, versionID int64) (ChannelTemplateVersion, error)
 
 	// 供应商关联
 
-	// BatchCreateTemplateProviders 批量创建模板供应商关联
-	BatchCreateTemplateProviders(ctx context.Context, providers []ChannelTemplateProvider) ([]ChannelTemplateProvider, error)
-	// GetProvidersByVersionIDs 根据版本IDs获取供应商关联
+	// GetProvidersByVersionIDs DONE
 	GetProvidersByVersionIDs(ctx context.Context, versionIDs []int64) ([]ChannelTemplateProvider, error)
-	// GetApprovedProvidersByTemplateIDAndVersionID 根据模版ID和版本ID查找审核通过的供应商
-	GetApprovedProvidersByTemplateIDAndVersionID(ctx context.Context, templateID, versionID int64) ([]ChannelTemplateProvider, error)
-	// GetProviderByNameAndChannel 根据名称和渠道获取已通过审核的供应商
+
+	// GetProviderByNameAndChannel DONE
 	GetProviderByNameAndChannel(ctx context.Context, templateID, versionID int64, providerName string, channel string) ([]ChannelTemplateProvider, error)
+
+	// BatchCreateTemplateProviders DONE
+	BatchCreateTemplateProviders(ctx context.Context, providers []ChannelTemplateProvider) ([]ChannelTemplateProvider, error)
+
+	// GetApprovedProvidersByTemplateIDAndVersionID DONE
+	GetApprovedProvidersByTemplateIDAndVersionID(ctx context.Context, templateID, versionID int64) ([]ChannelTemplateProvider, error)
+
+	GetProvidersByTemplateIDAndVersionID(ctx context.Context, templateID, versionID int64) ([]ChannelTemplateProvider, error)
+
+	// UpdateTemplateVersion 更新模板版本信息
+	UpdateTemplateVersion(ctx context.Context, version ChannelTemplateVersion) error
+
+	// BatchUpdateTemplateVersionAuditStatus 更新模板版本审核状态
+	BatchUpdateTemplateVersionAuditStatus(ctx context.Context, versions []ChannelTemplateVersion) error
+
+	// GetProviderByRequestID 根据请求ID获取供应商关联
+	GetProviderByRequestID(ctx context.Context, requestID string) (ChannelTemplateProvider, error)
+
+	// UpdateTemplateProvider 更新模板供应商关联
+	UpdateTemplateProvider(ctx context.Context, provider ChannelTemplateProvider) error
 }
 
 // channelTemplateDAO DAO层实现
@@ -121,6 +150,8 @@ func NewChannelTemplateDAO(db *egorm.Component) ChannelTemplateDAO {
 	}
 }
 
+// 模版相关方法
+
 // GetTemplatesByOwner 根据所有者获取模板列表
 func (d *channelTemplateDAO) GetTemplatesByOwner(ctx context.Context, ownerID int64, ownerType string) ([]ChannelTemplate, error) {
 	var templates []ChannelTemplate
@@ -131,32 +162,17 @@ func (d *channelTemplateDAO) GetTemplatesByOwner(ctx context.Context, ownerID in
 	return templates, nil
 }
 
-// GetVersionsByTemplateIDs 根据模板IDs获取版本列表
-func (d *channelTemplateDAO) GetVersionsByTemplateIDs(ctx context.Context, templateIDs []int64) ([]ChannelTemplateVersion, error) {
-	if len(templateIDs) == 0 {
-		return []ChannelTemplateVersion{}, nil
+// GetTemplateByID 根据ID获取模板
+func (d *channelTemplateDAO) GetTemplateByID(ctx context.Context, id int64) (ChannelTemplate, error) {
+	var template ChannelTemplate
+	err := d.db.WithContext(ctx).Where("id = ?", id).First(&template).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ChannelTemplate{}, fmt.Errorf("%w", errs.ErrTemplateNotFound)
+		}
+		return ChannelTemplate{}, err
 	}
-
-	var versions []ChannelTemplateVersion
-	result := d.db.WithContext(ctx).Where("channel_template_id IN ?", templateIDs).Find(&versions)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	return versions, nil
-}
-
-// GetProvidersByVersionIDs 根据版本IDs获取供应商关联
-func (d *channelTemplateDAO) GetProvidersByVersionIDs(ctx context.Context, versionIDs []int64) ([]ChannelTemplateProvider, error) {
-	if len(versionIDs) == 0 {
-		return []ChannelTemplateProvider{}, nil
-	}
-
-	var providers []ChannelTemplateProvider
-	result := d.db.WithContext(ctx).Where("template_version_id IN ?", versionIDs).Find(&providers)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	return providers, nil
+	return template, nil
 }
 
 // CreateTemplate 创建模板
@@ -172,23 +188,10 @@ func (d *channelTemplateDAO) CreateTemplate(ctx context.Context, template Channe
 	return template, nil
 }
 
-// GetTemplateByID 根据ID获取模板
-func (d *channelTemplateDAO) GetTemplateByID(ctx context.Context, id int64) (ChannelTemplate, error) {
-	var template ChannelTemplate
-	err := d.db.WithContext(ctx).Where("id = ?", id).First(&template).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ChannelTemplate{}, nil
-		}
-		return ChannelTemplate{}, err
-	}
-	return template, nil
-}
-
-// UpdateTemplate 更新模板
+// UpdateTemplate 更新模板基本信息
 func (d *channelTemplateDAO) UpdateTemplate(ctx context.Context, template ChannelTemplate) error {
-	// 只允许更新name、description、business_type这三个字段
-	updateData := map[string]interface{}{
+	// 只允许用户更新name、description、business_type这三个字段
+	updateData := map[string]any{
 		"name":          template.Name,
 		"description":   template.Description,
 		"business_type": template.BusinessType,
@@ -200,14 +203,43 @@ func (d *channelTemplateDAO) UpdateTemplate(ctx context.Context, template Channe
 		Updates(updateData).Error
 }
 
-// SetActiveVersion 设置模板活跃版本
-func (d *channelTemplateDAO) SetActiveVersion(ctx context.Context, templateID, versionID int64) error {
+// SetTemplateActiveVersion 设置模板活跃版本
+func (d *channelTemplateDAO) SetTemplateActiveVersion(ctx context.Context, templateID, versionID int64) error {
 	return d.db.WithContext(ctx).Model(&ChannelTemplate{}).
 		Where("id = ?", templateID).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"active_version_id": versionID,
 			"utime":             time.Now().Unix(),
 		}).Error
+}
+
+// 模版版本相关方法
+
+// GetTemplateVersionsByTemplateIDs 根据模板IDs获取版本列表
+func (d *channelTemplateDAO) GetTemplateVersionsByTemplateIDs(ctx context.Context, templateIDs []int64) ([]ChannelTemplateVersion, error) {
+	if len(templateIDs) == 0 {
+		return []ChannelTemplateVersion{}, nil
+	}
+
+	var versions []ChannelTemplateVersion
+	result := d.db.WithContext(ctx).Where("channel_template_id IN ?", templateIDs).Find(&versions)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return versions, nil
+}
+
+// GetTemplateVersionByID 根据ID获取模板版本
+func (d *channelTemplateDAO) GetTemplateVersionByID(ctx context.Context, versionID int64) (ChannelTemplateVersion, error) {
+	var version ChannelTemplateVersion
+	err := d.db.WithContext(ctx).Where("id = ?", versionID).First(&version).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ChannelTemplateVersion{}, fmt.Errorf("%w", errs.ErrTemplateVersionNotFound)
+		}
+		return ChannelTemplateVersion{}, err
+	}
+	return version, nil
 }
 
 // CreateTemplateVersion 创建模板版本
@@ -223,17 +255,98 @@ func (d *channelTemplateDAO) CreateTemplateVersion(ctx context.Context, version 
 	return version, nil
 }
 
-// GetTemplateVersionByID 根据ID获取模板版本
-func (d *channelTemplateDAO) GetTemplateVersionByID(ctx context.Context, versionID int64) (ChannelTemplateVersion, error) {
-	var version ChannelTemplateVersion
-	err := d.db.WithContext(ctx).Where("id = ?", versionID).First(&version).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ChannelTemplateVersion{}, nil
+func (d *channelTemplateDAO) ForkTemplateVersion(ctx context.Context, versionID int64) (ChannelTemplateVersion, error) {
+	now := time.Now().Unix()
+	var created ChannelTemplateVersion
+
+	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 找到被拷贝记录
+		var old ChannelTemplateVersion
+		if err := tx.First(&old, "id = ?", versionID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("%w", errs.ErrTemplateVersionNotFound)
+			}
+			return err
 		}
+		// 拷贝记录
+		fork := ChannelTemplateVersion{
+			ChannelTemplateID:        old.ChannelTemplateID,
+			Name:                     "Forked" + old.Name,
+			Signature:                old.Signature,
+			Content:                  old.Content,
+			Remark:                   old.Remark,
+			AuditID:                  0,
+			AuditorID:                0,
+			AuditTime:                0,
+			AuditStatus:              domain.AuditStatusPending.String(),
+			RejectReason:             "",
+			LastReviewSubmissionTime: 0,
+			Ctime:                    now,
+			Utime:                    now,
+		}
+		if err := tx.Create(&fork).Error; err != nil {
+			return err
+		}
+		created = fork
+
+		// 获取供应商
+		var providers []ChannelTemplateProvider
+		if err := tx.Model(&ChannelTemplateProvider{}).
+			Where("template_id = ? AND template_version_id = ?",
+				old.ChannelTemplateID, old.ID).Find(&providers).Error; err != nil {
+			return err
+		}
+
+		forkedProviders := slice.Map(providers, func(_ int, src ChannelTemplateProvider) ChannelTemplateProvider {
+			return ChannelTemplateProvider{
+				TemplateID:               fork.ChannelTemplateID,
+				TemplateVersionID:        fork.ID,
+				ProviderID:               src.ProviderID,
+				ProviderName:             src.ProviderName,
+				ProviderChannel:          src.ProviderChannel,
+				RequestID:                "",
+				ProviderTemplateID:       "",
+				AuditStatus:              domain.AuditStatusPending.String(),
+				RejectReason:             "",
+				LastReviewSubmissionTime: 0,
+				Ctime:                    now,
+				Utime:                    now,
+			}
+		})
+		if err := tx.Create(&forkedProviders).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
 		return ChannelTemplateVersion{}, err
 	}
-	return version, nil
+	return created, nil
+}
+
+// 供应商相关方法
+
+// GetProvidersByVersionIDs 根据版本IDs获取供应商关联
+func (d *channelTemplateDAO) GetProvidersByVersionIDs(ctx context.Context, versionIDs []int64) ([]ChannelTemplateProvider, error) {
+	if len(versionIDs) == 0 {
+		return []ChannelTemplateProvider{}, nil
+	}
+
+	var providers []ChannelTemplateProvider
+	result := d.db.WithContext(ctx).Where("template_version_id IN (?)", versionIDs).Find(&providers)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return providers, nil
+}
+
+// GetProviderByNameAndChannel 根据名称和渠道获取已通过审核的供应商
+func (d *channelTemplateDAO) GetProviderByNameAndChannel(ctx context.Context, templateID, versionID int64, providerName, channel string) ([]ChannelTemplateProvider, error) {
+	var providers []ChannelTemplateProvider
+	err := d.db.WithContext(ctx).Model(&ChannelTemplateProvider{}).
+		Where("template_id = ? AND template_version_id = ? AND provider_name = ? AND provider_channel = ? AND audit_status = ?",
+			templateID, versionID, providerName, channel, domain.AuditStatusApproved).Find(&providers).Error
+	return providers, err
 }
 
 // BatchCreateTemplateProviders 批量创建模板供应商关联
@@ -260,15 +373,109 @@ func (d *channelTemplateDAO) GetApprovedProvidersByTemplateIDAndVersionID(ctx co
 	var providers []ChannelTemplateProvider
 	err := d.db.WithContext(ctx).Model(&ChannelTemplateProvider{}).
 		Where("template_id = ? AND template_version_id = ? AND audit_status = ?",
-			templateID, versionID, "APPROVED").Find(&providers).Error
+			templateID, versionID, domain.AuditStatusApproved).Find(&providers).Error
 	return providers, err
 }
 
-// GetProviderByNameAndChannel 根据名称和渠道获取已通过审核的供应商
-func (d *channelTemplateDAO) GetProviderByNameAndChannel(ctx context.Context, templateID, versionID int64, providerName, channel string) ([]ChannelTemplateProvider, error) {
+func (d *channelTemplateDAO) GetProvidersByTemplateIDAndVersionID(ctx context.Context, templateID, versionID int64) ([]ChannelTemplateProvider, error) {
 	var providers []ChannelTemplateProvider
 	err := d.db.WithContext(ctx).Model(&ChannelTemplateProvider{}).
-		Where("template_id = ? AND template_version_id = ? AND provider_name = ? AND provider_channel = ? AND audit_status = ?",
-			templateID, versionID, providerName, channel, "APPROVED").Find(&providers).Error
+		Where("template_id = ? AND template_version_id = ?",
+			templateID, versionID).Find(&providers).Error
 	return providers, err
+}
+
+// UpdateTemplateVersion 更新模板版本信息
+func (d *channelTemplateDAO) UpdateTemplateVersion(ctx context.Context, version ChannelTemplateVersion) error {
+	// 只允许更新部分字段
+	updateData := map[string]any{
+		"name":      version.Name,
+		"signature": version.Signature,
+		"content":   version.Content,
+		"remark":    version.Remark,
+		"utime":     time.Now().Unix(),
+	}
+
+	return d.db.WithContext(ctx).Model(&ChannelTemplateVersion{}).
+		Where("id = ?", version.ID).
+		Updates(updateData).Error
+}
+
+// BatchUpdateTemplateVersionAuditStatus 更新模板版本审核状态
+func (d *channelTemplateDAO) BatchUpdateTemplateVersionAuditStatus(ctx context.Context, versions []ChannelTemplateVersion) error {
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for i := range versions {
+			updateData := map[string]any{
+				"audit_status": versions[i].AuditStatus,
+				"utime":        time.Now().Unix(),
+			}
+
+			// 有条件地添加其他字段
+			if versions[i].AuditID > 0 {
+				updateData["audit_id"] = versions[i].AuditID
+			}
+			if versions[i].AuditorID > 0 {
+				updateData["auditor_id"] = versions[i].AuditorID
+			}
+			if versions[i].AuditTime > 0 {
+				updateData["audit_time"] = versions[i].AuditTime
+			}
+			if versions[i].RejectReason != "" {
+				updateData["reject_reason"] = versions[i].RejectReason
+			}
+			if versions[i].LastReviewSubmissionTime > 0 {
+				updateData["last_review_submission_time"] = versions[i].LastReviewSubmissionTime
+			}
+
+			if err := tx.Model(&ChannelTemplateVersion{}).
+				Where("id = ?", versions[i].ID).
+				Updates(updateData).Error; err != nil {
+				return err
+			}
+
+		}
+		return nil
+	})
+}
+
+// GetProviderByRequestID 根据请求ID获取供应商关联
+func (d *channelTemplateDAO) GetProviderByRequestID(ctx context.Context, requestID string) (ChannelTemplateProvider, error) {
+	var provider ChannelTemplateProvider
+	err := d.db.WithContext(ctx).Where("request_id = ?", requestID).First(&provider).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ChannelTemplateProvider{}, fmt.Errorf("%w", errs.ErrProviderNotFound)
+		}
+		return ChannelTemplateProvider{}, err
+	}
+	return provider, nil
+}
+
+// UpdateTemplateProvider 更新模板供应商关联
+func (d *channelTemplateDAO) UpdateTemplateProvider(ctx context.Context, provider ChannelTemplateProvider) error {
+	// 构建更新数据
+	updateData := map[string]any{
+		"utime": time.Now().Unix(),
+	}
+
+	// 有条件地添加其他字段
+	if provider.RequestID != "" {
+		updateData["request_id"] = provider.RequestID
+	}
+	if provider.ProviderTemplateID != "" {
+		updateData["provider_template_id"] = provider.ProviderTemplateID
+	}
+	if provider.AuditStatus != "" {
+		updateData["audit_status"] = provider.AuditStatus
+	}
+	if provider.RejectReason != "" {
+		updateData["reject_reason"] = provider.RejectReason
+	}
+	if provider.LastReviewSubmissionTime > 0 {
+		updateData["last_review_submission_time"] = provider.LastReviewSubmissionTime
+	}
+
+	return d.db.WithContext(ctx).Model(&ChannelTemplateProvider{}).
+		Where("id = ?", provider.ID).
+		Updates(updateData).Error
 }

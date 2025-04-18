@@ -63,6 +63,7 @@ var (
 		notificationsvc.NewTxCheckTask,
 	)
 	senderSvcSet = wire.NewSet(
+		newSMSClients,
 		newChannel,
 		initSender,
 	)
@@ -99,18 +100,32 @@ var (
 )
 
 func newChannel(
-	providerSvc providersvc.Service,
+	clients map[string]client.Client,
 	templateSvc templatesvc.ChannelTemplateService,
 ) channel.Channel {
 	return channel.NewDispatcher(map[domain.Channel]channel.Channel{
-		domain.ChannelEmail : channel.NewSMSChannel(newMockSMSSelectorBuilder(providerSvc, templateSvc)),
+		domain.ChannelSMS: channel.NewSMSChannel(newMockSMSSelectorBuilder()),
 	})
 }
 
+
 func newSMSSelectorBuilder(
-	providerSvc providersvc.Service,
+	clients map[string]client.Client,
 	templateSvc templatesvc.ChannelTemplateService,
 ) *sequential.SelectorBuilder {
+	// 构建SMS供应商
+	providers := make([]provider.Provider, 0, len(clients))
+	for name := range clients {
+		providers = append(providers, sms.NewSMSProvider(
+			name,
+			templateSvc,
+			clients[name],
+		))
+	}
+	return sequential.NewSelectorBuilder(providers)
+}
+
+func newSMSClients(providerSvc providersvc.Service) map[string]client.Client {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
 
@@ -118,8 +133,7 @@ func newSMSSelectorBuilder(
 	if err != nil {
 		panic(err)
 	}
-	// 构建SMS供应商
-	providers := make([]provider.Provider, 0, len(entities))
+	clients := make(map[string]client.Client)
 	for i := range entities {
 		var cli client.Client
 		if entities[i].Name == "aliyun" {
@@ -128,25 +142,20 @@ func newSMSSelectorBuilder(
 				panic(err1)
 			}
 			cli = c
-		} else if entities[i].Name == "gitee" {
+			clients[entities[i].Name] = cli
+		} else if entities[i].Name == "tencentcloud" {
 			c, err1 := client.NewTencentCloudSMS(entities[i].RegionID, entities[i].APIKey, entities[i].APISecret, entities[i].APPID)
 			if err1 != nil {
 				panic(err1)
 			}
 			cli = c
+			clients[entities[i].Name] = cli
 		}
-		providers = append(providers, sms.NewSMSProvider(
-			entities[i].Name,
-			templateSvc,
-			cli,
-		))
 	}
-	return sequential.NewSelectorBuilder(providers)
+	return clients
 }
-func newMockSMSSelectorBuilder(
-	providerSvc providersvc.Service,
-	templateSvc templatesvc.ChannelTemplateService,
-) *sequential.SelectorBuilder {
+
+func newMockSMSSelectorBuilder() *sequential.SelectorBuilder {
 	return sequential.NewSelectorBuilder([]provider.Provider{
 		metrics.NewProvider("ali", tracing.NewProvider(provider.NewMockProvider())),
 	})

@@ -22,6 +22,18 @@ type (
 	TemplateType int32
 )
 
+func (a AuditStatus) IsPending() bool {
+	return a == AuditStatusPending
+}
+
+func (a AuditStatus) IsApproved() bool {
+	return a == AuditStatusApproved
+}
+
+func (a AuditStatus) IsRejected() bool {
+	return a == AuditStatusRejected
+}
+
 type SendStatus int
 
 const (

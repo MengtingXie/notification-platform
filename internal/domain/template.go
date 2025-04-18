@@ -1,5 +1,11 @@
 package domain
 
+import (
+	"fmt"
+
+	"gitee.com/flycash/notification-platform/internal/errs"
+)
+
 // AuditStatus 审核状态
 type AuditStatus string
 
@@ -26,6 +32,10 @@ func (o OwnerType) String() string {
 	return string(o)
 }
 
+func (o OwnerType) IsValid() bool {
+	return o == OwnerTypePerson || o == OwnerTypeOrganization
+}
+
 type BusinessType int64
 
 const (
@@ -39,6 +49,11 @@ const (
 
 func (b BusinessType) ToInt64() int64 {
 	return int64(b)
+}
+
+func (b BusinessType) IsValid() bool {
+	return b == BusinessTypePromotion ||
+		b == BusinessTypeNotification || b == BusinessTypeVerificationCode
 }
 
 // ChannelTemplate 渠道模板
@@ -55,6 +70,33 @@ type ChannelTemplate struct {
 	Utime           int64        // 更新时间
 
 	Versions []ChannelTemplateVersion // 关联的所有版本
+}
+
+func (t *ChannelTemplate) Validate() error {
+	if t.OwnerID <= 0 {
+		return fmt.Errorf("%w: 所有者ID", errs.ErrInvalidParameter)
+	}
+
+	if !t.OwnerType.IsValid() {
+		return fmt.Errorf("%w: 所有者类型", errs.ErrInvalidParameter)
+	}
+
+	if t.Name == "" {
+		return fmt.Errorf("%w: 模板名称", errs.ErrInvalidParameter)
+	}
+
+	if t.Description == "" {
+		return fmt.Errorf("%w: 模板描述", errs.ErrInvalidParameter)
+	}
+
+	if !t.Channel.IsValid() {
+		return fmt.Errorf("%w: 渠道类型", errs.ErrInvalidParameter)
+	}
+
+	if !t.BusinessType.IsValid() {
+		return fmt.Errorf("%w: 业务类型", errs.ErrInvalidParameter)
+	}
+	return nil
 }
 
 // HasPublished 是否已发布
