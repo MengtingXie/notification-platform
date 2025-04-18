@@ -11,6 +11,18 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	// 分位数常量
+	percentile50 float64 = 0.5
+	percentile90 float64 = 0.9
+	percentile99 float64 = 0.99
+
+	// 误差边界常量
+	errorMargin50 float64 = 0.05
+	errorMargin90 float64 = 0.01
+	errorMargin99 float64 = 0.001
+)
+
 type Builder struct {
 	// apiDurationSummary 跟踪 API 响应时间
 	apiDurationSummary *prometheus.SummaryVec
@@ -25,9 +37,13 @@ func New() *Builder {
 	return &Builder{
 		apiDurationSummary: promauto.NewSummaryVec(
 			prometheus.SummaryOpts{
-				Name:       "grpc_server_handling_seconds",
-				Help:       "Summary of response latency (seconds) of gRPC requests.",
-				Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+				Name: "grpc_server_handling_seconds",
+				Help: "Summary of response latency (seconds) of gRPC requests.",
+				Objectives: map[float64]float64{
+					percentile50: errorMargin50,
+					percentile90: errorMargin90,
+					percentile99: errorMargin99,
+				},
 			},
 			[]string{"method", "status"},
 		),

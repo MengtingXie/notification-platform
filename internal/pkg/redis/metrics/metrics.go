@@ -10,10 +10,22 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// Metric quantile constants
 const (
-	exponentStart  = 0.001
-	exponentFactor = 2
-	exponentCount  = 10
+	quantileP50 = 0.5
+	quantileP90 = 0.9
+	quantileP95 = 0.95
+	quantileP99 = 0.99
+	errorP50    = 0.05
+	errorP90    = 0.01
+	errorP95    = 0.005
+	errorP99    = 0.001
+)
+
+// Status constants
+const (
+	statusSuccess = "success"
+	statusError   = "error"
 )
 
 var (
@@ -31,7 +43,7 @@ var (
 		prometheus.SummaryOpts{
 			Name:       "redis_command_duration_seconds",
 			Help:       "Redis command execution time in seconds",
-			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
+			Objectives: map[float64]float64{quantileP50: errorP50, quantileP90: errorP90, quantileP95: errorP95, quantileP99: errorP99},
 		},
 		[]string{"command"},
 	)
@@ -58,7 +70,7 @@ var (
 		prometheus.SummaryOpts{
 			Name:       "redis_pipeline_duration_seconds",
 			Help:       "Redis pipeline execution time in seconds",
-			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
+			Objectives: map[float64]float64{quantileP50: errorP50, quantileP90: errorP90, quantileP95: errorP95, quantileP99: errorP99},
 		},
 	)
 
@@ -109,14 +121,10 @@ func (h *Hook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 		// 记录命令执行时间
 		commandDuration.WithLabelValues(cmdName).Observe(duration.Seconds())
 
-		const (
-			successStatus = "success"
-			errorStatus   = "error"
-		)
 		// 记录命令执行状态
-		status := successStatus
+		status := statusSuccess
 		if err != nil && !errors.Is(err, redis.Nil) {
-			status = errorStatus
+			status = statusError
 		}
 
 		// 增加命令计数
@@ -147,21 +155,18 @@ func (h *Hook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.Process
 
 		// 记录管道命令数量
 		pipelineCommandsCounter.Add(float64(len(cmds)))
-		const (
-			successStr = "success"
-			errorStr   = "error"
-		)
+
 		// 检查是否有错误
-		status := successStr
+		status := statusSuccess
 		for _, cmd := range cmds {
 			if cmdErr := cmd.Err(); cmdErr != nil && !errors.Is(cmdErr, redis.Nil) {
-				status = errorStr
+				status = statusError
 				break
 			}
 		}
 
-		if status == successStr && err != nil {
-			status = errorStr
+		if status == statusSuccess && err != nil {
+			status = statusError
 		}
 
 		// 增加管道计数
@@ -178,9 +183,9 @@ func (h *Hook) DialHook(next redis.DialHook) redis.DialHook {
 		conn, err := next(ctx, network, addr)
 
 		// 记录连接状态
-		status := "success"
+		status := statusSuccess
 		if err != nil {
-			status = "error"
+			status = statusError
 		}
 
 		// 增加连接计数

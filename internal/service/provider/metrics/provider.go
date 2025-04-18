@@ -1,4 +1,3 @@
-// Provider 为供应商实现添加指标收集的装饰器
 package metrics
 
 import (
@@ -8,6 +7,23 @@ import (
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
 	"github.com/prometheus/client_golang/prometheus"
+)
+
+// 定义Prometheus指标配置常量
+const (
+	// 摘要指标的分位数配置
+	median = 0.5
+	p90    = 0.9
+	p95    = 0.95
+	p99    = 0.99
+
+	medianError = 0.05
+	p90Error    = 0.01
+	p95Error    = 0.005
+	p99Error    = 0.001
+
+	// 摘要指标的最大保留时间
+	maxAgeDuration = 5 * time.Minute
 )
 
 // Provider 为供应商实现添加指标收集的装饰器
@@ -23,10 +39,15 @@ type Provider struct {
 func NewProvider(name string, p provider.Provider) *Provider {
 	sendDurationSummary := prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name:       "provider_send_duration_seconds",
-			Help:       "供应商发送通知耗时统计（秒）",
-			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
-			MaxAge:     time.Minute * 5,
+			Name: "provider_send_duration_seconds",
+			Help: "供应商发送通知耗时统计（秒）",
+			Objectives: map[float64]float64{
+				median: medianError,
+				p90:    p90Error,
+				p95:    p95Error,
+				p99:    p99Error,
+			},
+			MaxAge: maxAgeDuration,
 		},
 		[]string{"provider", "channel", "status"},
 	)

@@ -8,6 +8,22 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	// Prometheus metrics constants
+	metricsMaxAge        = 5 * time.Minute
+	metricsP50Percentile = 0.5
+	metricsP50Error      = 0.05
+	metricsP90Percentile = 0.9
+	metricsP90Error      = 0.01
+	metricsP95Percentile = 0.95
+	metricsP95Error      = 0.005
+	metricsP99Percentile = 0.99
+	metricsP99Error      = 0.001
+
+	// Special tags for metrics
+	metricsBatchTag = "batch"
+)
+
 // MetricsSender 为通知发送添加指标收集的装饰器
 type MetricsSender struct {
 	sender                 NotificationSender
@@ -23,8 +39,8 @@ func NewMetricsSender(sender NotificationSender) *MetricsSender {
 		prometheus.SummaryOpts{
 			Name:       "notification_send_duration_seconds",
 			Help:       "通知发送耗时统计（秒）",
-			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
-			MaxAge:     time.Minute * 5,
+			Objectives: map[float64]float64{metricsP50Percentile: metricsP50Error, metricsP90Percentile: metricsP90Error, metricsP95Percentile: metricsP95Error, metricsP99Percentile: metricsP99Error},
+			MaxAge:     metricsMaxAge,
 		},
 		[]string{"channel", "status"},
 	)
@@ -134,7 +150,7 @@ func (m *MetricsSender) BatchSend(ctx context.Context, notifications []domain.No
 	// 记录平均耗时（每条通知）
 	m.sendDurationSummary.WithLabelValues(
 		channel,
-		"batch", // 使用特殊标签来标识批量发送的耗时
+		metricsBatchTag, // 使用特殊标签来标识批量发送的耗时
 	).Observe(duration / float64(len(notifications)))
 
 	return responses, err
