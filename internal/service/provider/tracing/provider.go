@@ -40,12 +40,15 @@ func (p *Provider) Send(ctx context.Context, notification domain.Notification) (
 		))
 	defer span.End()
 
+	// 调用底层供应商发送通知
 	response, err := p.provider.Send(ctx, notification)
 
 	if err != nil {
+		// 记录错误信息
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 	} else {
+		// 记录成功响应的属性
 		span.SetAttributes(
 			attribute.String("notification.id", strconv.FormatUint(response.NotificationID, 10)),
 			attribute.String("notification.status", string(response.Status)),

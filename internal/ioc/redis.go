@@ -1,7 +1,8 @@
 package ioc
 
 import (
-	redishook "gitee.com/flycash/notification-platform/internal/pkg/redis"
+	"gitee.com/flycash/notification-platform/internal/pkg/redis/metrics"
+	"gitee.com/flycash/notification-platform/internal/pkg/redis/tracing"
 	"github.com/gotomicro/ego/core/econf"
 	"github.com/redis/go-redis/v9"
 )
@@ -18,6 +19,7 @@ func InitRedisClient() *redis.Client {
 	cmd := redis.NewClient(&redis.Options{
 		Addr: cfg.Addr,
 	})
-	cmd = redishook.WithTracing(cmd)
+	cmd = tracing.WithTracing(cmd)
+	cmd = metrics.WithMetrics(cmd)
 	return cmd
 }

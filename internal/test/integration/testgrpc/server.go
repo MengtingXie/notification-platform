@@ -5,30 +5,31 @@ import (
 	"log"
 	"net"
 
-	tx_notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	"github.com/ego-component/eetcd/registry"
 	"github.com/gotomicro/ego/core/constant"
 	"github.com/gotomicro/ego/server"
 	"google.golang.org/grpc"
 )
 
-type Server struct {
+type Server[T any] struct {
 	name string
 	*grpc.Server
-	grpcServer tx_notificationv1.TransactionCheckServiceServer
-	reg        *registry.Component
+	grpcServer   T
+	reg          *registry.Component
+	registerFunc func(s grpc.ServiceRegistrar, srv T)
 }
 
-func NewServer(name string, reg *registry.Component, grpcServer tx_notificationv1.TransactionCheckServiceServer) *Server {
-	return &Server{
-		name:       name,
-		reg:        reg,
-		Server:     grpc.NewServer(),
-		grpcServer: grpcServer,
+func NewServer[T any](name string, reg *registry.Component, grpcServer T, registerFunc func(s grpc.ServiceRegistrar, srv T)) *Server[T] {
+	return &Server[T]{
+		name:         name,
+		reg:          reg,
+		Server:       grpc.NewServer(),
+		grpcServer:   grpcServer,
+		registerFunc: registerFunc,
 	}
 }
 
-func (s *Server) Start(addr string) error {
+func (s *Server[T]) Start(addr string) error {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
@@ -42,7 +43,7 @@ func (s *Server) Start(addr string) error {
 	if err != nil {
 		return err
 	}
-	tx_notificationv1.RegisterTransactionCheckServiceServer(s.Server, s.grpcServer)
-	log.Println("grpc server register success")
+	s.registerFunc(s.Server, s.grpcServer)
+	log.Printf("client grpc server %s = %s register success", s.name, addr)
 	return s.Serve(listener)
 }

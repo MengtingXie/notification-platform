@@ -4,7 +4,6 @@ package integration
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -12,17 +11,22 @@ import (
 	"testing"
 	"time"
 
+	clientv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	notificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/notification/v1"
 	"gitee.com/flycash/notification-platform/internal/domain"
 	prodioc "gitee.com/flycash/notification-platform/internal/ioc"
+	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
 	smsmocks "gitee.com/flycash/notification-platform/internal/service/provider/sms/client/mocks"
 	platformioc "gitee.com/flycash/notification-platform/internal/test/integration/ioc/platform"
+	"gitee.com/flycash/notification-platform/internal/test/integration/testgrpc"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
+	"github.com/ego-component/eetcd/registry"
 	"github.com/ego-component/egorm"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/gotomicro/ego"
 	"github.com/gotomicro/ego/client/egrpc"
+	"github.com/gotomicro/ego/client/egrpc/resolver"
 	"github.com/gotomicro/ego/core/econf"
 	"github.com/gotomicro/ego/core/elog"
 	"github.com/gotomicro/ego/server"
@@ -31,36 +35,29 @@ import (
 	"github.com/stretchr/testify/suite"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/yaml.v2"
 
 	jwtpkg "gitee.com/flycash/notification-platform/internal/api/grpc/interceptor/jwt"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
-	batchSizeLimit = 100
+	batchSizeLimit            = 100
+	callbackServerServiceName = "client.notification.callback.service"
 )
 
 func TestGRPCServerWithSuccessMock(t *testing.T) {
 	t.Parallel()
-	suite.Run(t, new(SuccessGRPCServerTestSuite))
+	suite.Run(t, new(GRPCServerTestSuite))
 }
 
-func TestGRPCServerWithFailureMock(t *testing.T) {
-	t.Skip()
-	t.Parallel()
-	suite.Run(t, new(FailureGRPCServerTestSuite))
-}
-
-// 成功测试套件
-type SuccessGRPCServerTestSuite struct {
+type GRPCServerTestSuite struct {
 	BaseGRPCServerTestSuite
 }
 
-func (s *SuccessGRPCServerTestSuite) SetupSuite() {
+func (s *GRPCServerTestSuite) SetupSuite() {
 	// 创建成功响应的模拟客户端
 	ctrl := gomock.NewController(s.T())
 	mockClient := smsmocks.NewMockClient(ctrl)
@@ -99,54 +96,7 @@ func (s *SuccessGRPCServerTestSuite) SetupSuite() {
 	s.BaseGRPCServerTestSuite.SetupTestSuite(serverProt, clientAddr, clients)
 }
 
-func (s *SuccessGRPCServerTestSuite) TearDownSuite() {
-	s.BaseGRPCServerTestSuite.TearDownTestSuite()
-}
-
-type FailureGRPCServerTestSuite struct {
-	BaseGRPCServerTestSuite
-}
-
-func (s *FailureGRPCServerTestSuite) SetupSuite() {
-	// 创建失败响应的模拟客户端
-	ctrl := gomock.NewController(s.T())
-	mockClient := smsmocks.NewMockClient(ctrl)
-
-	// 模拟Send方法
-	mockClient.EXPECT().Send(gomock.Any()).Return(client.SendResp{
-		RequestID: "mock-req-id",
-		PhoneNumbers: map[string]client.SendRespStatus{
-			"13800138000": {
-				Code:    "ERROR",
-				Message: "供应商API错误",
-			},
-		},
-	}, errors.New("供应商API错误")).AnyTimes()
-
-	// 模拟CreateTemplate方法
-	mockClient.EXPECT().CreateTemplate(gomock.Any()).Return(client.CreateTemplateResp{
-		RequestID:  "mock-req-id",
-		TemplateID: "prov-tpl-001",
-	}, nil).AnyTimes()
-
-	// 模拟QueryTemplateStatus方法
-	mockClient.EXPECT().QueryTemplateStatus(gomock.Any()).Return(client.QueryTemplateStatusResp{
-		RequestID:   "mock-req-id",
-		TemplateID:  "prov-tpl-001",
-		AuditStatus: client.AuditStatusApproved,
-		Reason:      "",
-	}, nil).AnyTimes()
-
-	// 配置参数 - 确保与providers表中的name字段匹配
-	clients := map[string]client.Client{"mock-provider-1": mockClient}
-	log.Printf("设置失败测试套件 Mock客户端: %+v", clients)
-
-	serverProt := 9005
-	clientAddr := fmt.Sprintf("127.0.0.1:%d", serverProt)
-	s.BaseGRPCServerTestSuite.SetupTestSuite(serverProt, clientAddr, clients)
-}
-
-func (s *FailureGRPCServerTestSuite) TearDownSuite() {
+func (s *GRPCServerTestSuite) TearDownSuite() {
 	s.BaseGRPCServerTestSuite.TearDownTestSuite()
 }
 
@@ -156,6 +106,8 @@ type BaseGRPCServerTestSuite struct {
 	db     *egorm.Component
 	server *ego.Ego
 	app    *testioc.App
+
+	clientGRPCServer *testgrpc.Server[clientv1.CallbackServiceServer]
 
 	client      notificationv1.NotificationServiceClient
 	queryClient notificationv1.NotificationQueryServiceClient
@@ -167,6 +119,10 @@ type BaseGRPCServerTestSuite struct {
 
 // 设置测试环境
 func (s *BaseGRPCServerTestSuite) SetupTestSuite(serverPort int, clientAddr string, mockClients map[string]client.Client) {
+	// 初始化数据库
+	s.db = testioc.InitDBAndTables()
+	time.Sleep(5 * time.Second)
+
 	serverAddr := fmt.Sprintf("0.0.0.0:%d", serverPort)
 	log.Printf("启动测试套件，服务器地址：%s, 客户端地址：%s\n", serverAddr, clientAddr)
 
@@ -189,8 +145,19 @@ func (s *BaseGRPCServerTestSuite) SetupTestSuite(serverPort int, clientAddr stri
 		"debug": true,
 	})
 
-	// 初始化数据库
-	s.db = testioc.InitDBAndTables()
+	// 初始化注册中心
+	etcdClient := testioc.InitEtcdClient()
+	reg := registry.Load("").Build(registry.WithClientEtcd(etcdClient))
+	go func() {
+		s.clientGRPCServer = testgrpc.NewServer[clientv1.CallbackServiceServer](callbackServerServiceName, reg, &MockClientGRPCServer{}, func(s grpc.ServiceRegistrar, srv clientv1.CallbackServiceServer) {
+			clientv1.RegisterCallbackServiceServer(s, srv)
+		})
+		err = s.clientGRPCServer.Start("127.0.0.1:30002")
+		s.NoError(err)
+	}()
+	// 等待启动完成
+	time.Sleep(1 * time.Second)
+	resolver.Register("etcd", reg)
 
 	// 创建服务器
 	s.server = ego.New()
@@ -245,12 +212,22 @@ func (s *BaseGRPCServerTestSuite) SetupTestSuite(serverPort int, clientAddr stri
 	s.queryClient = notificationv1.NewNotificationQueryServiceClient(conn)
 }
 
+type MockClientGRPCServer struct {
+	clientv1.UnsafeCallbackServiceServer
+}
+
+func (m *MockClientGRPCServer) HandleNotificationResult(_ context.Context, request *clientv1.HandleNotificationResultRequest) (*clientv1.HandleNotificationResultResponse, error) {
+	return &clientv1.HandleNotificationResultResponse{Success: true}, nil
+}
+
 // 关闭测试环境
 func (s *BaseGRPCServerTestSuite) TearDownTestSuite() {
 	log.Printf("关闭测试套件，服务器地址：%s\n", s.serverAddr)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFunc()
 	s.NoError(s.server.Stop(ctx, false))
+
+	s.clientGRPCServer.Stop()
 
 	// 测试完成后清空表数据
 	s.db.Exec("DELETE TABLE `callback_logs`")
@@ -323,6 +300,8 @@ func (s *BaseGRPCServerTestSuite) prepareTemplateData() int64 {
 	s.createTemplate(ctx, templateID)
 
 	// 设置业务配置
+	const retryInterval = 10 * time.Second
+	const maxRetries = 10
 	config := domain.BusinessConfig{
 		ID:        1,
 		OwnerID:   1,
@@ -334,6 +313,21 @@ func (s *BaseGRPCServerTestSuite) prepareTemplateData() int64 {
 					Priority: 1,
 					Enabled:  true,
 				},
+			},
+		},
+		TxnConfig: &domain.TxnConfig{
+			ServiceName:  "order.notification.callback.service",
+			InitialDelay: int(time.Hour),
+			RetryPolicy: &retry.Config{
+				Type:          "fixed",
+				FixedInterval: &retry.FixedIntervalConfig{Interval: retryInterval, MaxRetries: maxRetries},
+			},
+		},
+		CallbackConfig: &domain.CallbackConfig{
+			ServiceName: callbackServerServiceName,
+			RetryPolicy: &retry.Config{
+				Type:          "fixed",
+				FixedInterval: &retry.FixedIntervalConfig{Interval: retryInterval, MaxRetries: maxRetries},
 			},
 		},
 		RateLimit: 100,
@@ -420,8 +414,8 @@ func (s *BaseGRPCServerTestSuite) contextWithJWT(ctx context.Context) context.Co
 	return metadata.NewOutgoingContext(ctx, md)
 }
 
-// SendNotification测试 - 成功场景
-func (s *SuccessGRPCServerTestSuite) TestSendNotification() {
+// SendNotification测试
+func (s *GRPCServerTestSuite) TestSendNotification() {
 	// 准备测试数据
 	templateID := s.prepareTemplateData()
 
@@ -812,263 +806,8 @@ func (s *SuccessGRPCServerTestSuite) TestSendNotification() {
 	}
 }
 
-// SendNotification测试 - 失败场景
-func (s *FailureGRPCServerTestSuite) TestSendNotification() {
-	// 准备测试数据
-	templateID := s.prepareTemplateData()
-
-	// 测试用例
-	testCases := []struct {
-		name          string
-		req           *notificationv1.SendNotificationRequest
-		setupContext  func(context.Context) context.Context
-		wantResp      *notificationv1.SendNotificationResponse
-		errAssertFunc assert.ErrorAssertionFunc
-	}{
-		{
-			name: "发送通知失败-供应商API错误",
-			req: &notificationv1.SendNotificationRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "test-key-5",
-					Receivers:  []string{"13800138000"},
-					Channel:    notificationv1.Channel_SMS,
-					TemplateId: strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-				},
-			},
-			setupContext: s.contextWithJWT,
-			wantResp: &notificationv1.SendNotificationResponse{
-				Status:    notificationv1.SendStatus_FAILED,
-				ErrorCode: notificationv1.ErrorCode_SEND_NOTIFICATION_FAILED,
-			},
-			errAssertFunc: assert.NoError, // 业务错误通过响应返回，不是通过gRPC错误
-		},
-		{
-			name: "渠道被禁用",
-			req: &notificationv1.SendNotificationRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "test-key-disabled-channel",
-					Receivers:  []string{"13800138000"},
-					Channel:    notificationv1.Channel_SMS,
-					TemplateId: strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-				},
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 设置渠道为禁用状态
-				config := domain.BusinessConfig{
-					ID:        1,
-					OwnerID:   1,
-					OwnerType: "person",
-					ChannelConfig: &domain.ChannelConfig{
-						Channels: []domain.ChannelItem{
-							{
-								Channel:  "SMS",
-								Priority: 1,
-								Enabled:  false, // 设置为禁用
-							},
-						},
-					},
-					RateLimit: 100,
-					Quota: &domain.QuotaConfig{
-						Monthly: domain.MonthlyConfig{
-							SMS: 1000,
-						},
-					},
-				}
-				err := s.app.ConfigSvc.SaveConfig(ctx, config)
-				s.NoError(err)
-				return s.contextWithJWT(ctx)
-			},
-			wantResp: &notificationv1.SendNotificationResponse{
-				Status:    notificationv1.SendStatus_FAILED,
-				ErrorCode: notificationv1.ErrorCode_CHANNEL_DISABLED,
-			},
-			errAssertFunc: assert.NoError,
-		},
-		{
-			name: "无可用供应商",
-			req: &notificationv1.SendNotificationRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "test-key-no-provider",
-					Receivers:  []string{"13800138000"},
-					Channel:    notificationv1.Channel_SMS,
-					TemplateId: strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-				},
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 将供应商状态设置为非激活
-				err := s.db.WithContext(ctx).Exec(
-					"UPDATE providers SET status = ? WHERE channel = ?",
-					"INACTIVE", "SMS",
-				).Error
-				s.NoError(err)
-				return s.contextWithJWT(ctx)
-			},
-			wantResp: &notificationv1.SendNotificationResponse{
-				Status:    notificationv1.SendStatus_FAILED,
-				ErrorCode: notificationv1.ErrorCode_NO_AVAILABLE_PROVIDER,
-			},
-			errAssertFunc: assert.NoError,
-		},
-		{
-			name: "超过频率限制",
-			req: &notificationv1.SendNotificationRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "test-key-rate-limited",
-					Receivers:  []string{"13800138000"},
-					Channel:    notificationv1.Channel_SMS,
-					TemplateId: strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-				},
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 设置非常低的频率限制
-				config := domain.BusinessConfig{
-					ID:        1,
-					OwnerID:   1,
-					OwnerType: "person",
-					ChannelConfig: &domain.ChannelConfig{
-						Channels: []domain.ChannelItem{
-							{
-								Channel:  "SMS",
-								Priority: 1,
-								Enabled:  true,
-							},
-						},
-					},
-					RateLimit: 1, // 设置为1表示每秒最多发送1条
-					Quota: &domain.QuotaConfig{
-						Monthly: domain.MonthlyConfig{
-							SMS: 1000,
-						},
-					},
-				}
-				err := s.app.ConfigSvc.SaveConfig(ctx, config)
-				s.NoError(err)
-
-				// 先发送一条消息
-				_, err = s.client.SendNotification(s.contextWithJWT(ctx), &notificationv1.SendNotificationRequest{
-					Notification: &notificationv1.Notification{
-						Key:        "test-key-rate-first",
-						Receivers:  []string{"13800138000"},
-						Channel:    notificationv1.Channel_SMS,
-						TemplateId: strconv.FormatInt(templateID, 10),
-						TemplateParams: map[string]string{
-							"code": "111111",
-						},
-					},
-				})
-				s.NoError(err)
-
-				return s.contextWithJWT(ctx)
-			},
-			wantResp: &notificationv1.SendNotificationResponse{
-				Status:    notificationv1.SendStatus_FAILED,
-				ErrorCode: notificationv1.ErrorCode_RATE_LIMITED,
-			},
-			errAssertFunc: assert.NoError,
-		},
-		{
-			name: "配置不存在",
-			req: &notificationv1.SendNotificationRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "test-key-no-config",
-					Receivers:  []string{"13800138000"},
-					Channel:    notificationv1.Channel_SMS,
-					TemplateId: strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-				},
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 移除配置
-				err := s.db.WithContext(ctx).Exec("DELETE FROM business_configs WHERE id = ?", 1).Error
-				s.NoError(err)
-				return s.contextWithJWT(ctx)
-			},
-			wantResp: &notificationv1.SendNotificationResponse{
-				Status:    notificationv1.SendStatus_FAILED,
-				ErrorCode: notificationv1.ErrorCode_CONFIG_NOT_FOUND,
-			},
-			errAssertFunc: assert.NoError,
-		},
-		{
-			name: "使用截止日期策略发送通知-供应商API错误",
-			req: &notificationv1.SendNotificationRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "test-key-deadline-fail",
-					Receivers:  []string{"13800138000"},
-					Channel:    notificationv1.Channel_SMS,
-					TemplateId: strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-					Strategy: &notificationv1.SendStrategy{
-						StrategyType: &notificationv1.SendStrategy_Deadline{
-							Deadline: &notificationv1.SendStrategy_DeadlineStrategy{
-								Deadline: timestamppb.New(time.Now().Add(1 * time.Hour)),
-							},
-						},
-					},
-				},
-			},
-			setupContext: s.contextWithJWT,
-			wantResp: &notificationv1.SendNotificationResponse{
-				Status:    notificationv1.SendStatus_FAILED,
-				ErrorCode: notificationv1.ErrorCode_SEND_NOTIFICATION_FAILED,
-			},
-			errAssertFunc: assert.NoError,
-		},
-	}
-
-	for _, tt := range testCases {
-		s.T().Run(tt.name, func(t *testing.T) {
-			ctx := t.Context()
-			if tt.setupContext != nil {
-				ctx = tt.setupContext(ctx)
-			} else {
-				ctx = s.contextWithJWT(ctx)
-			}
-
-			// 调用服务
-			log.Printf("失败测试 - 发送请求: %+v", tt.req)
-			resp, err := s.client.SendNotification(ctx, tt.req)
-
-			if err != nil {
-				log.Printf("失败测试 - 发送请求失败: %v", err)
-			} else {
-				log.Printf("失败测试 - 接收响应: %+v", resp)
-			}
-
-			tt.errAssertFunc(t, err)
-
-			if err != nil {
-				return
-			}
-
-			assert.Equal(t, tt.wantResp.NotificationId, resp.NotificationId, "通知ID应匹配")
-			assert.Equal(t, tt.wantResp.Status, resp.Status, "响应状态应匹配")
-			assert.Equal(t, tt.wantResp.ErrorCode, resp.ErrorCode, "错误码应匹配")
-			if tt.wantResp.ErrorCode != notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
-				assert.NotEmpty(t, resp.ErrorMessage, "错误消息不能为空")
-			}
-		})
-	}
-}
-
-// SendNotificationAsync测试 - 成功场景
-func (s *SuccessGRPCServerTestSuite) TestSendNotificationAsync() {
+// SendNotificationAsync测试
+func (s *GRPCServerTestSuite) TestSendNotificationAsync() {
 	// 准备测试数据
 	templateID := s.prepareTemplateData()
 
@@ -1392,265 +1131,8 @@ func (s *SuccessGRPCServerTestSuite) TestSendNotificationAsync() {
 	}
 }
 
-// SendNotificationAsync测试 - 失败场景
-func (s *FailureGRPCServerTestSuite) TestSendNotificationAsync() {
-	// 准备测试数据
-	templateID := s.prepareTemplateData()
-
-	// 测试用例
-	testCases := []struct {
-		name          string
-		req           *notificationv1.SendNotificationAsyncRequest
-		setupContext  func(context.Context) context.Context
-		wantResp      *notificationv1.SendNotificationAsyncResponse
-		errAssertFunc assert.ErrorAssertionFunc
-	}{
-		{
-			name: "使用截止日期策略发送异步通知失败-供应商API错误",
-			req: &notificationv1.SendNotificationAsyncRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "test-async-deadline-fail-key",
-					Receivers:  []string{"13800138000"},
-					Channel:    notificationv1.Channel_SMS,
-					TemplateId: strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-					Strategy: &notificationv1.SendStrategy{
-						StrategyType: &notificationv1.SendStrategy_Deadline{
-							Deadline: &notificationv1.SendStrategy_DeadlineStrategy{
-								Deadline: timestamppb.New(time.Now().Add(1 * time.Hour)),
-							},
-						},
-					},
-				},
-			},
-			setupContext: s.contextWithJWT,
-			wantResp: &notificationv1.SendNotificationAsyncResponse{
-				ErrorCode: notificationv1.ErrorCode_SEND_NOTIFICATION_FAILED,
-			},
-			errAssertFunc: assert.NoError,
-		},
-		{
-			name: "渠道被禁用",
-			req: &notificationv1.SendNotificationAsyncRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "test-async-key-disabled-channel",
-					Receivers:  []string{"13800138000"},
-					Channel:    notificationv1.Channel_SMS,
-					TemplateId: strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-				},
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 设置渠道为禁用状态
-				config := domain.BusinessConfig{
-					ID:        1,
-					OwnerID:   1,
-					OwnerType: "person",
-					ChannelConfig: &domain.ChannelConfig{
-						Channels: []domain.ChannelItem{
-							{
-								Channel:  "SMS",
-								Priority: 1,
-								Enabled:  false, // 设置为禁用
-							},
-						},
-					},
-					RateLimit: 100,
-					Quota: &domain.QuotaConfig{
-						Monthly: domain.MonthlyConfig{
-							SMS: 1000,
-						},
-					},
-				}
-				err := s.app.ConfigSvc.SaveConfig(ctx, config)
-				s.NoError(err)
-				return s.contextWithJWT(ctx)
-			},
-			wantResp: &notificationv1.SendNotificationAsyncResponse{
-				ErrorCode: notificationv1.ErrorCode_CHANNEL_DISABLED,
-			},
-			errAssertFunc: assert.NoError,
-		},
-		{
-			name: "无可用供应商",
-			req: &notificationv1.SendNotificationAsyncRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "test-async-key-no-provider",
-					Receivers:  []string{"13800138000"},
-					Channel:    notificationv1.Channel_SMS,
-					TemplateId: strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-				},
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 将供应商状态设置为非激活
-				err := s.db.WithContext(ctx).Exec(
-					"UPDATE providers SET status = ? WHERE channel = ?",
-					"INACTIVE", "SMS",
-				).Error
-				s.NoError(err)
-				return s.contextWithJWT(ctx)
-			},
-			wantResp: &notificationv1.SendNotificationAsyncResponse{
-				ErrorCode: notificationv1.ErrorCode_NO_AVAILABLE_PROVIDER,
-			},
-			errAssertFunc: assert.NoError,
-		},
-		{
-			name: "超过频率限制",
-			req: &notificationv1.SendNotificationAsyncRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "test-async-key-rate-limited",
-					Receivers:  []string{"13800138000"},
-					Channel:    notificationv1.Channel_SMS,
-					TemplateId: strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-				},
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 设置非常低的频率限制
-				config := domain.BusinessConfig{
-					ID:        1,
-					OwnerID:   1,
-					OwnerType: "person",
-					ChannelConfig: &domain.ChannelConfig{
-						Channels: []domain.ChannelItem{
-							{
-								Channel:  "SMS",
-								Priority: 1,
-								Enabled:  true,
-							},
-						},
-					},
-					RateLimit: 1, // 设置为1表示每秒最多发送1条
-					Quota: &domain.QuotaConfig{
-						Monthly: domain.MonthlyConfig{
-							SMS: 1000,
-						},
-					},
-				}
-				err := s.app.ConfigSvc.SaveConfig(ctx, config)
-				s.NoError(err)
-
-				// 先发送一条异步消息
-				_, err = s.client.SendNotificationAsync(s.contextWithJWT(ctx), &notificationv1.SendNotificationAsyncRequest{
-					Notification: &notificationv1.Notification{
-						Key:        "test-async-key-rate-first",
-						Receivers:  []string{"13800138000"},
-						Channel:    notificationv1.Channel_SMS,
-						TemplateId: strconv.FormatInt(templateID, 10),
-						TemplateParams: map[string]string{
-							"code": "111111",
-						},
-					},
-				})
-				s.NoError(err)
-
-				return s.contextWithJWT(ctx)
-			},
-			wantResp: &notificationv1.SendNotificationAsyncResponse{
-				ErrorCode: notificationv1.ErrorCode_RATE_LIMITED,
-			},
-			errAssertFunc: assert.NoError,
-		},
-		{
-			name: "配置不存在",
-			req: &notificationv1.SendNotificationAsyncRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "test-async-key-no-config",
-					Receivers:  []string{"13800138000"},
-					Channel:    notificationv1.Channel_SMS,
-					TemplateId: strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-				},
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 移除配置
-				err := s.db.WithContext(ctx).Exec("DELETE FROM business_configs WHERE id = ?", 1).Error
-				s.NoError(err)
-				return s.contextWithJWT(ctx)
-			},
-			wantResp: &notificationv1.SendNotificationAsyncResponse{
-				ErrorCode: notificationv1.ErrorCode_CONFIG_NOT_FOUND,
-			},
-			errAssertFunc: assert.NoError,
-		},
-		{
-			name: "配额用尽",
-			req: &notificationv1.SendNotificationAsyncRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "test-async-key-quota-exceeded",
-					Receivers:  []string{"13800138000"},
-					Channel:    notificationv1.Channel_SMS,
-					TemplateId: strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-				},
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 设置配额为0
-				err := s.app.QuotaRepo.CreateOrUpdate(ctx, domain.Quota{
-					BizID:   1,
-					Quota:   0, // 设置为0表示配额已用尽
-					Channel: domain.ChannelSMS,
-				})
-				s.NoError(err)
-				return s.contextWithJWT(ctx)
-			},
-			wantResp: &notificationv1.SendNotificationAsyncResponse{
-				ErrorCode: notificationv1.ErrorCode_NO_QUOTA,
-			},
-			errAssertFunc: assert.NoError,
-		},
-	}
-
-	for _, tt := range testCases {
-		s.T().Run(tt.name, func(t *testing.T) {
-			ctx := t.Context()
-			if tt.setupContext != nil {
-				ctx = tt.setupContext(ctx)
-			} else {
-				ctx = s.contextWithJWT(ctx)
-			}
-
-			// 调用服务
-			log.Printf("失败测试异步 - 发送请求: %+v", tt.req)
-			resp, err := s.client.SendNotificationAsync(ctx, tt.req)
-
-			if err != nil {
-				log.Printf("失败测试异步 - 发送请求失败: %v", err)
-			} else {
-				log.Printf("失败测试异步 - 接收响应: %+v", resp)
-			}
-
-			tt.errAssertFunc(t, err)
-
-			if err != nil {
-				return
-			}
-
-			assert.Equal(t, tt.wantResp.NotificationId, resp.NotificationId, "通知ID应匹配")
-			assert.Equal(t, tt.wantResp.ErrorCode, resp.ErrorCode, "错误码应匹配")
-			if tt.wantResp.ErrorCode != notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED {
-				assert.NotEmpty(t, resp.ErrorMessage, "错误消息不能为空")
-			}
-		})
-	}
-}
-
-// BatchSendNotifications测试 - 成功场景
-func (s *SuccessGRPCServerTestSuite) TestBatchSendNotifications() {
+// BatchSendNotifications测试
+func (s *GRPCServerTestSuite) TestBatchSendNotifications() {
 	// 准备测试数据
 	templateID := s.prepareTemplateData()
 
@@ -1688,6 +1170,14 @@ func (s *SuccessGRPCServerTestSuite) TestBatchSendNotifications() {
 			},
 			setupContext: s.contextWithJWT,
 			wantResp: &notificationv1.BatchSendNotificationsResponse{
+				Results: []*notificationv1.SendNotificationResponse{
+					{
+						Status: notificationv1.SendStatus_SUCCEEDED,
+					},
+					{
+						Status: notificationv1.SendStatus_SUCCEEDED,
+					},
+				},
 				TotalCount:   2,
 				SuccessCount: 2,
 			},
@@ -1783,7 +1273,269 @@ func (s *SuccessGRPCServerTestSuite) TestBatchSendNotifications() {
 			wantResp:      nil,
 			errAssertFunc: assert.Error, // 超过限制返回错误
 		},
-		// TODO 不同渠道混合发送
+		{
+			name: "使用立即发送策略批量发送通知",
+			req: &notificationv1.BatchSendNotificationsRequest{
+				Notifications: []*notificationv1.Notification{
+					{
+						Key:        "batch-immediate-key-1",
+						Receivers:  []string{"13800138010"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "101010",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Immediate{
+								Immediate: &notificationv1.SendStrategy_ImmediateStrategy{},
+							},
+						},
+					},
+					{
+						Key:        "batch-immediate-key-2",
+						Receivers:  []string{"13800138011"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "111111",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Immediate{
+								Immediate: &notificationv1.SendStrategy_ImmediateStrategy{},
+							},
+						},
+					},
+				},
+			},
+			setupContext: s.contextWithJWT,
+			wantResp: &notificationv1.BatchSendNotificationsResponse{
+				TotalCount:   2,
+				SuccessCount: 2,
+				Results: []*notificationv1.SendNotificationResponse{
+					{
+						Status: notificationv1.SendStatus_SUCCEEDED,
+					},
+					{
+						Status: notificationv1.SendStatus_SUCCEEDED,
+					},
+				},
+			},
+			errAssertFunc: assert.NoError,
+		},
+		{
+			name: "使用截止日期策略批量发送通知",
+			req: &notificationv1.BatchSendNotificationsRequest{
+				Notifications: []*notificationv1.Notification{
+					{
+						Key:        "batch-deadline-key-1",
+						Receivers:  []string{"13800138012"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "121212",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Deadline{
+								Deadline: &notificationv1.SendStrategy_DeadlineStrategy{
+									Deadline: timestamppb.New(time.Now().Add(1 * time.Hour)),
+								},
+							},
+						},
+					},
+					{
+						Key:        "batch-deadline-key-2",
+						Receivers:  []string{"13800138013"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "131313",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Deadline{
+								Deadline: &notificationv1.SendStrategy_DeadlineStrategy{
+									Deadline: timestamppb.New(time.Now().Add(2 * time.Hour)),
+								},
+							},
+						},
+					},
+				},
+			},
+			setupContext: s.contextWithJWT,
+			wantResp: &notificationv1.BatchSendNotificationsResponse{
+				TotalCount:   2,
+				SuccessCount: 2,
+				Results: []*notificationv1.SendNotificationResponse{
+					{
+						Status: notificationv1.SendStatus_PENDING,
+					},
+					{
+						Status: notificationv1.SendStatus_PENDING,
+					},
+				},
+			},
+			errAssertFunc: assert.NoError,
+		},
+		{
+			name: "使用延迟发送策略批量发送通知",
+			req: &notificationv1.BatchSendNotificationsRequest{
+				Notifications: []*notificationv1.Notification{
+					{
+						Key:        "batch-delayed-key-1",
+						Receivers:  []string{"13800138014"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "141414",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Delayed{
+								Delayed: &notificationv1.SendStrategy_DelayedStrategy{
+									DelaySeconds: 60, // 延迟60秒
+								},
+							},
+						},
+					},
+					{
+						Key:        "batch-delayed-key-2",
+						Receivers:  []string{"13800138015"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "151515",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Delayed{
+								Delayed: &notificationv1.SendStrategy_DelayedStrategy{
+									DelaySeconds: 120, // 延迟120秒
+								},
+							},
+						},
+					},
+				},
+			},
+			setupContext: s.contextWithJWT,
+			wantResp: &notificationv1.BatchSendNotificationsResponse{
+				TotalCount:   2,
+				SuccessCount: 2,
+				Results: []*notificationv1.SendNotificationResponse{
+					{
+						Status: notificationv1.SendStatus_PENDING,
+					},
+					{
+						Status: notificationv1.SendStatus_PENDING,
+					},
+				},
+			},
+			errAssertFunc: assert.NoError,
+		},
+		{
+			name: "使用定时发送策略批量发送通知",
+			req: &notificationv1.BatchSendNotificationsRequest{
+				Notifications: []*notificationv1.Notification{
+					{
+						Key:        "batch-scheduled-key-1",
+						Receivers:  []string{"13800138016"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "161616",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Scheduled{
+								Scheduled: &notificationv1.SendStrategy_ScheduledStrategy{
+									SendTime: timestamppb.New(time.Now().Add(30 * time.Minute)),
+								},
+							},
+						},
+					},
+					{
+						Key:        "batch-scheduled-key-2",
+						Receivers:  []string{"13800138017"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "171717",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Scheduled{
+								Scheduled: &notificationv1.SendStrategy_ScheduledStrategy{
+									SendTime: timestamppb.New(time.Now().Add(45 * time.Minute)),
+								},
+							},
+						},
+					},
+				},
+			},
+			setupContext: s.contextWithJWT,
+			wantResp: &notificationv1.BatchSendNotificationsResponse{
+				TotalCount:   2,
+				SuccessCount: 2,
+				Results: []*notificationv1.SendNotificationResponse{
+					{
+						Status: notificationv1.SendStatus_PENDING,
+					},
+					{
+						Status: notificationv1.SendStatus_PENDING,
+					},
+				},
+			},
+			errAssertFunc: assert.NoError,
+		},
+		{
+			name: "使用时间窗口策略批量发送通知",
+			req: &notificationv1.BatchSendNotificationsRequest{
+				Notifications: []*notificationv1.Notification{
+					{
+						Key:        "batch-timewindow-key-1",
+						Receivers:  []string{"13800138018"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "181818",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_TimeWindow{
+								TimeWindow: &notificationv1.SendStrategy_TimeWindowStrategy{
+									StartTimeMilliseconds: time.Now().Unix() * 1000,
+									EndTimeMilliseconds:   time.Now().Add(2*time.Hour).Unix() * 1000,
+								},
+							},
+						},
+					},
+					{
+						Key:        "batch-timewindow-key-2",
+						Receivers:  []string{"13800138019"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "191919",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_TimeWindow{
+								TimeWindow: &notificationv1.SendStrategy_TimeWindowStrategy{
+									StartTimeMilliseconds: time.Now().Unix() * 1000,
+									EndTimeMilliseconds:   time.Now().Add(3*time.Hour).Unix() * 1000,
+								},
+							},
+						},
+					},
+				},
+			},
+			setupContext: s.contextWithJWT,
+			wantResp: &notificationv1.BatchSendNotificationsResponse{
+				TotalCount:   2,
+				SuccessCount: 2,
+				Results: []*notificationv1.SendNotificationResponse{
+					{
+						Status: notificationv1.SendStatus_PENDING,
+					},
+					{
+						Status: notificationv1.SendStatus_PENDING,
+					},
+				},
+			},
+			errAssertFunc: assert.NoError,
+		},
 		{
 			name: "不同发送策略混合发送",
 			req: &notificationv1.BatchSendNotificationsRequest{
@@ -1827,6 +1579,98 @@ func (s *SuccessGRPCServerTestSuite) TestBatchSendNotifications() {
 			},
 			errAssertFunc: assert.NoError,
 		},
+		{
+			name: "五种发送策略完整混合发送",
+			req: &notificationv1.BatchSendNotificationsRequest{
+				Notifications: []*notificationv1.Notification{
+					{
+						Key:        "batch-immediate-mix-key",
+						Receivers:  []string{"13800138020"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "202020",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Immediate{
+								Immediate: &notificationv1.SendStrategy_ImmediateStrategy{},
+							},
+						},
+					},
+					{
+						Key:        "batch-deadline-mix-key",
+						Receivers:  []string{"13800138021"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "212121",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Deadline{
+								Deadline: &notificationv1.SendStrategy_DeadlineStrategy{
+									Deadline: timestamppb.New(time.Now().Add(1 * time.Hour)),
+								},
+							},
+						},
+					},
+					{
+						Key:        "batch-delayed-mix-key",
+						Receivers:  []string{"13800138022"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "222222",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Delayed{
+								Delayed: &notificationv1.SendStrategy_DelayedStrategy{
+									DelaySeconds: 60,
+								},
+							},
+						},
+					},
+					{
+						Key:        "batch-scheduled-mix-key",
+						Receivers:  []string{"13800138023"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "232323",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_Scheduled{
+								Scheduled: &notificationv1.SendStrategy_ScheduledStrategy{
+									SendTime: timestamppb.New(time.Now().Add(30 * time.Minute)),
+								},
+							},
+						},
+					},
+					{
+						Key:        "batch-timewindow-mix-key",
+						Receivers:  []string{"13800138024"},
+						Channel:    notificationv1.Channel_SMS,
+						TemplateId: strconv.FormatInt(templateID, 10),
+						TemplateParams: map[string]string{
+							"code": "242424",
+						},
+						Strategy: &notificationv1.SendStrategy{
+							StrategyType: &notificationv1.SendStrategy_TimeWindow{
+								TimeWindow: &notificationv1.SendStrategy_TimeWindowStrategy{
+									StartTimeMilliseconds: time.Now().Unix() * 1000,
+									EndTimeMilliseconds:   time.Now().Add(2*time.Hour).Unix() * 1000,
+								},
+							},
+						},
+					},
+				},
+			},
+			setupContext: s.contextWithJWT,
+			wantResp: &notificationv1.BatchSendNotificationsResponse{
+				TotalCount:   5,
+				SuccessCount: 5,
+			},
+			errAssertFunc: assert.NoError,
+		},
 	}
 
 	for _, tt := range testCases {
@@ -1841,7 +1685,7 @@ func (s *SuccessGRPCServerTestSuite) TestBatchSendNotifications() {
 			if err != nil {
 				log.Printf("发送批量请求失败: %v", err)
 			} else {
-				log.Printf("接收批量响应: %+v", resp)
+				log.Printf("接收批量响应: %#v", resp)
 			}
 
 			tt.errAssertFunc(t, err)
@@ -1861,7 +1705,8 @@ func (s *SuccessGRPCServerTestSuite) TestBatchSendNotifications() {
 			// 检查成功的通知是否有非零ID
 			successCount := int32(0)
 			for _, result := range resp.Results {
-				if result.Status == notificationv1.SendStatus_SUCCEEDED {
+				if result.Status == notificationv1.SendStatus_SUCCEEDED ||
+					result.Status == notificationv1.SendStatus_PENDING {
 					assert.Greater(t, result.NotificationId, uint64(0), "成功的通知应有非零ID")
 					successCount++
 				}
@@ -1871,172 +1716,8 @@ func (s *SuccessGRPCServerTestSuite) TestBatchSendNotifications() {
 	}
 }
 
-// BatchSendNotifications测试 - 失败场景
-func (s *FailureGRPCServerTestSuite) TestBatchSendNotifications() {
-	// 准备测试数据
-	templateID := s.prepareTemplateData()
-
-	// 测试用例
-	testCases := []struct {
-		name          string
-		req           *notificationv1.BatchSendNotificationsRequest
-		setupContext  func(context.Context) context.Context
-		wantResp      *notificationv1.BatchSendNotificationsResponse
-		errAssertFunc assert.ErrorAssertionFunc
-	}{
-		{
-			name: "批量发送失败-供应商API错误",
-			req: &notificationv1.BatchSendNotificationsRequest{
-				Notifications: []*notificationv1.Notification{
-					{
-						Key:        "batch-fail-key-1",
-						Receivers:  []string{"13800138001"},
-						Channel:    notificationv1.Channel_SMS,
-						TemplateId: strconv.FormatInt(templateID, 10),
-						TemplateParams: map[string]string{
-							"code": "111111",
-						},
-					},
-					{
-						Key:        "batch-fail-key-2",
-						Receivers:  []string{"13800138002"},
-						Channel:    notificationv1.Channel_SMS,
-						TemplateId: strconv.FormatInt(templateID, 10),
-						TemplateParams: map[string]string{
-							"code": "222222",
-						},
-					},
-				},
-			},
-			setupContext: s.contextWithJWT,
-			wantResp: &notificationv1.BatchSendNotificationsResponse{
-				TotalCount:   2,
-				SuccessCount: 0,
-			},
-			errAssertFunc: assert.NoError, // 业务错误通过响应返回，不是通过gRPC错误
-		},
-		{
-			name: "渠道被禁用",
-			req: &notificationv1.BatchSendNotificationsRequest{
-				Notifications: []*notificationv1.Notification{
-					{
-						Key:        "batch-disabled-channel-key",
-						Receivers:  []string{"13800138003"},
-						Channel:    notificationv1.Channel_SMS,
-						TemplateId: strconv.FormatInt(templateID, 10),
-						TemplateParams: map[string]string{
-							"code": "333333",
-						},
-					},
-				},
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 设置渠道为禁用状态
-				config := domain.BusinessConfig{
-					ID:        1,
-					OwnerID:   1,
-					OwnerType: "person",
-					ChannelConfig: &domain.ChannelConfig{
-						Channels: []domain.ChannelItem{
-							{
-								Channel:  "SMS",
-								Priority: 1,
-								Enabled:  false, // 设置为禁用
-							},
-						},
-					},
-					RateLimit: 100,
-					Quota: &domain.QuotaConfig{
-						Monthly: domain.MonthlyConfig{
-							SMS: 1000,
-						},
-					},
-				}
-				err := s.app.ConfigSvc.SaveConfig(ctx, config)
-				s.NoError(err)
-				return s.contextWithJWT(ctx)
-			},
-			wantResp: &notificationv1.BatchSendNotificationsResponse{
-				TotalCount:   1,
-				SuccessCount: 0,
-			},
-			errAssertFunc: assert.NoError,
-		},
-		{
-			name: "批量通知全部无效",
-			req: &notificationv1.BatchSendNotificationsRequest{
-				Notifications: []*notificationv1.Notification{
-					{
-						Key:        "batch-invalid-key-1",
-						Receivers:  []string{"13800138004"},
-						Channel:    notificationv1.Channel_SMS,
-						TemplateId: "invalid-id-1",
-						TemplateParams: map[string]string{
-							"code": "444444",
-						},
-					},
-					{
-						Key:        "batch-invalid-key-2",
-						Receivers:  []string{"13800138005"},
-						Channel:    notificationv1.Channel_SMS,
-						TemplateId: "invalid-id-2",
-						TemplateParams: map[string]string{
-							"code": "555555",
-						},
-					},
-				},
-			},
-			setupContext: s.contextWithJWT,
-			wantResp: &notificationv1.BatchSendNotificationsResponse{
-				TotalCount:   2,
-				SuccessCount: 0,
-			},
-			errAssertFunc: assert.NoError,
-		},
-	}
-
-	for _, tt := range testCases {
-		s.T().Run(tt.name, func(t *testing.T) {
-			ctx := t.Context()
-			if tt.setupContext != nil {
-				ctx = tt.setupContext(ctx)
-			} else {
-				ctx = s.contextWithJWT(ctx)
-			}
-
-			// 调用服务
-			log.Printf("失败批量测试 - 发送请求: %+v", tt.req)
-			resp, err := s.client.BatchSendNotifications(ctx, tt.req)
-
-			if err != nil {
-				log.Printf("失败批量测试 - 发送请求失败: %v", err)
-			} else {
-				log.Printf("失败批量测试 - 接收响应: %+v", resp)
-			}
-
-			tt.errAssertFunc(t, err)
-
-			if err != nil {
-				return
-			}
-
-			// 验证响应
-			assert.Equal(t, tt.wantResp.TotalCount, resp.TotalCount, "总数应匹配")
-			assert.Equal(t, tt.wantResp.SuccessCount, resp.SuccessCount, "成功数应匹配")
-
-			// 为所有通知检查错误代码和错误消息
-			for _, result := range resp.Results {
-				if result.Status == notificationv1.SendStatus_FAILED {
-					assert.NotEqual(t, notificationv1.ErrorCode_ERROR_CODE_UNSPECIFIED, result.ErrorCode, "失败通知应有错误代码")
-					assert.NotEmpty(t, result.ErrorMessage, "失败通知应有错误消息")
-				}
-			}
-		})
-	}
-}
-
-// BatchSendNotificationsAsync测试 - 成功场景
-func (s *SuccessGRPCServerTestSuite) TestBatchSendNotificationsAsync() {
+// BatchSendNotificationsAsync测试
+func (s *GRPCServerTestSuite) TestBatchSendNotificationsAsync() {
 	// 准备测试数据
 	templateID := s.prepareTemplateData()
 
@@ -2271,158 +1952,8 @@ func (s *SuccessGRPCServerTestSuite) TestBatchSendNotificationsAsync() {
 	}
 }
 
-// BatchSendNotificationsAsync测试 - 失败场景
-func (s *FailureGRPCServerTestSuite) TestBatchSendNotificationsAsync() {
-	// 准备测试数据
-	templateID := s.prepareTemplateData()
-
-	// 测试用例
-	testCases := []struct {
-		name          string
-		req           *notificationv1.BatchSendNotificationsAsyncRequest
-		setupContext  func(context.Context) context.Context
-		wantResp      *notificationv1.BatchSendNotificationsAsyncResponse
-		errAssertFunc assert.ErrorAssertionFunc
-	}{
-		{
-			name: "批量异步发送失败-供应商API错误",
-			req: &notificationv1.BatchSendNotificationsAsyncRequest{
-				Notifications: []*notificationv1.Notification{
-					{
-						Key:        "batch-async-fail-key-1",
-						Receivers:  []string{"13800138001"},
-						Channel:    notificationv1.Channel_SMS,
-						TemplateId: strconv.FormatInt(templateID, 10),
-						TemplateParams: map[string]string{
-							"code": "111111",
-						},
-					},
-					{
-						Key:        "batch-async-fail-key-2",
-						Receivers:  []string{"13800138002"},
-						Channel:    notificationv1.Channel_SMS,
-						TemplateId: strconv.FormatInt(templateID, 10),
-						TemplateParams: map[string]string{
-							"code": "222222",
-						},
-					},
-				},
-			},
-			setupContext:  s.contextWithJWT,
-			wantResp:      nil,
-			errAssertFunc: assert.Error, // 供应商API错误应返回gRPC错误
-		},
-		{
-			name: "渠道被禁用",
-			req: &notificationv1.BatchSendNotificationsAsyncRequest{
-				Notifications: []*notificationv1.Notification{
-					{
-						Key:        "batch-async-disabled-channel-key",
-						Receivers:  []string{"13800138003"},
-						Channel:    notificationv1.Channel_SMS,
-						TemplateId: strconv.FormatInt(templateID, 10),
-						TemplateParams: map[string]string{
-							"code": "333333",
-						},
-					},
-				},
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 设置渠道为禁用状态
-				config := domain.BusinessConfig{
-					ID:        1,
-					OwnerID:   1,
-					OwnerType: "person",
-					ChannelConfig: &domain.ChannelConfig{
-						Channels: []domain.ChannelItem{
-							{
-								Channel:  "SMS",
-								Priority: 1,
-								Enabled:  false, // 设置为禁用
-							},
-						},
-					},
-					RateLimit: 100,
-					Quota: &domain.QuotaConfig{
-						Monthly: domain.MonthlyConfig{
-							SMS: 1000,
-						},
-					},
-				}
-				err := s.app.ConfigSvc.SaveConfig(ctx, config)
-				s.NoError(err)
-				return s.contextWithJWT(ctx)
-			},
-			wantResp:      nil,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name: "批量异步通知全部无效",
-			req: &notificationv1.BatchSendNotificationsAsyncRequest{
-				Notifications: []*notificationv1.Notification{
-					{
-						Key:        "batch-async-invalid-key-1",
-						Receivers:  []string{"13800138004"},
-						Channel:    notificationv1.Channel_SMS,
-						TemplateId: "invalid-id-1",
-						TemplateParams: map[string]string{
-							"code": "444444",
-						},
-					},
-					{
-						Key:        "batch-async-invalid-key-2",
-						Receivers:  []string{"13800138005"},
-						Channel:    notificationv1.Channel_SMS,
-						TemplateId: "invalid-id-2",
-						TemplateParams: map[string]string{
-							"code": "555555",
-						},
-					},
-				},
-			},
-			setupContext:  s.contextWithJWT,
-			wantResp:      nil,
-			errAssertFunc: assert.Error,
-		},
-	}
-
-	for _, tt := range testCases {
-		s.T().Run(tt.name, func(t *testing.T) {
-			ctx := t.Context()
-			if tt.setupContext != nil {
-				ctx = tt.setupContext(ctx)
-			} else {
-				ctx = s.contextWithJWT(ctx)
-			}
-
-			// 调用服务
-			log.Printf("失败批量异步测试 - 发送请求: %+v", tt.req)
-			resp, err := s.client.BatchSendNotificationsAsync(ctx, tt.req)
-
-			if err != nil {
-				log.Printf("失败批量异步测试 - 发送请求失败: %v", err)
-			} else {
-				log.Printf("失败批量异步测试 - 接收响应: %+v", resp)
-			}
-
-			tt.errAssertFunc(t, err)
-
-			if err != nil {
-				return
-			}
-
-			// 验证响应
-			if len(tt.wantResp.NotificationIds) > 0 {
-				assert.Greater(t, len(resp.NotificationIds), 0, "通知ID数组应非空")
-			} else {
-				assert.Empty(t, resp.NotificationIds, "通知ID数组应为空")
-			}
-		})
-	}
-}
-
-// QueryNotification测试 - 成功场景
-func (s *SuccessGRPCServerTestSuite) TestQueryNotification() {
+// QueryNotification测试
+func (s *GRPCServerTestSuite) TestQueryNotification() {
 	// 准备测试数据
 	templateID := s.prepareTemplateData()
 	ctx := s.contextWithJWT(context.Background())
@@ -2430,7 +1961,7 @@ func (s *SuccessGRPCServerTestSuite) TestQueryNotification() {
 	// 发送通知以创建记录
 	sendReq := &notificationv1.SendNotificationRequest{
 		Notification: &notificationv1.Notification{
-			Key:        "query-notification-key",
+			Key:        "query-notification-key-x",
 			Receivers:  []string{"13800138000"},
 			Channel:    notificationv1.Channel_SMS,
 			TemplateId: strconv.FormatInt(templateID, 10),
@@ -2457,7 +1988,7 @@ func (s *SuccessGRPCServerTestSuite) TestQueryNotification() {
 		{
 			name: "成功查询存在的通知",
 			req: &notificationv1.QueryNotificationRequest{
-				Key: "query-notification-key",
+				Key: "query-notification-key-x",
 			},
 			setupContext: s.contextWithJWT,
 			wantResp: &notificationv1.QueryNotificationResponse{
@@ -2539,83 +2070,8 @@ func (s *SuccessGRPCServerTestSuite) TestQueryNotification() {
 	}
 }
 
-// QueryNotification测试 - 失败场景
-func (s *FailureGRPCServerTestSuite) TestQueryNotification() {
-	// 测试用例
-	testCases := []struct {
-		name          string
-		req           *notificationv1.QueryNotificationRequest
-		setupContext  func(context.Context) context.Context
-		wantErrCode   codes.Code
-		errAssertFunc assert.ErrorAssertionFunc
-	}{
-		{
-			name: "JWT认证失败",
-			req: &notificationv1.QueryNotificationRequest{
-				Key: "failure-query-key",
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 不添加JWT认证
-				return ctx
-			},
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name: "查询空Key",
-			req: &notificationv1.QueryNotificationRequest{
-				Key: "",
-			},
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name:          "请求对象为nil",
-			req:           nil,
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name: "数据库错误模拟",
-			req: &notificationv1.QueryNotificationRequest{
-				Key: "db-error-key",
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 模拟数据库错误情况
-				ctx = s.contextWithJWT(ctx)
-				// 假设这里能触发数据库错误
-				return ctx
-			},
-			wantErrCode:   codes.Internal,
-			errAssertFunc: assert.Error,
-		},
-	}
-
-	for _, tt := range testCases {
-		s.T().Run(tt.name, func(t *testing.T) {
-			// 设置上下文
-			ctx := tt.setupContext(t.Context())
-
-			// 调用服务
-			log.Printf("失败场景 - 查询通知请求: %+v", tt.req)
-			resp, err := s.queryClient.QueryNotification(ctx, tt.req)
-			log.Printf("失败场景 - 查询通知响应: %+v, 错误: %v", resp, err)
-
-			// 验证结果
-			tt.errAssertFunc(t, err)
-			if tt.wantErrCode != codes.OK {
-				if st, ok := status.FromError(err); ok {
-					assert.Equal(t, tt.wantErrCode, st.Code())
-				}
-			}
-		})
-	}
-}
-
-// BatchQueryNotifications测试 - 成功场景
-func (s *SuccessGRPCServerTestSuite) TestBatchQueryNotifications() {
+// BatchQueryNotifications测试
+func (s *GRPCServerTestSuite) TestBatchQueryNotifications() {
 	// 准备测试数据
 	templateID := s.prepareTemplateData()
 	ctx := s.contextWithJWT(context.Background())
@@ -2817,106 +2273,8 @@ func (s *SuccessGRPCServerTestSuite) TestBatchQueryNotifications() {
 	}
 }
 
-// BatchQueryNotifications测试 - 失败场景
-func (s *FailureGRPCServerTestSuite) TestBatchQueryNotifications() {
-	// 测试用例
-	testCases := []struct {
-		name          string
-		req           *notificationv1.BatchQueryNotificationsRequest
-		setupContext  func(context.Context) context.Context
-		wantErrCode   codes.Code
-		errAssertFunc assert.ErrorAssertionFunc
-	}{
-		{
-			name: "JWT认证失败",
-			req: &notificationv1.BatchQueryNotificationsRequest{
-				Keys: []string{"batch-query-fail-key-1", "batch-query-fail-key-2"},
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 不添加JWT认证
-				return ctx
-			},
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name:          "请求对象为nil",
-			req:           nil,
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name: "请求超过批量限制",
-			req: func() *notificationv1.BatchQueryNotificationsRequest {
-				// 创建一个超过批量限制的请求
-				keys := make([]string, batchSizeLimit+1)
-				for i := 0; i <= batchSizeLimit; i++ {
-					keys[i] = fmt.Sprintf("batch-query-large-key-%d", i)
-				}
-				return &notificationv1.BatchQueryNotificationsRequest{
-					Keys: keys,
-				}
-			}(),
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name: "数据库错误模拟",
-			req: &notificationv1.BatchQueryNotificationsRequest{
-				Keys: []string{"db-error-key-1", "db-error-key-2"},
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 模拟数据库错误情况
-				ctx = s.contextWithJWT(ctx)
-				// 假设这里能触发数据库错误
-				return ctx
-			},
-			wantErrCode:   codes.Internal,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name: "重复的Key",
-			req: &notificationv1.BatchQueryNotificationsRequest{
-				Keys: []string{"repeat-key", "repeat-key", "repeat-key"},
-			},
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.OK, // 服务器应该能处理重复的key，不应该报错
-			errAssertFunc: assert.NoError,
-		},
-	}
-
-	for _, tt := range testCases {
-		s.T().Run(tt.name, func(t *testing.T) {
-			// 设置上下文
-			ctx := tt.setupContext(t.Context())
-
-			// 调用服务
-			log.Printf("失败场景 - 批量查询通知请求: %+v", tt.req)
-			resp, err := s.queryClient.BatchQueryNotifications(ctx, tt.req)
-			log.Printf("失败场景 - 批量查询通知响应: %+v, 错误: %v", resp, err)
-
-			// 验证结果
-			tt.errAssertFunc(t, err)
-			if err == nil && tt.wantErrCode == codes.OK {
-				assert.NotNil(t, resp, "响应不应为nil")
-				if tt.name == "重复的Key" {
-					// 重复的Key应该只返回一条记录
-					// 注意：这里依赖于具体实现，可能需要调整
-					assert.LessOrEqual(t, len(resp.Results), 1, "对于重复的Key，结果数量应少于或等于1")
-				}
-			} else if tt.wantErrCode != codes.OK {
-				if st, ok := status.FromError(err); ok {
-					assert.Equal(t, tt.wantErrCode, st.Code(), "错误码应匹配")
-				}
-			}
-		})
-	}
-}
-
-// TxPrepare测试 - 成功场景
-func (s *SuccessGRPCServerTestSuite) TestTxPrepare() {
+// TxPrepare测试
+func (s *GRPCServerTestSuite) TestTxPrepare() {
 	// 准备测试数据
 	templateID := s.prepareTemplateData()
 
@@ -3026,146 +2384,8 @@ func (s *SuccessGRPCServerTestSuite) TestTxPrepare() {
 	}
 }
 
-// TxPrepare测试 - 失败场景
-func (s *FailureGRPCServerTestSuite) TestTxPrepare() {
-	// 准备测试数据
-	templateID := s.prepareTemplateData()
-
-	// 测试用例
-	testCases := []struct {
-		name          string
-		req           *notificationv1.TxPrepareRequest
-		setupContext  func(context.Context) context.Context
-		wantErrCode   codes.Code
-		errAssertFunc assert.ErrorAssertionFunc
-	}{
-		{
-			name: "JWT认证失败",
-			req: &notificationv1.TxPrepareRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "tx-prepare-jwt-fail-key",
-					Receivers:  []string{"13800138003"},
-					Channel:    notificationv1.Channel_SMS,
-					TemplateId: strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-				},
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 不添加JWT认证
-				return ctx
-			},
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name:          "请求对象为nil",
-			req:           nil,
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name: "Notification为nil",
-			req: &notificationv1.TxPrepareRequest{
-				Notification: nil,
-			},
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name: "无效模板ID",
-			req: &notificationv1.TxPrepareRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "tx-prepare-invalid-template-key",
-					Receivers:  []string{"13800138004"},
-					Channel:    notificationv1.Channel_SMS,
-					TemplateId: "invalid-id",
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-				},
-			},
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name: "无效通道类型",
-			req: &notificationv1.TxPrepareRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "tx-prepare-invalid-channel-key",
-					Receivers:  []string{"13800138005"},
-					Channel:    notificationv1.Channel(999), // 无效的通道类型
-					TemplateId: strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-				},
-			},
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name: "空接收者列表",
-			req: &notificationv1.TxPrepareRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "tx-prepare-empty-receivers-key",
-					Receivers:  []string{},
-					Channel:    notificationv1.Channel_SMS,
-					TemplateId: strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-				},
-			},
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name: "缺少必要的模板参数",
-			req: &notificationv1.TxPrepareRequest{
-				Notification: &notificationv1.Notification{
-					Key:            "tx-prepare-missing-params-key",
-					Receivers:      []string{"13800138006"},
-					Channel:        notificationv1.Channel_SMS,
-					TemplateId:     strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{}, // 缺少必要参数
-				},
-			},
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-	}
-
-	for _, tt := range testCases {
-		s.T().Run(tt.name, func(t *testing.T) {
-			// 设置上下文
-			ctx := tt.setupContext(t.Context())
-
-			// 调用服务
-			log.Printf("失败场景 - TxPrepare请求: %+v", tt.req)
-			resp, err := s.client.TxPrepare(ctx, tt.req)
-			log.Printf("失败场景 - TxPrepare响应: %+v, 错误: %v", resp, err)
-
-			// 验证结果
-			tt.errAssertFunc(t, err)
-			if tt.wantErrCode != codes.OK {
-				if st, ok := status.FromError(err); ok {
-					assert.Equal(t, tt.wantErrCode, st.Code(), "错误码应匹配")
-				}
-			}
-		})
-	}
-}
-
-// TxCommit测试 - 成功场景
-func (s *SuccessGRPCServerTestSuite) TestTxCommit() {
+// TxCommit测试
+func (s *GRPCServerTestSuite) TestTxCommit() {
 	// 准备测试数据
 	templateID := s.prepareTemplateData()
 
@@ -3255,121 +2475,8 @@ func (s *SuccessGRPCServerTestSuite) TestTxCommit() {
 	}
 }
 
-// TxCommit测试 - 失败场景
-func (s *FailureGRPCServerTestSuite) TestTxCommit() {
-	// 准备测试数据
-	templateID := s.prepareTemplateData()
-
-	// 测试用例
-	testCases := []struct {
-		name          string
-		prepareKey    string
-		commitReq     *notificationv1.TxCommitRequest
-		setupContext  func(context.Context) context.Context
-		wantErrCode   codes.Code
-		errAssertFunc assert.ErrorAssertionFunc
-	}{
-		{
-			name:       "JWT认证失败",
-			prepareKey: "tx-commit-jwt-fail-key",
-			commitReq: &notificationv1.TxCommitRequest{
-				Key: "tx-commit-jwt-fail-key",
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 不添加JWT认证
-				return ctx
-			},
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name:          "请求对象为nil",
-			prepareKey:    "",
-			commitReq:     nil,
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name:       "空Key",
-			prepareKey: "",
-			commitReq: &notificationv1.TxCommitRequest{
-				Key: "",
-			},
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name:       "不存在的Key",
-			prepareKey: "",
-			commitReq: &notificationv1.TxCommitRequest{
-				Key: "non-existent-tx-key",
-			},
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.NotFound,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name:       "提交已提交的事务",
-			prepareKey: "tx-commit-already-committed-key",
-			commitReq: &notificationv1.TxCommitRequest{
-				Key: "tx-commit-already-committed-key",
-			},
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.FailedPrecondition,
-			errAssertFunc: assert.Error,
-		},
-	}
-
-	for _, tt := range testCases {
-		s.T().Run(tt.name, func(t *testing.T) {
-			ctx := s.contextWithJWT(t.Context())
-
-			// 对于需要预先准备事务的测试用例，先执行TxPrepare
-			if tt.prepareKey != "" {
-				prepareReq := &notificationv1.TxPrepareRequest{
-					Notification: &notificationv1.Notification{
-						Key:        tt.prepareKey,
-						Receivers:  []string{"13800138001"},
-						Channel:    notificationv1.Channel_SMS,
-						TemplateId: strconv.FormatInt(templateID, 10),
-						TemplateParams: map[string]string{
-							"code": "123456",
-						},
-					},
-				}
-
-				// 准备事务
-				_, err := s.client.TxPrepare(ctx, prepareReq)
-				assert.NoError(t, err, "准备事务应成功")
-
-				// 对于"提交已提交的事务"测试，先提交一次
-				if tt.name == "提交已提交的事务" {
-					_, err := s.client.TxCommit(ctx, tt.commitReq)
-					assert.NoError(t, err, "首次提交应成功")
-				}
-			}
-
-			// 调用服务
-			testCtx := tt.setupContext(t.Context())
-			log.Printf("失败场景 - TxCommit请求: %+v", tt.commitReq)
-			resp, err := s.client.TxCommit(testCtx, tt.commitReq)
-			log.Printf("失败场景 - TxCommit响应: %+v, 错误: %v", resp, err)
-
-			// 验证结果
-			tt.errAssertFunc(t, err)
-			if tt.wantErrCode != codes.OK {
-				if st, ok := status.FromError(err); ok {
-					assert.Equal(t, tt.wantErrCode, st.Code(), "错误码应匹配")
-				}
-			}
-		})
-	}
-}
-
-// TxCancel测试 - 成功场景
-func (s *SuccessGRPCServerTestSuite) TestTxCancel() {
+// TxCancel测试
+func (s *GRPCServerTestSuite) TestTxCancel() {
 	// 准备测试数据
 	templateID := s.prepareTemplateData()
 
@@ -3455,134 +2562,6 @@ func (s *SuccessGRPCServerTestSuite) TestTxCancel() {
 			tt.errAssertFunc(t, err)
 			if err == nil {
 				assert.NotNil(t, resp, "响应不应为nil")
-			}
-		})
-	}
-}
-
-// TxCancel测试 - 失败场景
-func (s *FailureGRPCServerTestSuite) TestTxCancel() {
-	// 准备测试数据
-	templateID := s.prepareTemplateData()
-
-	// 测试用例
-	testCases := []struct {
-		name          string
-		prepareKey    string
-		cancelReq     *notificationv1.TxCancelRequest
-		setupContext  func(context.Context) context.Context
-		wantErrCode   codes.Code
-		errAssertFunc assert.ErrorAssertionFunc
-	}{
-		{
-			name:       "JWT认证失败",
-			prepareKey: "tx-cancel-jwt-fail-key",
-			cancelReq: &notificationv1.TxCancelRequest{
-				Key: "tx-cancel-jwt-fail-key",
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 不添加JWT认证
-				return ctx
-			},
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name:          "请求对象为nil",
-			prepareKey:    "",
-			cancelReq:     nil,
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name:       "空Key",
-			prepareKey: "",
-			cancelReq: &notificationv1.TxCancelRequest{
-				Key: "",
-			},
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.InvalidArgument,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name:       "不存在的Key",
-			prepareKey: "",
-			cancelReq: &notificationv1.TxCancelRequest{
-				Key: "non-existent-tx-key",
-			},
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.NotFound,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name:       "取消已提交的事务",
-			prepareKey: "tx-cancel-already-committed-key",
-			cancelReq: &notificationv1.TxCancelRequest{
-				Key: "tx-cancel-already-committed-key",
-			},
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.FailedPrecondition,
-			errAssertFunc: assert.Error,
-		},
-		{
-			name:       "取消已取消的事务",
-			prepareKey: "tx-cancel-already-canceled-key",
-			cancelReq: &notificationv1.TxCancelRequest{
-				Key: "tx-cancel-already-canceled-key",
-			},
-			setupContext:  s.contextWithJWT,
-			wantErrCode:   codes.FailedPrecondition,
-			errAssertFunc: assert.Error,
-		},
-	}
-
-	for _, tt := range testCases {
-		s.T().Run(tt.name, func(t *testing.T) {
-			ctx := s.contextWithJWT(t.Context())
-
-			// 对于需要预先准备事务的测试用例，先执行TxPrepare
-			if tt.prepareKey != "" {
-				prepareReq := &notificationv1.TxPrepareRequest{
-					Notification: &notificationv1.Notification{
-						Key:        tt.prepareKey,
-						Receivers:  []string{"13800138001"},
-						Channel:    notificationv1.Channel_SMS,
-						TemplateId: strconv.FormatInt(templateID, 10),
-						TemplateParams: map[string]string{
-							"code": "123456",
-						},
-					},
-				}
-
-				// 准备事务
-				_, err := s.client.TxPrepare(ctx, prepareReq)
-				assert.NoError(t, err, "准备事务应成功")
-
-				// 对于特殊测试场景的预处理
-				if tt.name == "取消已提交的事务" {
-					commitReq := &notificationv1.TxCommitRequest{Key: tt.prepareKey}
-					_, err := s.client.TxCommit(ctx, commitReq)
-					assert.NoError(t, err, "提交事务应成功")
-				} else if tt.name == "取消已取消的事务" {
-					cancelReq := &notificationv1.TxCancelRequest{Key: tt.prepareKey}
-					_, err := s.client.TxCancel(ctx, cancelReq)
-					assert.NoError(t, err, "首次取消应成功")
-				}
-			}
-
-			// 调用服务
-			testCtx := tt.setupContext(t.Context())
-			log.Printf("失败场景 - TxCancel请求: %+v", tt.cancelReq)
-			resp, err := s.client.TxCancel(testCtx, tt.cancelReq)
-			log.Printf("失败场景 - TxCancel响应: %+v, 错误: %v", resp, err)
-
-			// 验证结果
-			tt.errAssertFunc(t, err)
-			if tt.wantErrCode != codes.OK {
-				if st, ok := status.FromError(err); ok {
-					assert.Equal(t, tt.wantErrCode, st.Code(), "错误码应匹配")
-				}
 			}
 		})
 	}

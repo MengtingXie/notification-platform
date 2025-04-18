@@ -43,11 +43,12 @@ type Provider struct {
 	Channel Channel // 支持的渠道
 
 	// 基本信息
-	Endpoint  string // API入口地址
-	RegionID  string
-	APIKey    string // API密钥
-	APISecret string // API密钥
-	APPID     string
+	Endpoint       string // API入口地址
+	RegionID       string
+	APIKey         string // API密钥
+	APISecret      string // API密钥
+	APPID          string
+	TemplateRegExp string
 
 	Weight     int // 权重
 	QPSLimit   int // 每秒请求数限制
