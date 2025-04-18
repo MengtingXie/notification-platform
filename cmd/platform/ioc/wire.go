@@ -4,6 +4,8 @@ package ioc
 
 import (
 	"context"
+	"gitee.com/flycash/notification-platform/internal/service/provider/metrics"
+	"gitee.com/flycash/notification-platform/internal/service/provider/tracing"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/service/quota"
@@ -62,7 +64,7 @@ var (
 	)
 	senderSvcSet = wire.NewSet(
 		newChannel,
-		sender.NewSender,
+		initSender,
 	)
 	sendNotificationSvcSet = wire.NewSet(
 		notificationsvc.NewSendService,
@@ -101,7 +103,7 @@ func newChannel(
 	templateSvc templatesvc.ChannelTemplateService,
 ) channel.Channel {
 	return channel.NewDispatcher(map[domain.Channel]channel.Channel{
-		domain.ChannelSMS: channel.NewSMSChannel(newSMSSelectorBuilder(providerSvc, templateSvc)),
+		domain.ChannelEmail : channel.NewSMSChannel(newMockSMSSelectorBuilder(providerSvc, templateSvc)),
 	})
 }
 
@@ -140,6 +142,22 @@ func newSMSSelectorBuilder(
 		))
 	}
 	return sequential.NewSelectorBuilder(providers)
+}
+func newMockSMSSelectorBuilder(
+	providerSvc providersvc.Service,
+	templateSvc templatesvc.ChannelTemplateService,
+) *sequential.SelectorBuilder {
+	return sequential.NewSelectorBuilder([]provider.Provider{
+		metrics.NewProvider("ali", tracing.NewProvider(provider.NewMockProvider())),
+	})
+}
+
+func initSender(repo repository.NotificationRepository,
+	configSvc configsvc.BusinessConfigService,
+	callbackSvc callback.Service,
+	channel channel.Channel) sender.NotificationSender {
+	s := sender.NewSender(repo, configSvc, callbackSvc, channel)
+	return sender.NewTracingSender(sender.NewMetricsSender(s))
 }
 
 func InitGrpcServer() *ioc.App {

@@ -22,9 +22,11 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/notification/callback"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
 	"gitee.com/flycash/notification-platform/internal/service/provider/manage"
+	"gitee.com/flycash/notification-platform/internal/service/provider/metrics"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sequential"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
+	"gitee.com/flycash/notification-platform/internal/service/provider/tracing"
 	"gitee.com/flycash/notification-platform/internal/service/quota"
 	"gitee.com/flycash/notification-platform/internal/service/scheduler"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
@@ -61,7 +63,7 @@ func InitGrpcServer() *ioc.App {
 	callbackLogRepository := repository.NewCallbackLogRepository(notificationRepository, callbackLogDAO)
 	callbackService := callback.NewService(businessConfigService, callbackLogRepository)
 	channel := newChannel(manageService, channelTemplateService)
-	notificationSender := sender.NewSender(notificationRepository, businessConfigService, callbackService, channel)
+	notificationSender := initSender(notificationRepository, businessConfigService, callbackService, channel)
 	immediateSendStrategy := sendstrategy.NewImmediateStrategy(notificationRepository, notificationSender)
 	defaultSendStrategy := sendstrategy.NewDefaultStrategy(notificationRepository, businessConfigService)
 	sendStrategy := sendstrategy.NewDispatcher(immediateSendStrategy, defaultSendStrategy)
@@ -99,7 +101,8 @@ var (
 	notificationSvcSet   = wire.NewSet(notification.NewNotificationService, repository.NewNotificationRepository, dao.NewNotificationDAO, notification.NewSendingTimeoutTask)
 	txNotificationSvcSet = wire.NewSet(notification.NewTxNotificationService, repository.NewTxNotificationRepository, dao.NewTxNotificationDAO, notification.NewTxCheckTask)
 	senderSvcSet         = wire.NewSet(
-		newChannel, sender.NewSender,
+		newChannel,
+		initSender,
 	)
 	sendNotificationSvcSet = wire.NewSet(notification.NewSendService, sendstrategy.NewDispatcher, sendstrategy.NewImmediateStrategy, sendstrategy.NewDefaultStrategy)
 	callbackSvcSet         = wire.NewSet(callback.NewService, repository.NewCallbackLogRepository, dao.NewCallbackLogDAO, callback.NewAsyncRequestResultCallbackTask)
@@ -113,7 +116,7 @@ func newChannel(
 	providerSvc manage.Service,
 	templateSvc manage2.ChannelTemplateService,
 ) channel.Channel {
-	return channel.NewDispatcher(map[domain.Channel]channel.Channel{domain.ChannelSMS: channel.NewSMSChannel(newSMSSelectorBuilder(providerSvc, templateSvc))})
+	return channel.NewDispatcher(map[domain.Channel]channel.Channel{domain.ChannelEmail: channel.NewSMSChannel(newMockSMSSelectorBuilder(providerSvc, templateSvc))})
 }
 
 func newSMSSelectorBuilder(
@@ -151,4 +154,19 @@ func newSMSSelectorBuilder(
 		))
 	}
 	return sequential.NewSelectorBuilder(providers)
+}
+
+func newMockSMSSelectorBuilder(
+	providerSvc manage.Service,
+	templateSvc manage2.ChannelTemplateService,
+) *sequential.SelectorBuilder {
+	return sequential.NewSelectorBuilder([]provider.Provider{metrics.NewProvider("ali", tracing.NewProvider(provider.NewMockProvider()))})
+}
+
+func initSender(repo repository.NotificationRepository,
+	configSvc config.BusinessConfigService,
+	callbackSvc callback.Service, channel2 channel.Channel,
+) sender.NotificationSender {
+	s := sender.NewSender(repo, configSvc, callbackSvc, channel2)
+	return sender.NewTracingSender(sender.NewMetricsSender(s))
 }
