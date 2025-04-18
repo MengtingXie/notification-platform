@@ -49,6 +49,10 @@ func initMQ() (mq.MQ, error) {
 			Name:       "test",
 			Partitions: 1,
 		},
+		{
+			Name:       "audit_result_events",
+			Partitions: 1,
+		},
 	}
 	// 替换用内存实现，方便测试
 	qq := memory.NewMQ()

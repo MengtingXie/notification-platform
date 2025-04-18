@@ -6,7 +6,6 @@ import (
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"github.com/ecodeclub/ekit/slice"
-	"golang.org/x/sync/errgroup"
 )
 
 // ChannelTemplateRepository 提供模板数据存储的仓库接口
@@ -323,25 +322,21 @@ func (r *channelTemplateRepository) BatchUpdateTemplateProvidersAuditInfo(ctx co
 
 // GetPendingOrInReviewProviders 获取未审核或审核中的供应商关联
 func (r *channelTemplateRepository) GetPendingOrInReviewProviders(ctx context.Context, offset, limit int, utime int64) (providers []domain.ChannelTemplateProvider, total int64, err error) {
-	var (
-		eg           errgroup.Group
-		daoProviders []dao.ChannelTemplateProvider
-	)
-	eg.Go(func() error {
-		var err1 error
-		daoProviders, err1 = r.dao.GetPendingOrInReviewProviders(ctx, offset, limit, utime)
-		return err1
-	})
+	var daoProviders []dao.ChannelTemplateProvider
 
-	eg.Go(func() error {
-		var err2 error
-		total, err2 = r.dao.TotalPendingOrInReviewProviders(ctx, utime)
-		return err2
-	})
+	daoProviders, err = r.dao.GetPendingOrInReviewProviders(ctx, offset, limit, utime)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	total, err = r.dao.TotalPendingOrInReviewProviders(ctx, utime)
+	if err != nil {
+		return nil, 0, err
+	}
 
 	return slice.Map(daoProviders, func(_ int, src dao.ChannelTemplateProvider) domain.ChannelTemplateProvider {
 		return r.toProviderDomain(src)
-	}), total, eg.Wait()
+	}), total, nil
 }
 
 func (r *channelTemplateRepository) toTemplateDomain(daoTemplate dao.ChannelTemplate) domain.ChannelTemplate {

@@ -1983,13 +1983,14 @@ func (s *TemplateHandlerTestSuite) TestEvent_AuditResultConsume() {
 		after         func(t *testing.T, svc *templateioc.Service, events []auditevt.CallbackResultEvent)
 	}{
 		{
-			name: "成功处理多条审核通过消息",
+			name: "成功处理多条审核通过和审核拒绝消息",
 			setupMock: func(t *testing.T, ctrl *gomock.Controller) (*templateioc.Service, []auditevt.CallbackResultEvent) {
 				t.Helper()
 
 				// 创建服务实例
 				svc, providerSvc, _, clients := s.newService(ctrl)
 
+				n := 6
 				// 设置供应商审核预期
 				providerSvc.EXPECT().GetByChannel(gomock.Any(), gomock.Any()).Return([]domain.Provider{
 					{
@@ -1998,7 +1999,7 @@ func (s *TemplateHandlerTestSuite) TestEvent_AuditResultConsume() {
 						Channel: domain.ChannelSMS,
 						Status:  domain.ProviderStatusActive,
 					},
-				}, nil).Times(3) // 预期调用3次
+				}, nil).Times(n)
 
 				mockClient := clients["mock-provider-name-1"].(*smsmocks.MockClient)
 
@@ -2013,7 +2014,7 @@ func (s *TemplateHandlerTestSuite) TestEvent_AuditResultConsume() {
 
 				// 创建3个模板和版本，用于测试批量处理
 				var versionIDs []int64
-				for i := 0; i < 3; i++ {
+				for i := 0; i < n; i++ {
 					template, err := svc.Svc.CreateTemplate(t.Context(), domain.ChannelTemplate{
 						OwnerID:      ownerID,
 						OwnerType:    ownerType,
@@ -2036,21 +2037,25 @@ func (s *TemplateHandlerTestSuite) TestEvent_AuditResultConsume() {
 				// 创建测试消息
 				now := time.Now().Unix()
 				events := make([]auditevt.CallbackResultEvent, 0, len(versionIDs))
-				for i, versionID := range versionIDs {
+				for i := range versionIDs {
+					auditStatus := domain.AuditStatusApproved.String()
+					if i%2 == 1 {
+						auditStatus = domain.AuditStatusRejected.String()
+					}
 					events = append(events, auditevt.CallbackResultEvent{
-						ResourceID:   versionID,
+						ResourceID:   versionIDs[i],
 						ResourceType: domain.ResourceTypeTemplate,
 						AuditID:      int64(i + 100),
 						AuditorID:    int64(i + 1000),
 						AuditTime:    now,
-						AuditStatus:  domain.AuditStatusApproved.String(),
+						AuditStatus:  auditStatus,
 						RejectReason: "",
 					})
 				}
 
 				// 使用AuditResultProducer发送消息
-				for _, event := range events {
-					err := svc.AuditResultProducer.Produce(t.Context(), event)
+				for i := range events {
+					err := svc.AuditResultProducer.Produce(t.Context(), events[i])
 					require.NoError(t, err)
 				}
 
@@ -2062,98 +2067,23 @@ func (s *TemplateHandlerTestSuite) TestEvent_AuditResultConsume() {
 			errAssertFunc: assert.NoError,
 			after: func(t *testing.T, svc *templateioc.Service, events []auditevt.CallbackResultEvent) {
 				// 验证版本状态
-				for _, evt := range events {
-					version, err := svc.Repo.GetTemplateVersionByID(t.Context(), evt.ResourceID)
+				for i := range events {
+					version, err := svc.Repo.GetTemplateVersionByID(t.Context(), events[i].ResourceID)
 					require.NoError(t, err)
-					assert.Equal(t, domain.AuditStatus(evt.AuditStatus), version.AuditStatus)
-					assert.Equal(t, evt.AuditID, version.AuditID)
-					assert.Equal(t, evt.AuditorID, version.AuditorID)
-					assert.Equal(t, evt.AuditTime, version.AuditTime)
+					assert.Equal(t, domain.AuditStatus(events[i].AuditStatus), version.AuditStatus)
+					assert.Equal(t, events[i].AuditID, version.AuditID)
+					assert.Equal(t, events[i].AuditorID, version.AuditorID)
+					assert.Equal(t, events[i].AuditTime, version.AuditTime)
 
 					// 验证供应商状态 - 因为审核状态是已通过，所以应该触发供应商审核
-					providers, err := svc.Repo.GetProvidersByTemplateIDAndVersionID(t.Context(), version.ChannelTemplateID, version.ID)
-					require.NoError(t, err)
-					assert.NotEmpty(t, providers)
-					for _, provider := range providers {
-						assert.Equal(t, domain.AuditStatusInReview, provider.AuditStatus)
-						assert.NotZero(t, provider.LastReviewSubmissionTime)
-					}
-				}
-			},
-		},
-		{
-			name: "处理审核拒绝消息",
-			setupMock: func(t *testing.T, ctrl *gomock.Controller) (*templateioc.Service, []auditevt.CallbackResultEvent) {
-				t.Helper()
-
-				// 创建服务实例
-				svc, providerSvc, _, _ := s.newService(ctrl)
-
-				// 设置模板和版本
-				providerSvc.EXPECT().GetByChannel(gomock.Any(), domain.ChannelSMS).Return([]domain.Provider{
-					{
-						ID:      1,
-						Name:    "mock-provider-name-1",
-						Channel: domain.ChannelSMS,
-						Status:  domain.ProviderStatusActive,
-					},
-				}, nil)
-
-				// 创建模板和版本
-				template, err := svc.Svc.CreateTemplate(t.Context(), domain.ChannelTemplate{
-					OwnerID:      ownerID,
-					OwnerType:    ownerType,
-					Name:         "audit-rejected-template",
-					Description:  "audit rejected template",
-					Channel:      domain.ChannelSMS,
-					BusinessType: domain.BusinessTypePromotion,
-				})
-				require.NoError(t, err)
-
-				// 获取模板版本
-				templateFromDB, err := svc.Svc.GetTemplateByID(t.Context(), template.ID)
-				require.NoError(t, err)
-				require.Len(t, templateFromDB.Versions, 1)
-
-				// 创建测试消息 - 审核拒绝
-				now := time.Now().Unix()
-				events := []auditevt.CallbackResultEvent{
-					{
-						ResourceID:   templateFromDB.Versions[0].ID,
-						ResourceType: domain.ResourceTypeTemplate,
-						AuditID:      200,
-						AuditorID:    2000,
-						AuditTime:    now,
-						AuditStatus:  domain.AuditStatusRejected.String(),
-						RejectReason: "内容不符合规范",
-					},
-				}
-
-				// 使用AuditResultProducer发送消息
-				for _, event := range events {
-					err := svc.AuditResultProducer.Produce(t.Context(), event)
-					require.NoError(t, err)
-				}
-
-				// 等待消息被消费
-				time.Sleep(500 * time.Millisecond)
-
-				return svc, events
-			},
-			errAssertFunc: assert.NoError,
-			after: func(t *testing.T, svc *templateioc.Service, events []auditevt.CallbackResultEvent) {
-				// 验证版本状态
-				for _, evt := range events {
-					version, err := svc.Repo.GetTemplateVersionByID(t.Context(), evt.ResourceID)
-					require.NoError(t, err)
-					assert.Equal(t, evt.AuditStatus, version.AuditStatus.String())
-					assert.Equal(t, evt.AuditID, version.AuditID)
-					assert.Equal(t, evt.AuditorID, version.AuditorID)
-					assert.Equal(t, evt.AuditTime, version.AuditTime)
-					assert.Equal(t, evt.RejectReason, version.RejectReason)
-
 					assert.Len(t, version.Providers, 1)
-					assert.Equal(t, domain.AuditStatusPending, version.Providers[0].AuditStatus)
+					if i%2 == 1 {
+						// 验证供应商状态 - 因为审核状态是已拒绝，所以不应该触发供应商审核
+						assert.Equal(t, domain.AuditStatusPending, version.Providers[0].AuditStatus)
+					} else {
+						assert.Equal(t, domain.AuditStatusInReview, version.Providers[0].AuditStatus)
+						assert.NotZero(t, version.Providers[0].LastReviewSubmissionTime)
+					}
 				}
 			},
 		},
