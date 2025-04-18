@@ -9,12 +9,17 @@ import (
 )
 
 const (
-	exponentStart  = 0.001
-	exponentFactor = 2
-	exponentCount  = 10
-	linearStart    = 1
-	linearFactor   = 10
-	linearCount    = 10
+	// 影响行数直方图配置
+	rowAffectedBucketStart = 1  // 起始桶值
+	rowAffectedBucketWidth = 10 // 桶宽度
+	rowAffectedBucketCount = 10 // 桶数量
+
+	// 摘要指标配置 - 分位数和允许误差
+	summaryMaxAgeMinutes  = 5     // 摘要窗口期(分钟)
+	summaryP50ErrorMargin = 0.05  // P50分位数允许误差
+	summaryP90ErrorMargin = 0.01  // P90分位数允许误差
+	summaryP95ErrorMargin = 0.005 // P95分位数允许误差
+	summaryP99ErrorMargin = 0.001 // P99分位数允许误差
 )
 
 // GormMetricsPlugin 是一个实现了gorm.Plugin接口的度量插件
@@ -22,7 +27,7 @@ const (
 type GormMetricsPlugin struct {
 	// Prometheus 指标
 	requestCount *prometheus.CounterVec
-	responseTime *prometheus.HistogramVec
+	responseTime *prometheus.SummaryVec // 使用SummaryVec记录响应时间
 	errorCount   *prometheus.CounterVec
 	rowsAffected *prometheus.HistogramVec
 
@@ -43,12 +48,18 @@ func NewGormMetricsPlugin() *GormMetricsPlugin {
 		[]string{"operation", "table"},
 	)
 
-	responseTime := prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
+	responseTime := prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
 			Namespace: "gorm",
 			Name:      "response_time_seconds",
 			Help:      "Response time of GORM database operations in seconds.",
-			Buckets:   prometheus.ExponentialBuckets(exponentStart, exponentFactor, exponentCount), // 从1ms开始，指数级增长
+			Objectives: map[float64]float64{
+				0.5:  summaryP50ErrorMargin,
+				0.9:  summaryP90ErrorMargin,
+				0.95: summaryP95ErrorMargin,
+				0.99: summaryP99ErrorMargin,
+			},
+			MaxAge: time.Minute * summaryMaxAgeMinutes,
 		},
 		[]string{"operation", "table", "status"},
 	)
@@ -67,7 +78,7 @@ func NewGormMetricsPlugin() *GormMetricsPlugin {
 			Namespace: "gorm",
 			Name:      "rows_affected",
 			Help:      "Number of rows affected by GORM database operations.",
-			Buckets:   prometheus.LinearBuckets(linearStart, linearFactor, linearCount), // 1, 11, 21, ...
+			Buckets:   prometheus.LinearBuckets(rowAffectedBucketStart, rowAffectedBucketWidth, rowAffectedBucketCount),
 		},
 		[]string{"operation", "table"},
 	)

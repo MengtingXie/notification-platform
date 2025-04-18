@@ -11,7 +11,7 @@ import (
 // MetricsSender 为通知发送添加指标收集的装饰器
 type MetricsSender struct {
 	sender                 NotificationSender
-	sendDurationHistogram  *prometheus.HistogramVec
+	sendDurationSummary    *prometheus.SummaryVec
 	sendCounter            *prometheus.CounterVec
 	batchSendCounter       *prometheus.CounterVec
 	notificationSentStatus *prometheus.CounterVec
@@ -19,16 +19,12 @@ type MetricsSender struct {
 
 // NewMetricsSender 创建一个新的带有指标收集的发送器
 func NewMetricsSender(sender NotificationSender) *MetricsSender {
-	const (
-		exponentStart  = 0.01
-		exponentFactor = 2
-		exponentCount  = 10
-	)
-	sendDurationHistogram := prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "notification_send_duration_seconds",
-			Help:    "通知发送耗时统计（秒）",
-			Buckets: prometheus.ExponentialBuckets(exponentStart, exponentFactor, exponentCount), // 10ms到约10秒
+	sendDurationSummary := prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name:       "notification_send_duration_seconds",
+			Help:       "通知发送耗时统计（秒）",
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
+			MaxAge:     time.Minute * 5,
 		},
 		[]string{"channel", "status"},
 	)
@@ -58,11 +54,11 @@ func NewMetricsSender(sender NotificationSender) *MetricsSender {
 	)
 
 	// 注册指标
-	prometheus.MustRegister(sendDurationHistogram, sendCounter, batchSendCounter, notificationSentStatus)
+	prometheus.MustRegister(sendDurationSummary, sendCounter, batchSendCounter, notificationSentStatus)
 
 	return &MetricsSender{
 		sender:                 sender,
-		sendDurationHistogram:  sendDurationHistogram,
+		sendDurationSummary:    sendDurationSummary,
 		sendCounter:            sendCounter,
 		batchSendCounter:       batchSendCounter,
 		notificationSentStatus: notificationSentStatus,
@@ -90,7 +86,7 @@ func (m *MetricsSender) Send(ctx context.Context, notification domain.Notificati
 	).Inc()
 
 	// 记录耗时
-	m.sendDurationHistogram.WithLabelValues(
+	m.sendDurationSummary.WithLabelValues(
 		string(notification.Channel),
 		string(response.Status),
 	).Observe(duration)
@@ -136,7 +132,7 @@ func (m *MetricsSender) BatchSend(ctx context.Context, notifications []domain.No
 	duration := time.Since(startTime).Seconds()
 
 	// 记录平均耗时（每条通知）
-	m.sendDurationHistogram.WithLabelValues(
+	m.sendDurationSummary.WithLabelValues(
 		channel,
 		"batch", // 使用特殊标签来标识批量发送的耗时
 	).Observe(duration / float64(len(notifications)))

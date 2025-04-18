@@ -104,10 +104,9 @@ func newChannel(
 	templateSvc templatesvc.ChannelTemplateService,
 ) channel.Channel {
 	return channel.NewDispatcher(map[domain.Channel]channel.Channel{
-		domain.ChannelSMS: channel.NewSMSChannel(newMockSMSSelectorBuilder()),
+		domain.ChannelEmail: channel.NewSMSChannel(newMockSMSSelectorBuilder()),
 	})
 }
-
 
 func newSMSSelectorBuilder(
 	clients map[string]client.Client,

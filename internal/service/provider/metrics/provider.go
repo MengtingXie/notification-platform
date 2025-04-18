@@ -12,26 +12,21 @@ import (
 
 // Provider 为供应商实现添加指标收集的装饰器
 type Provider struct {
-	provider              provider.Provider
-	sendDurationHistogram *prometheus.HistogramVec
-	sendCounter           *prometheus.CounterVec
-	sendStatusCounter     *prometheus.CounterVec
-	name                  string
+	provider            provider.Provider
+	sendDurationSummary *prometheus.SummaryVec
+	sendCounter         *prometheus.CounterVec
+	sendStatusCounter   *prometheus.CounterVec
+	name                string
 }
-
-const (
-	exStart  = 0.01
-	exFactor = 2
-	exCount  = 10
-)
 
 // NewProvider 创建一个新的带有指标收集的供应商
 func NewProvider(name string, p provider.Provider) *Provider {
-	sendDurationHistogram := prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "provider_send_duration_seconds",
-			Help:    "供应商发送通知耗时统计（秒）",
-			Buckets: prometheus.ExponentialBuckets(exStart, exFactor, exCount), // 10ms到约10秒
+	sendDurationSummary := prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name:       "provider_send_duration_seconds",
+			Help:       "供应商发送通知耗时统计（秒）",
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
+			MaxAge:     time.Minute * 5,
 		},
 		[]string{"provider", "channel", "status"},
 	)
@@ -53,14 +48,14 @@ func NewProvider(name string, p provider.Provider) *Provider {
 	)
 
 	// 注册指标
-	prometheus.MustRegister(sendDurationHistogram, sendCounter, sendStatusCounter)
+	prometheus.MustRegister(sendDurationSummary, sendCounter, sendStatusCounter)
 
 	return &Provider{
-		provider:              p,
-		sendDurationHistogram: sendDurationHistogram,
-		sendCounter:           sendCounter,
-		sendStatusCounter:     sendStatusCounter,
-		name:                  name,
+		provider:            p,
+		sendDurationSummary: sendDurationSummary,
+		sendCounter:         sendCounter,
+		sendStatusCounter:   sendStatusCounter,
+		name:                name,
 	}
 }
 
@@ -89,7 +84,7 @@ func (p *Provider) Send(ctx context.Context, notification domain.Notification) (
 	).Inc()
 
 	// 记录耗时
-	p.sendDurationHistogram.WithLabelValues(
+	p.sendDurationSummary.WithLabelValues(
 		p.name,
 		string(notification.Channel),
 		string(response.Status),

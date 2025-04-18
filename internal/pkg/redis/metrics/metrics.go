@@ -27,11 +27,11 @@ var (
 	)
 
 	// Redis命令执行时间
-	commandDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "redis_command_duration_seconds",
-			Help:    "Redis command execution time in seconds",
-			Buckets: prometheus.ExponentialBuckets(exponentStart, exponentFactor, exponentCount), // 1ms to ~1s
+	commandDuration = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name:       "redis_command_duration_seconds",
+			Help:       "Redis command execution time in seconds",
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
 		},
 		[]string{"command"},
 	)
@@ -54,11 +54,11 @@ var (
 	)
 
 	// Redis管道执行时间
-	pipelineDuration = prometheus.NewHistogram(
-		prometheus.HistogramOpts{
-			Name:    "redis_pipeline_duration_seconds",
-			Help:    "Redis pipeline execution time in seconds",
-			Buckets: prometheus.ExponentialBuckets(exponentStart, exponentFactor, exponentCount), // 1ms to ~1s
+	pipelineDuration = prometheus.NewSummary(
+		prometheus.SummaryOpts{
+			Name:       "redis_pipeline_duration_seconds",
+			Help:       "Redis pipeline execution time in seconds",
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
 		},
 	)
 

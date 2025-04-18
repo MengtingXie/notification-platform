@@ -282,7 +282,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(grpc_server_handling_seconds_bucket{method=~\"$method\"}[5m])) by (method, le))",
+          "expr": "histogram_quantile(0.95, sum(rate(ego_server_handle_seconds_bucket{method=~\"$method\"}[5m])) by (method, le))",
           "legendFormat": "{{method}} - P95",
           "range": true,
           "refId": "A"
@@ -293,11 +293,23 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(grpc_server_handling_seconds_sum{method=~\"$method\"}[5m])) by (method) / sum(rate(grpc_server_handling_seconds_count{method=~\"$method\"}[5m])) by (method)",
+          "expr": "sum(rate(ego_server_handle_seconds_sum{method=~\"$method\"}[5m])) by (method) / sum(rate(ego_server_handle_seconds_count{method=~\"$method\"}[5m])) by (method)",
           "hide": false,
           "legendFormat": "{{method}} - 平均响应时间",
           "range": true,
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(grpc_server_handling_seconds_sum{method=~\"$method\"}) by (method) / sum(grpc_server_handling_seconds_count{method=~\"$method\"}) by (method)",
+          "hide": false,
+          "legendFormat": "{{method}} - gRPC平均响应时间",
+          "range": true,
+          "refId": "C"
         }
       ],
       "title": "gRPC 接口响应时间",
@@ -489,6 +501,18 @@
           "legendFormat": "{{method}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(gorm_response_time_seconds_sum{status=\"success\"}) by (table, operation) / sum(gorm_response_time_seconds_count{status=\"success\"}) by (table, operation)",
+          "hide": false,
+          "legendFormat": "{{table}} - {{operation}} (GORM)",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "数据库操作平均响应时间",
@@ -578,6 +602,18 @@
           "legendFormat": "{{method}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(gorm_requests_total[5m])) by (table, operation)",
+          "hide": false,
+          "legendFormat": "{{table}} - {{operation}} (GORM)",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "数据库操作频率 (QPS)",
@@ -850,7 +886,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(redis_command_duration_seconds_sum[5m])) by (command) / sum(rate(redis_command_duration_seconds_count[5m])) by (command)",
+          "expr": "sum(redis_command_duration_seconds_sum) by (command) / sum(redis_command_duration_seconds_count) by (command)",
           "hide": false,
           "legendFormat": "{{command}} - 平均",
           "range": true,
@@ -940,8 +976,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(redis_commands_total[5m])) by (command)",
-          "legendFormat": "{{command}}",
+          "expr": "sum(rate(redis_commands_total[5m])) by (command, status)",
+          "legendFormat": "{{command}} - {{status}}",
           "range": true,
           "refId": "A"
         }
@@ -1231,7 +1267,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(notification_send_duration_seconds_sum[5m])) by (channel, status) / sum(rate(notification_send_duration_seconds_count[5m])) by (channel, status)",
+          "expr": "sum(notification_send_duration_seconds_sum) by (channel, status) / sum(notification_send_duration_seconds_count) by (channel, status)",
           "hide": false,
           "legendFormat": "{{channel}} - {{status}} - 平均",
           "range": true,
@@ -1596,7 +1632,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(provider_send_duration_seconds_sum[5m])) by (channel, provider, status) / sum(rate(provider_send_duration_seconds_count[5m])) by (channel, provider, status)",
+          "expr": "sum(provider_send_duration_seconds_sum) by (channel, provider, status) / sum(provider_send_duration_seconds_count) by (channel, provider, status)",
           "hide": false,
           "legendFormat": "{{channel}} - {{provider}} - {{status}} - 平均",
           "range": true,
@@ -1671,7 +1707,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(provider_send_status_total{status!=\"SUCCEEDED\"}[5m])) by (channel, provider) / sum(rate(provider_send_total[5m])) by (channel, provider)",          "legendFormat": "{{channel}} - {{provider}}",
+          "expr": "sum(rate(provider_send_status_total{status!=\"SUCCEEDED\"}[5m])) by (channel, provider) / sum(rate(provider_send_total[5m])) by (channel, provider)",
+          "legendFormat": "{{channel}} - {{provider}}",
           "range": true,
           "refId": "A"
         }

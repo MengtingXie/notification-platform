@@ -12,8 +12,8 @@ import (
 )
 
 type Builder struct {
-	// apiDurationHistogram 跟踪 API 响应时间
-	apiDurationHistogram *prometheus.HistogramVec
+	// apiDurationSummary 跟踪 API 响应时间
+	apiDurationSummary *prometheus.SummaryVec
 	// requestCounter 跟踪请求总数
 	requestCounter *prometheus.CounterVec
 	// errorCounter 跟踪失败请求数
@@ -23,11 +23,11 @@ type Builder struct {
 // New 创建一个带有初始化指标的 Builder
 func New() *Builder {
 	return &Builder{
-		apiDurationHistogram: promauto.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "grpc_server_handling_seconds",
-				Help:    "Histogram of response latency (seconds) of gRPC requests.",
-				Buckets: prometheus.DefBuckets,
+		apiDurationSummary: promauto.NewSummaryVec(
+			prometheus.SummaryOpts{
+				Name:       "grpc_server_handling_seconds",
+				Help:       "Summary of response latency (seconds) of gRPC requests.",
+				Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 			},
 			[]string{"method", "status"},
 		),
@@ -75,7 +75,7 @@ func (b *Builder) Build() grpc.UnaryServerInterceptor {
 		}
 
 		// 向 Prometheus 报告
-		b.apiDurationHistogram.WithLabelValues(
+		b.apiDurationSummary.WithLabelValues(
 			info.FullMethod,
 			statusCode,
 		).Observe(duration)
