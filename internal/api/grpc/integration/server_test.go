@@ -73,18 +73,22 @@ func (s *GRPCServerTestSuite) SetupSuite() {
 		},
 	}, nil).AnyTimes()
 
-	// 模拟CreateTemplate方法
+	// 模拟 CreateTemplate 方法
 	mockClient.EXPECT().CreateTemplate(gomock.Any()).Return(client.CreateTemplateResp{
 		RequestID:  "mock-req-id",
 		TemplateID: "prov-tpl-001",
 	}, nil).AnyTimes()
 
-	// 模拟QueryTemplateStatus方法
-	mockClient.EXPECT().QueryTemplateStatus(gomock.Any()).Return(client.QueryTemplateStatusResp{
-		RequestID:   "mock-req-id",
-		TemplateID:  "prov-tpl-001",
-		AuditStatus: client.AuditStatusApproved,
-		Reason:      "",
+	// 模拟 BatchQueryTemplateStatus 方法
+	mockClient.EXPECT().BatchQueryTemplateStatus(gomock.Any()).Return(client.BatchQueryTemplateStatusResp{
+		Results: map[string]client.QueryTemplateStatusResp{
+			"prov-tpl-001": {
+				RequestID:   "mock-req-id",
+				TemplateID:  "prov-tpl-001",
+				AuditStatus: client.AuditStatusApproved,
+				Reason:      "",
+			},
+		},
 	}, nil).AnyTimes()
 
 	// 配置参数 - 确保与providers表中的name字段匹配
@@ -216,7 +220,7 @@ type MockClientGRPCServer struct {
 	clientv1.UnsafeCallbackServiceServer
 }
 
-func (m *MockClientGRPCServer) HandleNotificationResult(_ context.Context, request *clientv1.HandleNotificationResultRequest) (*clientv1.HandleNotificationResultResponse, error) {
+func (m *MockClientGRPCServer) HandleNotificationResult(_ context.Context, _ *clientv1.HandleNotificationResultRequest) (*clientv1.HandleNotificationResultResponse, error) {
 	return &clientv1.HandleNotificationResultResponse{Success: true}, nil
 }
 

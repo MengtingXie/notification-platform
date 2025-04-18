@@ -3,6 +3,8 @@
 package template
 
 import (
+	auditevt "gitee.com/flycash/notification-platform/internal/event/audit"
+	templateevt "gitee.com/flycash/notification-platform/internal/event/template"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	auditsvc "gitee.com/flycash/notification-platform/internal/service/audit"
@@ -14,22 +16,28 @@ import (
 )
 
 type Service struct {
-	Svc  templatesvc.ChannelTemplateService
-	Repo repository.ChannelTemplateRepository
+	Svc                 templatesvc.ChannelTemplateService
+	Repo                repository.ChannelTemplateRepository
+	AuditResultConsumer *templateevt.AuditResultConsumer
+	AuditResultProducer auditevt.ResultCallbackEventProducer
 }
 
 func Init(
 	providerSvc providersvc.Service,
 	auditSvc auditsvc.Service,
 	clients map[string]client.Client,
-) *Service {
+) (*Service, error) {
 	wire.Build(
 		testioc.BaseSet,
 		templatesvc.NewChannelTemplateService,
 		repository.NewChannelTemplateRepository,
 		dao.NewChannelTemplateDAO,
 
+		templateevt.NewAuditResultConsumer,
+
+		auditevt.NewResultCallbackEventProducer,
+
 		wire.Struct(new(Service), "*"),
 	)
-	return nil
+	return nil, nil
 }

@@ -20,6 +20,31 @@ func (a AuditStatus) String() string {
 	return string(a)
 }
 
+func (a AuditStatus) IsPending() bool {
+	return a == AuditStatusPending
+}
+
+func (a AuditStatus) IsInReview() bool {
+	return a == AuditStatusInReview
+}
+
+func (a AuditStatus) IsRejected() bool {
+	return a == AuditStatusRejected
+}
+
+func (a AuditStatus) IsApproved() bool {
+	return a == AuditStatusApproved
+}
+
+func (a AuditStatus) IsValid() bool {
+	switch a {
+	case AuditStatusPending, AuditStatusInReview, AuditStatusApproved, AuditStatusRejected:
+		return true
+	default:
+		return false
+	}
+}
+
 // OwnerType 拥有者类型
 type OwnerType string
 
@@ -54,6 +79,19 @@ func (b BusinessType) ToInt64() int64 {
 func (b BusinessType) IsValid() bool {
 	return b == BusinessTypePromotion ||
 		b == BusinessTypeNotification || b == BusinessTypeVerificationCode
+}
+
+func (b BusinessType) String() string {
+	switch b {
+	case BusinessTypePromotion:
+		return "推广营销"
+	case BusinessTypeNotification:
+		return "通知"
+	case BusinessTypeVerificationCode:
+		return "验证码"
+	default:
+		return "未知类型"
+	}
 }
 
 // ChannelTemplate 渠道模板

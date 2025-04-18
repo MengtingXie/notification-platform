@@ -23,6 +23,18 @@ func (c Channel) IsValid() bool {
 	return c == ChannelSMS || c == ChannelEmail || c == ChannelInApp
 }
 
+func (c Channel) IsSMS() bool {
+	return c == ChannelSMS
+}
+
+func (c Channel) IsEmail() bool {
+	return c == ChannelEmail
+}
+
+func (c Channel) IsInApp() bool {
+	return c == ChannelInApp
+}
+
 // ProviderStatus 供应商状态
 type ProviderStatus string
 
@@ -43,12 +55,11 @@ type Provider struct {
 	Channel Channel // 支持的渠道
 
 	// 基本信息
-	Endpoint       string // API入口地址
-	RegionID       string
-	APIKey         string // API密钥
-	APISecret      string // API密钥
-	APPID          string
-	TemplateRegExp string
+	Endpoint  string // API入口地址
+	RegionID  string
+	APIKey    string // API密钥
+	APISecret string // API密钥
+	APPID     string
 
 	Weight     int // 权重
 	QPSLimit   int // 每秒请求数限制

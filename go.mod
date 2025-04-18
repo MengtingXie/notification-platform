@@ -4,7 +4,7 @@ go 1.24.1
 
 require (
 	github.com/alibabacloud-go/darabonba-openapi/v2 v2.1.6
-	github.com/alibabacloud-go/dysmsapi-20170525/v3 v3.0.6
+	github.com/alibabacloud-go/dysmsapi-20170525/v4 v4.1.3
 	github.com/alibabacloud-go/tea v1.3.7
 	github.com/ecodeclub/ecache v0.0.0-20240111145855-75679834beca
 	github.com/ecodeclub/ekit v0.0.9-0.20250308133608-b832b6e50738
