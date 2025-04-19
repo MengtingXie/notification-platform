@@ -4,9 +4,10 @@ package ioc
 
 import (
 	"context"
+	"time"
+
 	"gitee.com/flycash/notification-platform/internal/service/provider/metrics"
 	"gitee.com/flycash/notification-platform/internal/service/provider/tracing"
-	"time"
 
 	"gitee.com/flycash/notification-platform/internal/service/quota"
 	"gitee.com/flycash/notification-platform/internal/service/scheduler"
@@ -156,7 +157,7 @@ func newSMSClients(providerSvc providersvc.Service) map[string]client.Client {
 
 func newMockSMSSelectorBuilder() *sequential.SelectorBuilder {
 	return sequential.NewSelectorBuilder([]provider.Provider{
-		metrics.NewProvider("ali", tracing.NewProvider(provider.NewMockProvider())),
+		metrics.NewProvider("ali", tracing.NewProvider(provider.NewMockProvider(), "ali")),
 	})
 }
 
