@@ -39,6 +39,12 @@ func (s *RegistryTestSuite) SetupSuite() {
 	s.etcdClient = testioc.InitEtcdClient()
 }
 
+// 添加一个ServerInfo结构体用于安全传递服务器信息
+type ServerInfo struct {
+	addr string
+	err  error
+}
+
 // TestGroup 测试基于分组的服务发现和请求路由功能
 // 本测试验证：
 // 1. 启动4个服务器实例：3个group=core，1个group=""
@@ -60,6 +66,7 @@ func (s *RegistryTestSuite) TestGroup() {
 	var coreServers []*greeterServer
 	var defaultServers []*greeterServer
 
+	// 使用通道来安全地获取服务器地址
 	for i := 0; i < 3; i++ {
 		gs := &greeterServer{group: "core"}
 		srv := NewServer("greeter",
@@ -70,20 +77,35 @@ func (s *RegistryTestSuite) TestGroup() {
 		// 注册greeter服务
 		helloworldv1.RegisterGreeterServiceServer(srv.Server, gs)
 
+		// 使用通道获取服务器地址
+		addrCh := make(chan ServerInfo, 1)
+
 		// 使用随机端口启动服务
 		go func() {
-			_ = srv.Start("127.0.0.1:0")
+			// 先获取监听器但不启动服务
+			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				addrCh <- ServerInfo{err: err}
+				return
+			}
+
+			// 安全地获取地址
+			addr := listener.Addr().String()
+			addrCh <- ServerInfo{addr: addr}
+
+			// 设置监听器并启动服务
+			srv.listener = listener
+
+			// 必须调用Start方法以执行注册逻辑，使用空地址因为监听器已经设置
+			_ = srv.Start("")
 		}()
 
-		// 等待服务开始监听
-		time.Sleep(time.Millisecond * 200)
+		// 等待地址准备好或出错
+		serverInfo := <-addrCh
+		require.NoError(t, serverInfo.err, "启动服务失败")
 
-		// 确保listener已经创建
-		for srv.listener == nil {
-			time.Sleep(time.Millisecond * 50)
-		}
-
-		gs.addr = srv.listener.Addr().String()
+		// 现在可以安全地使用地址
+		gs.addr = serverInfo.addr
 		servers = append(servers, srv)
 		coreServers = append(coreServers, gs)
 	}
@@ -97,19 +119,34 @@ func (s *RegistryTestSuite) TestGroup() {
 
 	helloworldv1.RegisterGreeterServiceServer(srv.Server, gs)
 
+	// 使用通道获取服务器地址
+	addrCh := make(chan ServerInfo, 1)
+
 	go func() {
-		_ = srv.Start("127.0.0.1:0")
+		// 先获取监听器但不启动服务
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			addrCh <- ServerInfo{err: err}
+			return
+		}
+
+		// 安全地获取地址
+		addr := listener.Addr().String()
+		addrCh <- ServerInfo{addr: addr}
+
+		// 设置监听器并启动服务
+		srv.listener = listener
+
+		// 必须调用Start方法以执行注册逻辑，使用空地址因为监听器已经设置
+		_ = srv.Start("")
 	}()
 
-	// 等待服务开始监听
-	time.Sleep(time.Millisecond * 200)
+	// 等待地址准备好或出错
+	serverInfo := <-addrCh
+	require.NoError(t, serverInfo.err, "启动服务失败")
 
-	// 确保listener已经创建
-	for srv.listener == nil {
-		time.Sleep(time.Millisecond * 50)
-	}
-
-	gs.addr = srv.listener.Addr().String()
+	// 现在可以安全地使用地址
+	gs.addr = serverInfo.addr
 	servers = append(servers, srv)
 	defaultServers = append(defaultServers, gs)
 
@@ -182,6 +219,7 @@ func (s *RegistryTestSuite) TestGroup() {
 		defaultTotal += s.reqCnt.Load()
 	}
 
+	// 验证所有请求都发送到了group=core的服务器
 	s.Equal(int32(5), coreTotal, "所有请求应该被发送到group=core的服务器")
 	s.Equal(int32(0), defaultTotal, "group=''的服务器不应该收到请求")
 
@@ -271,29 +309,34 @@ func ServerWithWriteWeight(writeWeight int32) ServerOption {
 
 type ServerOption func(server *Server)
 
+// 需要修改Server的Start方法，使其支持外部传入的listener
 func (s *Server) Start(addr string) error {
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return err
+	// 如果已经有listener，直接使用
+	if s.listener == nil {
+		listener, err := net.Listen("tcp", addr)
+		if err != nil {
+			return err
+		}
+		s.listener = listener
 	}
-	s.listener = listener
+
 	// 用户决定使用注册中心
 	if s.registry != nil {
 		s.si = registry.ServiceInstance{
 			Name:        s.name,
-			Address:     listener.Addr().String(),
-			ReadWeight:  s.readWeight,
-			WriteWeight: s.writeWeight,
+			Address:     s.listener.Addr().String(),
+			ReadWeight:  int32(s.readWeight),
+			WriteWeight: int32(s.writeWeight),
 			Group:       s.group,
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
-		err = s.registry.Register(ctx, s.si)
+		err := s.registry.Register(ctx, s.si)
 		cancel()
 		if err != nil {
 			return err
 		}
 	}
-	return s.Server.Serve(listener)
+	return s.Server.Serve(s.listener)
 }
 
 func (s *Server) Close() error {
