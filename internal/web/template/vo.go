@@ -113,16 +113,3 @@ type UpdateVersionReq struct {
 type SubmitForInternalReviewReq struct {
 	VersionID int64 `json:"versionId"` // 版本ID
 }
-
-// SubmitForProviderReviewReq
-type SubmitForProviderReviewReq struct {
-	TemplateID int64 `json:"templateId"` // 模板ID
-	VersionID  int64 `json:"versionId"`  // 版本ID
-	ProviderID int64 `json:"providerId"` // 供应商ID
-}
-
-// UpdateProviderAuditStatusReq 更新供应商审核状态请求
-type UpdateProviderAuditStatusReq struct {
-	RequestID          string `json:"requestId"`          // 请求ID
-	ProviderTemplateID string `json:"providerTemplateId"` // 供应商侧模板ID
-}

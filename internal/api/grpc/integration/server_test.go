@@ -73,18 +73,22 @@ func (s *GRPCServerTestSuite) SetupSuite() {
 		},
 	}, nil).AnyTimes()
 
-	// 模拟CreateTemplate方法
+	// 模拟 CreateTemplate 方法
 	mockClient.EXPECT().CreateTemplate(gomock.Any()).Return(client.CreateTemplateResp{
 		RequestID:  "mock-req-id",
 		TemplateID: "prov-tpl-001",
 	}, nil).AnyTimes()
 
-	// 模拟QueryTemplateStatus方法
-	mockClient.EXPECT().QueryTemplateStatus(gomock.Any()).Return(client.QueryTemplateStatusResp{
-		RequestID:   "mock-req-id",
-		TemplateID:  "prov-tpl-001",
-		AuditStatus: client.AuditStatusApproved,
-		Reason:      "",
+	// 模拟 BatchQueryTemplateStatus 方法
+	mockClient.EXPECT().BatchQueryTemplateStatus(gomock.Any()).Return(client.BatchQueryTemplateStatusResp{
+		Results: map[string]client.QueryTemplateStatusResp{
+			"prov-tpl-001": {
+				RequestID:   "mock-req-id",
+				TemplateID:  "prov-tpl-001",
+				AuditStatus: client.AuditStatusApproved,
+				Reason:      "",
+			},
+		},
 	}, nil).AnyTimes()
 
 	// 配置参数 - 确保与providers表中的name字段匹配
@@ -121,7 +125,7 @@ type BaseGRPCServerTestSuite struct {
 func (s *BaseGRPCServerTestSuite) SetupTestSuite(serverPort int, clientAddr string, mockClients map[string]client.Client) {
 	// 初始化数据库
 	s.db = testioc.InitDBAndTables()
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	serverAddr := fmt.Sprintf("0.0.0.0:%d", serverPort)
 	log.Printf("启动测试套件，服务器地址：%s, 客户端地址：%s\n", serverAddr, clientAddr)
@@ -216,7 +220,7 @@ type MockClientGRPCServer struct {
 	clientv1.UnsafeCallbackServiceServer
 }
 
-func (m *MockClientGRPCServer) HandleNotificationResult(_ context.Context, request *clientv1.HandleNotificationResultRequest) (*clientv1.HandleNotificationResultResponse, error) {
+func (m *MockClientGRPCServer) HandleNotificationResult(_ context.Context, _ *clientv1.HandleNotificationResultRequest) (*clientv1.HandleNotificationResultResponse, error) {
 	return &clientv1.HandleNotificationResultResponse{Success: true}, nil
 }
 

@@ -5,6 +5,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"log"
 	"math/rand/v2"
 	"testing"
 	"time"
@@ -171,6 +172,7 @@ func (s *NotificationCallbackServiceTestSuite) TestSendCallback() {
 				logs, err := app.Repo.FindByNotificationIDs(context.Background(), []uint64{result.ID})
 				assert.NoError(t, err)
 				if assert.NotEmpty(t, logs, "回调日志创建失败，未找到记录") {
+					log.Printf("notificationID = %d, callbackLogID = %d, log.Notification.ID = %d\n", result.ID, logs[0].ID, logs[0].Notification.ID)
 					assert.Equal(t, domain.CallbackLogStatusPending, logs[0].Status, "回调日志状态未正确设置为PENDING")
 				}
 

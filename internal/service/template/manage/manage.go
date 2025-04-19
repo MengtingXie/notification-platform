@@ -2,6 +2,7 @@ package manage
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"time"
@@ -12,33 +13,34 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/audit"
 	providersvc "gitee.com/flycash/notification-platform/internal/service/provider/manage"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
+	"github.com/ecodeclub/ekit/slice"
 )
 
-// ChannelTemplateService 模板服务接口
+// ChannelTemplateService 提供模板管理的服务接口
 //
 //go:generate mockgen -source=./manage.go -destination=../mocks/manage.mock.go -package=templatemocks -typed ChannelTemplateService
 type ChannelTemplateService interface {
-	// 模版
+	// 模版相关方法
 
-	// GetTemplatesByOwner DONE
+	// GetTemplatesByOwner 获取指定所有者的模板列表
 	GetTemplatesByOwner(ctx context.Context, ownerID int64, ownerType domain.OwnerType) ([]domain.ChannelTemplate, error)
 
-	// GetTemplateByIDAndProviderInfo DONE
+	// GetTemplateByIDAndProviderInfo 根据模板ID和供应商信息获取模板
 	GetTemplateByIDAndProviderInfo(ctx context.Context, templateID int64, providerName string, channel domain.Channel) (domain.ChannelTemplate, error)
 
-	// GetTemplateByID DONE
+	// GetTemplateByID 根据ID获取模板
 	GetTemplateByID(ctx context.Context, templateID int64) (domain.ChannelTemplate, error)
 
-	// CreateTemplate DONE
+	// CreateTemplate 创建模板
 	CreateTemplate(ctx context.Context, template domain.ChannelTemplate) (domain.ChannelTemplate, error)
 
-	// UpdateTemplate DONE
+	// UpdateTemplate 更新模板
 	UpdateTemplate(ctx context.Context, template domain.ChannelTemplate) error
 
 	// PublishTemplate 发布模板
 	PublishTemplate(ctx context.Context, templateID, versionID int64) error
 
-	// 模版版本
+	// 模版版本相关方法
 
 	// ForkVersion 基于已有版本创建模版版本
 	ForkVersion(ctx context.Context, versionID int64) (domain.ChannelTemplateVersion, error)
@@ -49,18 +51,22 @@ type ChannelTemplateService interface {
 	// SubmitForInternalReview 提交内部审核
 	SubmitForInternalReview(ctx context.Context, versionID int64) error
 
-	// BatchUpdateVersionAuditStatus 批量更新审核状态
+	// BatchUpdateVersionAuditStatus 批量更新版本审核状态
 	BatchUpdateVersionAuditStatus(ctx context.Context, versions []domain.ChannelTemplateVersion) error
 
-	// 供应商
+	// 供应商相关方法
 
-	// SubmitForProviderReview 提交供应商审核
-	SubmitForProviderReview(ctx context.Context, templateID, versionID int64) error
-	// UpdateProviderAuditStatus 更新供应商审核状态
-	UpdateProviderAuditStatus(ctx context.Context, requestID, providerTemplateID string) error
+	// BatchSubmitForProviderReview 批量提交供应商审核
+	BatchSubmitForProviderReview(ctx context.Context, versionID []int64) error
+
+	// GetPendingOrInReviewProviders 获取未审核或审核中的供应商关联
+	GetPendingOrInReviewProviders(ctx context.Context, offset, limit int, utime int64) (providers []domain.ChannelTemplateProvider, total int64, err error)
+
+	// BatchQueryAndUpdateProviderAuditInfo 批量查询并更新供应商审核信息
+	BatchQueryAndUpdateProviderAuditInfo(ctx context.Context, providers []domain.ChannelTemplateProvider) error
 }
 
-// templateService 模板服务实现
+// templateService 实现了ChannelTemplateService接口，提供模板管理的具体实现
 type templateService struct {
 	repo        repository.ChannelTemplateRepository
 	providerSvc providersvc.Service
@@ -260,7 +266,8 @@ func (t *templateService) PublishTemplate(ctx context.Context, templateID, versi
 	}
 
 	// 设置活跃版本
-	if err := t.repo.SetTemplateActiveVersion(ctx, templateID, versionID); err != nil {
+	err = t.repo.SetTemplateActiveVersion(ctx, templateID, versionID)
+	if err != nil {
 		return fmt.Errorf("发布模版失败: %w", err)
 	}
 	return nil
@@ -299,10 +306,10 @@ func (t *templateService) UpdateVersion(ctx context.Context, version domain.Chan
 	}
 
 	// 更新版本
-	if err1 := t.repo.UpdateTemplateVersion(ctx, updateVersion); err1 != nil {
-		return fmt.Errorf("%w: %w", errs.ErrUpdateTemplateVersionFailed, err1)
+	err = t.repo.UpdateTemplateVersion(ctx, updateVersion)
+	if err != nil {
+		return fmt.Errorf("%w: %w", errs.ErrUpdateTemplateVersionFailed, err)
 	}
-
 	return nil
 }
 
@@ -310,7 +317,7 @@ func (t *templateService) BatchUpdateVersionAuditStatus(ctx context.Context, ver
 	if len(versions) == 0 {
 		return nil
 	}
-	if err := t.repo.BatchUpdateTemplateVersionAuditStatus(ctx, versions); err != nil {
+	if err := t.repo.BatchUpdateTemplateVersionAuditInfo(ctx, versions); err != nil {
 		return fmt.Errorf("%w: %w", errs.ErrUpdateTemplateVersionAuditStatusFailed, err)
 	}
 	return nil
@@ -324,93 +331,105 @@ func (t *templateService) SubmitForInternalReview(ctx context.Context, versionID
 	// 获取版本信息
 	version, err := t.repo.GetTemplateVersionByID(ctx, versionID)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", errs.ErrSubmitVersionForInternalReviewFailed, err)
+	}
+
+	if version.AuditStatus == domain.AuditStatusInReview || version.AuditStatus == domain.AuditStatusApproved {
+		return nil
 	}
 
 	// 获取模板信息
 	template, err := t.repo.GetTemplateByID(ctx, version.ChannelTemplateID)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", errs.ErrSubmitVersionForInternalReviewFailed, err)
 	}
 
 	// 获取版本关联的供应商
 	providers, err := t.repo.GetProvidersByTemplateIDAndVersionID(ctx, template.ID, version.ID)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", errs.ErrSubmitVersionForInternalReviewFailed, err)
 	}
 
-	// 构建审核内容
-	auditData := map[string]any{
-		"template":  template,
-		"version":   version,
-		"providers": providers,
+	content, err := t.getJSONAuditContent(template, version, providers)
+	if err != nil {
+		return fmt.Errorf("%w: %w", errs.ErrSubmitVersionForInternalReviewFailed, err)
 	}
 
 	// 创建审核记录
-	auditReq := domain.Audit{
+	auditID, err := t.auditSvc.CreateAudit(ctx, domain.Audit{
 		ResourceID:   version.ID,
 		ResourceType: domain.ResourceTypeTemplate,
-		Content:      fmt.Sprintf("%v", auditData), // 简化处理，实际应该是JSON格式
-	}
-
-	auditID, err := t.auditSvc.CreateAudit(ctx, auditReq)
+		Content:      content,
+	})
 	if err != nil {
 		return fmt.Errorf("%w: %w", errs.ErrSubmitVersionForInternalReviewFailed, err)
 	}
 
 	// 更新版本审核状态
-	now := time.Now().Unix()
 	updateVersions := []domain.ChannelTemplateVersion{
 		{
 			ID:                       version.ID,
 			AuditID:                  auditID,
 			AuditStatus:              domain.AuditStatusInReview,
-			LastReviewSubmissionTime: now,
+			LastReviewSubmissionTime: time.Now().Unix(),
 		},
 	}
 
-	if err := t.repo.BatchUpdateTemplateVersionAuditStatus(ctx, updateVersions); err != nil {
+	err = t.repo.BatchUpdateTemplateVersionAuditInfo(ctx, updateVersions)
+	if err != nil {
 		return fmt.Errorf("%w: 更新版本审核状态失败: %w", errs.ErrSubmitVersionForInternalReviewFailed, err)
 	}
 
 	return nil
 }
 
+func (t *templateService) getJSONAuditContent(template domain.ChannelTemplate, version domain.ChannelTemplateVersion, providers []domain.ChannelTemplateProvider) (string, error) {
+	content := domain.AuditContent{
+		OwnerID:      template.OwnerID,
+		OwnerType:    template.OwnerType.String(),
+		Name:         template.Name,
+		Description:  template.Description,
+		Channel:      template.Channel.String(),
+		BusinessType: template.BusinessType.String(),
+		Version:      version.Name,
+		Signature:    version.Signature,
+		Content:      version.Content,
+		Remark:       version.Remark,
+		ProviderNames: slice.Map(providers, func(_ int, src domain.ChannelTemplateProvider) string {
+			return src.ProviderName
+		}),
+	}
+	b, err := json.Marshal(content)
+	if err != nil {
+		return "", fmt.Errorf("序列化审核内容失败: %w", err)
+	}
+	return string(b), nil
+}
+
 // 供应商相关方法
 
-func (t *templateService) SubmitForProviderReview(ctx context.Context, templateID, versionID int64) error {
-	if templateID <= 0 {
-		return fmt.Errorf("%w: 模版ID必须大于0", errs.ErrInvalidParameter)
+func (t *templateService) BatchSubmitForProviderReview(ctx context.Context, versionIDs []int64) error {
+	for i := range versionIDs {
+		_ = t.submitForProviderReview(ctx, versionIDs[i])
 	}
+	return nil
+}
 
-	if versionID <= 0 {
-		return fmt.Errorf("%w: 模版版本ID必须大于0", errs.ErrInvalidParameter)
-	}
-
+func (t *templateService) submitForProviderReview(ctx context.Context, versionID int64) error {
 	// 获取版本信息
 	version, err := t.repo.GetTemplateVersionByID(ctx, versionID)
 	if err != nil {
 		return err
 	}
 
-	// 确认版本属于该模板
-	if version.ChannelTemplateID != templateID {
-		return fmt.Errorf("%w: %w", errs.ErrInvalidParameter, errs.ErrTemplateAndVersionMisMatch)
-	}
-
-	// 检查版本是否通过内部审核
-	if version.AuditStatus != domain.AuditStatusApproved {
-		return fmt.Errorf("%w: %w: 版本未通过内部审核", errs.ErrSubmitVersionForProviderReviewFailed, errs.ErrInvalidOperation)
-	}
-
 	// 获取模板信息
-	template, err := t.repo.GetTemplateByID(ctx, templateID)
+	template, err := t.repo.GetTemplateByID(ctx, version.ChannelTemplateID)
 	if err != nil {
 		return fmt.Errorf("%w: %w", errs.ErrSubmitVersionForProviderReviewFailed, err)
 	}
 
 	// 获取供应商关联信息
-	providers, err := t.repo.GetProvidersByTemplateIDAndVersionID(ctx, templateID, versionID)
+	providers, err := t.repo.GetProvidersByTemplateIDAndVersionID(ctx, template.ID, versionID)
 	if err != nil {
 		return fmt.Errorf("%w: %w", errs.ErrSubmitVersionForProviderReviewFailed, err)
 	}
@@ -418,13 +437,13 @@ func (t *templateService) SubmitForProviderReview(ctx context.Context, templateI
 	for i := range providers {
 		if providers[i].AuditStatus == domain.AuditStatusPending ||
 			providers[i].AuditStatus == domain.AuditStatusRejected {
-			_ = t.submitForProviderReview(ctx, template, version, providers[i])
+			_ = t.submit(ctx, template, version, providers[i])
 		}
 	}
 	return nil
 }
 
-func (t *templateService) submitForProviderReview(ctx context.Context, template domain.ChannelTemplate, version domain.ChannelTemplateVersion, provider domain.ChannelTemplateProvider) error {
+func (t *templateService) submit(ctx context.Context, template domain.ChannelTemplate, version domain.ChannelTemplateVersion, provider domain.ChannelTemplateProvider) error {
 	// 当前仅支持SMS渠道
 	if provider.ProviderChannel != domain.ChannelSMS {
 		return nil
@@ -436,13 +455,9 @@ func (t *templateService) submitForProviderReview(ctx context.Context, template 
 	}
 
 	// 构建供应商审核请求并调用
-	content, err := t.replacePlaceholders(ctx, version.Content, provider)
-	if err != nil {
-		return fmt.Errorf("%w: %w", errs.ErrSubmitVersionForProviderReviewFailed, err)
-	}
 	resp, err := cli.CreateTemplate(client.CreateTemplateReq{
 		TemplateName:    version.Name,
-		TemplateContent: content,
+		TemplateContent: t.replacePlaceholders(version.Content, provider),
 		TemplateType:    client.TemplateType(template.BusinessType),
 		Remark:          version.Remark,
 	})
@@ -451,13 +466,15 @@ func (t *templateService) submitForProviderReview(ctx context.Context, template 
 	}
 
 	// 更新供应商关联
-	if err1 := t.repo.UpdateTemplateProvider(ctx, (domain.ChannelTemplateProvider{
+	err = t.repo.UpdateTemplateProviderAuditInfo(ctx, domain.ChannelTemplateProvider{
 		ID:                       provider.ID,
 		RequestID:                resp.RequestID,
+		ProviderTemplateID:       resp.TemplateID,
 		AuditStatus:              domain.AuditStatusInReview,
 		LastReviewSubmissionTime: time.Now().Unix(),
-	})); err1 != nil {
-		return fmt.Errorf("%w: 更新供应商关联失败: %w", errs.ErrSubmitVersionForProviderReviewFailed, err1)
+	})
+	if err != nil {
+		return fmt.Errorf("%w: 更新供应商关联失败: %w", errs.ErrSubmitVersionForProviderReviewFailed, err)
 	}
 	return nil
 }
@@ -470,80 +487,87 @@ func (t *templateService) getSMSClient(providerName string) (client.Client, erro
 	return smsClient, nil
 }
 
-func (t *templateService) replacePlaceholders(ctx context.Context, content string, provider domain.ChannelTemplateProvider) (string, error) {
-	p, err := t.providerSvc.GetByID(ctx, provider.ProviderID)
-	if err != nil {
-		return "", fmt.Errorf("%w: %w", errs.ErrProviderNotFound, err)
+func (t *templateService) replacePlaceholders(content string, provider domain.ChannelTemplateProvider) string {
+	// 仅腾讯云需要替换占位符
+	if provider.ProviderName != "tencentcloud" {
+		return content
 	}
-
-	if p.TemplateRegExp == "" {
-		return content, nil
-	}
-
-	// 如果配置了替换规则
 	re := regexp.MustCompile(`\$\{[^}]+\}`)
 	counter := 0
 	output := re.ReplaceAllStringFunc(content, func(_ string) string {
 		counter++
-		return fmt.Sprintf(p.TemplateRegExp, counter)
+		return fmt.Sprintf("{%d}", counter)
 	})
-	return output, nil
+	return output
 }
 
-func (t *templateService) UpdateProviderAuditStatus(ctx context.Context, requestID, providerTemplateID string) error {
-	if requestID == "" || providerTemplateID == "" {
-		return fmt.Errorf("%w: 参数不能为空", errs.ErrInvalidParameter)
+func (t *templateService) GetPendingOrInReviewProviders(ctx context.Context, offset, limit int, utime int64) (providers []domain.ChannelTemplateProvider, total int64, err error) {
+	return t.repo.GetPendingOrInReviewProviders(ctx, offset, limit, utime)
+}
+
+func (t *templateService) BatchQueryAndUpdateProviderAuditInfo(ctx context.Context, providers []domain.ChannelTemplateProvider) error {
+	if len(providers) == 0 {
+		return nil
 	}
 
-	// 根据请求ID获取供应商关联
-	provider, err := t.repo.GetProviderByRequestID(ctx, requestID)
-	if err != nil {
-		return fmt.Errorf("%w: 获取供应商关联失败: %w", errs.ErrUpdateTemplateProviderAuditStatusFailed, err)
+	// 按渠道和供应商名称分组处理
+	groupedProviders := make(map[domain.Channel]map[string][]domain.ChannelTemplateProvider)
+	for i := range providers {
+		channel := providers[i].ProviderChannel
+		name := providers[i].ProviderName
+		if _, ok := groupedProviders[channel]; !ok {
+			groupedProviders[channel] = make(map[string][]domain.ChannelTemplateProvider)
+		}
+		groupedProviders[channel][name] = append(groupedProviders[channel][name], providers[i])
 	}
 
-	if provider.ID == 0 {
-		return fmt.Errorf("%w: %w: 未找到对应的供应商关联", errs.ErrUpdateTemplateProviderAuditStatusFailed, errs.ErrProviderNotFound)
+	// 处理每个渠道的供应商
+	for channel := range groupedProviders {
+		for name := range groupedProviders[channel] {
+			if channel.IsSMS() {
+				if err := t.batchQueryAndUpdateSMSProvidersAuditInfo(ctx, groupedProviders[channel][name]); err != nil {
+					return err
+				}
+			}
+		}
 	}
+	return nil
+}
 
-	// 获取对应的SMS客户端
-	cli, err := t.getSMSClient(provider.ProviderName)
+func (t *templateService) batchQueryAndUpdateSMSProvidersAuditInfo(ctx context.Context, providers []domain.ChannelTemplateProvider) error {
+	const first = 0
+	smsClient, err := t.getSMSClient(providers[first].ProviderName)
 	if err != nil {
 		return fmt.Errorf("%w: %w", errs.ErrUpdateTemplateProviderAuditStatusFailed, err)
 	}
 
-	// 查询审核状态
-	resp, err := cli.QueryTemplateStatus(client.QueryTemplateStatusReq{
-		TemplateID: providerTemplateID,
+	// 获取供应商侧的模版ID 和 映射关系
+	templateIDs := make([]string, 0, len(providers))
+	providerMap := make(map[string]domain.ChannelTemplateProvider, len(providers))
+	for i := range providers {
+		templateIDs = append(templateIDs, providers[i].ProviderTemplateID)
+		providerMap[providers[i].ProviderTemplateID] = providers[i]
+	}
+
+	// 批量查询模版状态
+	results, err := smsClient.BatchQueryTemplateStatus(client.BatchQueryTemplateStatusReq{
+		TemplateIDs: templateIDs,
 	})
 	if err != nil {
-		return fmt.Errorf("%w: 查询供应商审核状态失败: %w", errs.ErrUpdateTemplateProviderAuditStatusFailed, err)
+		return fmt.Errorf("%w: %w", errs.ErrUpdateTemplateProviderAuditStatusFailed, err)
 	}
 
-	// 转换审核状态
-	var auditStatus domain.AuditStatus
-
-	switch {
-	case resp.AuditStatus.IsPending():
-		auditStatus = domain.AuditStatusInReview
-	case resp.AuditStatus.IsApproved():
-		auditStatus = domain.AuditStatusApproved
-	case resp.AuditStatus.IsRejected():
-		auditStatus = domain.AuditStatusRejected
-	default:
-		auditStatus = domain.AuditStatusPending
+	// 更新对应的状态信息
+	updates := make([]domain.ChannelTemplateProvider, 0, len(results.Results))
+	for i := range results.Results {
+		p, ok := providerMap[results.Results[i].TemplateID]
+		if !ok {
+			continue
+		}
+		p.RequestID = results.Results[i].RequestID
+		p.AuditStatus = results.Results[i].AuditStatus.ToDomain()
+		p.RejectReason = results.Results[i].Reason
+		updates = append(updates, p)
 	}
-
-	// 更新供应商关联
-	updateProvider := domain.ChannelTemplateProvider{
-		ID:                 provider.ID,
-		ProviderTemplateID: providerTemplateID,
-		AuditStatus:        auditStatus,
-		RejectReason:       resp.Reason,
-	}
-
-	if err := t.repo.UpdateTemplateProvider(ctx, updateProvider); err != nil {
-		return fmt.Errorf("更新供应商关联失败: %w", err)
-	}
-
-	return nil
+	return t.repo.BatchUpdateTemplateProvidersAuditInfo(ctx, updates)
 }

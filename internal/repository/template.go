@@ -8,62 +8,67 @@ import (
 	"github.com/ecodeclub/ekit/slice"
 )
 
-// ChannelTemplateRepository 模板仓储接口
+// ChannelTemplateRepository 提供模板数据存储的仓库接口
 type ChannelTemplateRepository interface {
-	// 模版
+	// 模版相关方法
 
-	// GetTemplatesByOwner DONE
+	// GetTemplatesByOwner 获取指定所有者的模板列表
 	GetTemplatesByOwner(ctx context.Context, ownerID int64, ownerType domain.OwnerType) ([]domain.ChannelTemplate, error)
 
-	// GetTemplateByID DONE
+	// GetTemplateByID 根据ID获取模板
 	GetTemplateByID(ctx context.Context, templateID int64) (domain.ChannelTemplate, error)
 
-	// CreateTemplate DONE
+	// CreateTemplate 创建模板
 	CreateTemplate(ctx context.Context, template domain.ChannelTemplate) (domain.ChannelTemplate, error)
 
-	// UpdateTemplate DONE
+	// UpdateTemplate 更新模板
 	UpdateTemplate(ctx context.Context, template domain.ChannelTemplate) error
 
-	// SetTemplateActiveVersion DONE
+	// SetTemplateActiveVersion 设置模板的活跃版本
 	SetTemplateActiveVersion(ctx context.Context, templateID, versionID int64) error
 
-	// 模版版本
+	// 模版版本相关方法
 
-	// GetTemplateVersionByID DONE
+	// GetTemplateVersionByID 根据ID获取模板版本
 	GetTemplateVersionByID(ctx context.Context, versionID int64) (domain.ChannelTemplateVersion, error)
 
-	// CreateTemplateVersion DONE
+	// CreateTemplateVersion 创建模板版本
 	CreateTemplateVersion(ctx context.Context, version domain.ChannelTemplateVersion) (domain.ChannelTemplateVersion, error)
 
+	// ForkTemplateVersion 基于已有版本创建新版本
 	ForkTemplateVersion(ctx context.Context, versionID int64) (domain.ChannelTemplateVersion, error)
 
-	// 供应商
+	// 供应商相关方法
 
-	// GetProviderByNameAndChannel DONE
+	// GetProviderByNameAndChannel 根据名称和渠道获取供应商
 	GetProviderByNameAndChannel(ctx context.Context, templateID, versionID int64, providerName string, channel domain.Channel) ([]domain.ChannelTemplateProvider, error)
 
-	// BatchCreateTemplateProviders DONE
+	// BatchCreateTemplateProviders 批量创建模板供应商关联
 	BatchCreateTemplateProviders(ctx context.Context, providers []domain.ChannelTemplateProvider) ([]domain.ChannelTemplateProvider, error)
 
-	// GetApprovedProvidersByTemplateIDAndVersionID DONE
+	// GetApprovedProvidersByTemplateIDAndVersionID 获取已审核通过的供应商列表
 	GetApprovedProvidersByTemplateIDAndVersionID(ctx context.Context, templateID, versionID int64) ([]domain.ChannelTemplateProvider, error)
 
+	// GetProvidersByTemplateIDAndVersionID 获取模板和版本关联的所有供应商
 	GetProvidersByTemplateIDAndVersionID(ctx context.Context, templateID, versionID int64) ([]domain.ChannelTemplateProvider, error)
 
 	// UpdateTemplateVersion 更新模板版本
 	UpdateTemplateVersion(ctx context.Context, version domain.ChannelTemplateVersion) error
 
-	// BatchUpdateTemplateVersionAuditStatus 更新模板版本审核状态
-	BatchUpdateTemplateVersionAuditStatus(ctx context.Context, versions []domain.ChannelTemplateVersion) error
+	// BatchUpdateTemplateVersionAuditInfo 批量更新模板版本审核信息
+	BatchUpdateTemplateVersionAuditInfo(ctx context.Context, versions []domain.ChannelTemplateVersion) error
 
-	// GetProviderByRequestID 根据请求ID获取供应商关联
-	GetProviderByRequestID(ctx context.Context, requestID string) (domain.ChannelTemplateProvider, error)
+	// UpdateTemplateProviderAuditInfo 更新模板供应商审核信息
+	UpdateTemplateProviderAuditInfo(ctx context.Context, provider domain.ChannelTemplateProvider) error
 
-	// UpdateTemplateProvider 更新模板供应商关联
-	UpdateTemplateProvider(ctx context.Context, provider domain.ChannelTemplateProvider) error
+	// BatchUpdateTemplateProvidersAuditInfo 批量更新模板供应商审核信息
+	BatchUpdateTemplateProvidersAuditInfo(ctx context.Context, providers []domain.ChannelTemplateProvider) error
+
+	// GetPendingOrInReviewProviders 获取未审核或审核中的供应商关联
+	GetPendingOrInReviewProviders(ctx context.Context, offset, limit int, ctime int64) (providers []domain.ChannelTemplateProvider, total int64, err error)
 }
 
-// channelTemplateRepository 仓储实现
+// channelTemplateRepository 实现了ChannelTemplateRepository接口，提供模板数据的存储实现
 type channelTemplateRepository struct {
 	dao dao.ChannelTemplateDAO
 }
@@ -88,6 +93,10 @@ func (r *channelTemplateRepository) GetTemplatesByOwner(ctx context.Context, own
 		return []domain.ChannelTemplate{}, nil
 	}
 
+	return r.getTemplates(ctx, templates)
+}
+
+func (r *channelTemplateRepository) getTemplates(ctx context.Context, templates []dao.ChannelTemplate) ([]domain.ChannelTemplate, error) {
 	// 提取模板IDs
 	templateIDs := make([]int64, len(templates))
 	for i := range templates {
@@ -141,11 +150,16 @@ func (r *channelTemplateRepository) GetTemplatesByOwner(ctx context.Context, own
 }
 
 func (r *channelTemplateRepository) GetTemplateByID(ctx context.Context, templateID int64) (domain.ChannelTemplate, error) {
-	template, err := r.dao.GetTemplateByID(ctx, templateID)
+	templateEntity, err := r.dao.GetTemplateByID(ctx, templateID)
 	if err != nil {
 		return domain.ChannelTemplate{}, err
 	}
-	return r.toTemplateDomain(template), nil
+	templates, err := r.getTemplates(ctx, []dao.ChannelTemplate{templateEntity})
+	if err != nil {
+		return domain.ChannelTemplate{}, err
+	}
+	const first = 0
+	return templates[first], nil
 }
 
 func (r *channelTemplateRepository) CreateTemplate(ctx context.Context, template domain.ChannelTemplate) (domain.ChannelTemplate, error) {
@@ -178,7 +192,18 @@ func (r *channelTemplateRepository) GetTemplateVersionByID(ctx context.Context, 
 	if err != nil {
 		return domain.ChannelTemplateVersion{}, err
 	}
-	return r.toVersionDomain(version), nil
+	providers, err := r.dao.GetProvidersByVersionIDs(ctx, []int64{versionID})
+	if err != nil {
+		return domain.ChannelTemplateVersion{}, err
+	}
+	domainProviders := make([]domain.ChannelTemplateProvider, 0, len(providers))
+	for i := range providers {
+		domainProviders = append(domainProviders, r.toProviderDomain(providers[i]))
+	}
+
+	domainVersion := r.toVersionDomain(version)
+	domainVersion.Providers = domainProviders
+	return domainVersion, nil
 }
 
 // CreateTemplateVersion 创建模板版本
@@ -278,22 +303,40 @@ func (r *channelTemplateRepository) UpdateTemplateVersion(ctx context.Context, v
 	return r.dao.UpdateTemplateVersion(ctx, r.toVersionEntity(version))
 }
 
-func (r *channelTemplateRepository) BatchUpdateTemplateVersionAuditStatus(ctx context.Context, versions []domain.ChannelTemplateVersion) error {
-	return r.dao.BatchUpdateTemplateVersionAuditStatus(ctx, slice.Map(versions, func(_ int, src domain.ChannelTemplateVersion) dao.ChannelTemplateVersion {
+func (r *channelTemplateRepository) BatchUpdateTemplateVersionAuditInfo(ctx context.Context, versions []domain.ChannelTemplateVersion) error {
+	return r.dao.BatchUpdateTemplateVersionAuditInfo(ctx, slice.Map(versions, func(_ int, src domain.ChannelTemplateVersion) dao.ChannelTemplateVersion {
 		return r.toVersionEntity(src)
 	}))
 }
 
-func (r *channelTemplateRepository) GetProviderByRequestID(ctx context.Context, requestID string) (domain.ChannelTemplateProvider, error) {
-	provider, err := r.dao.GetProviderByRequestID(ctx, requestID)
-	if err != nil {
-		return domain.ChannelTemplateProvider{}, err
-	}
-	return r.toProviderDomain(provider), nil
+func (r *channelTemplateRepository) UpdateTemplateProviderAuditInfo(ctx context.Context, provider domain.ChannelTemplateProvider) error {
+	return r.dao.UpdateTemplateProviderAuditInfo(ctx, r.toProviderEntity(provider))
 }
 
-func (r *channelTemplateRepository) UpdateTemplateProvider(ctx context.Context, provider domain.ChannelTemplateProvider) error {
-	return r.dao.UpdateTemplateProvider(ctx, r.toProviderEntity(provider))
+func (r *channelTemplateRepository) BatchUpdateTemplateProvidersAuditInfo(ctx context.Context, providers []domain.ChannelTemplateProvider) error {
+	daoProviders := slice.Map(providers, func(_ int, src domain.ChannelTemplateProvider) dao.ChannelTemplateProvider {
+		return r.toProviderEntity(src)
+	})
+	return r.dao.BatchUpdateTemplateProvidersAuditInfo(ctx, daoProviders)
+}
+
+// GetPendingOrInReviewProviders 获取未审核或审核中的供应商关联
+func (r *channelTemplateRepository) GetPendingOrInReviewProviders(ctx context.Context, offset, limit int, utime int64) (providers []domain.ChannelTemplateProvider, total int64, err error) {
+	var daoProviders []dao.ChannelTemplateProvider
+
+	daoProviders, err = r.dao.GetPendingOrInReviewProviders(ctx, offset, limit, utime)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	total, err = r.dao.TotalPendingOrInReviewProviders(ctx, utime)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return slice.Map(daoProviders, func(_ int, src dao.ChannelTemplateProvider) domain.ChannelTemplateProvider {
+		return r.toProviderDomain(src)
+	}), total, nil
 }
 
 func (r *channelTemplateRepository) toTemplateDomain(daoTemplate dao.ChannelTemplate) domain.ChannelTemplate {

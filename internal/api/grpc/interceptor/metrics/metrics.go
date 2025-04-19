@@ -11,9 +11,21 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	// 分位数常量
+	percentile50 float64 = 0.5
+	percentile90 float64 = 0.9
+	percentile99 float64 = 0.99
+
+	// 误差边界常量
+	errorMargin50 float64 = 0.05
+	errorMargin90 float64 = 0.01
+	errorMargin99 float64 = 0.001
+)
+
 type Builder struct {
-	// apiDurationHistogram 跟踪 API 响应时间
-	apiDurationHistogram *prometheus.HistogramVec
+	// apiDurationSummary 跟踪 API 响应时间
+	apiDurationSummary *prometheus.SummaryVec
 	// requestCounter 跟踪请求总数
 	requestCounter *prometheus.CounterVec
 	// errorCounter 跟踪失败请求数
@@ -23,11 +35,15 @@ type Builder struct {
 // New 创建一个带有初始化指标的 Builder
 func New() *Builder {
 	return &Builder{
-		apiDurationHistogram: promauto.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "grpc_server_handling_seconds",
-				Help:    "Histogram of response latency (seconds) of gRPC requests.",
-				Buckets: prometheus.DefBuckets,
+		apiDurationSummary: promauto.NewSummaryVec(
+			prometheus.SummaryOpts{
+				Name: "grpc_server_handling_seconds",
+				Help: "Summary of response latency (seconds) of gRPC requests.",
+				Objectives: map[float64]float64{
+					percentile50: errorMargin50,
+					percentile90: errorMargin90,
+					percentile99: errorMargin99,
+				},
 			},
 			[]string{"method", "status"},
 		),
@@ -75,7 +91,7 @@ func (b *Builder) Build() grpc.UnaryServerInterceptor {
 		}
 
 		// 向 Prometheus 报告
-		b.apiDurationHistogram.WithLabelValues(
+		b.apiDurationSummary.WithLabelValues(
 			info.FullMethod,
 			statusCode,
 		).Observe(duration)

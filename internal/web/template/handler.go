@@ -1,9 +1,11 @@
 package template
 
 import (
+	"errors"
 	"log"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/errs"
 	templatesvc "gitee.com/flycash/notification-platform/internal/service/template/manage"
 	"github.com/ecodeclub/ekit/slice"
 	"github.com/ecodeclub/ginx"
@@ -25,7 +27,6 @@ func (h *Handler) PrivateRoutes(_ *gin.Engine) {
 }
 
 func (h *Handler) PublicRoutes(server *gin.Engine) {
-	log.Printf("invoked! PublicRoutes ???\n")
 	g := server.Group("/templates")
 	g.POST("/list", ginx.B[ListTemplatesReq](h.ListTemplates))
 	g.POST("/create", ginx.B[CreateTemplateReq](h.CreateTemplate))
@@ -144,11 +145,13 @@ func (h *Handler) UpdateTemplate(ctx *ginx.Context, req UpdateTemplateReq) (ginx
 	}
 
 	if err := h.svc.UpdateTemplate(ctx.Request.Context(), template); err != nil {
+
+		log.Printf("err = %#v\n", err)
 		return systemErrorResult, err
 	}
 
 	return ginx.Result{
-		Data: struct{}{},
+		Msg: "OK",
 	}, nil
 }
 
@@ -159,7 +162,7 @@ func (h *Handler) PublishTemplate(ctx *ginx.Context, req PublishTemplateReq) (gi
 	}
 
 	return ginx.Result{
-		Data: struct{}{},
+		Msg: "OK",
 	}, nil
 }
 
@@ -187,11 +190,13 @@ func (h *Handler) UpdateVersion(ctx *ginx.Context, req UpdateVersionReq) (ginx.R
 	}
 
 	if err := h.svc.UpdateVersion(ctx.Request.Context(), version); err != nil {
-		return systemErrorResult, err
+		if !errors.Is(err, errs.ErrTemplateVersionNotFound) {
+			return systemErrorResult, err
+		}
 	}
 
 	return ginx.Result{
-		Data: struct{}{},
+		Msg: "OK",
 	}, nil
 }
 
@@ -202,6 +207,6 @@ func (h *Handler) SubmitForInternalReview(ctx *ginx.Context, req SubmitForIntern
 	}
 
 	return ginx.Result{
-		Data: struct{}{},
+		Msg: "OK",
 	}, nil
 }

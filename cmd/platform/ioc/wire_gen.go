@@ -22,9 +22,11 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/notification/callback"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
 	"gitee.com/flycash/notification-platform/internal/service/provider/manage"
+	"gitee.com/flycash/notification-platform/internal/service/provider/metrics"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sequential"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms"
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
+	"gitee.com/flycash/notification-platform/internal/service/provider/tracing"
 	"gitee.com/flycash/notification-platform/internal/service/quota"
 	"gitee.com/flycash/notification-platform/internal/service/scheduler"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
@@ -37,37 +39,37 @@ import (
 // Injectors from wire.go:
 
 func InitGrpcServer() *ioc.App {
-	db := ioc.InitDB()
-	notificationDAO := dao.NewNotificationDAO(db)
+	v := ioc.InitDB()
+	notificationDAO := dao.NewNotificationDAO(v)
 	notificationRepository := repository.NewNotificationRepository(notificationDAO)
 	sonyflake := ioc.InitIDGenerator()
 	service := notification.NewNotificationService(notificationRepository, sonyflake)
-	channelTemplateDAO := dao.NewChannelTemplateDAO(db)
+	channelTemplateDAO := dao.NewChannelTemplateDAO(v)
 	channelTemplateRepository := repository.NewChannelTemplateRepository(channelTemplateDAO)
 	string2 := ioc.InitProviderEncryptKey()
-	providerDAO := dao.NewProviderDAO(db, string2)
+	providerDAO := dao.NewProviderDAO(v, string2)
 	providerRepository := repository.NewProviderRepository(providerDAO)
 	manageService := manage.NewProviderService(providerRepository)
 	auditService := audit.NewService()
-	v := newSMSClients(manageService)
-	channelTemplateService := manage2.NewChannelTemplateService(channelTemplateRepository, manageService, auditService, v)
-	businessConfigDAO := dao.NewBusinessConfigDAO(db)
+	v2 := newSMSClients(manageService)
+	channelTemplateService := manage2.NewChannelTemplateService(channelTemplateRepository, manageService, auditService, v2)
+	businessConfigDAO := dao.NewBusinessConfigDAO(v)
 	client := ioc.InitRedisClient()
 	cache := ioc.InitGoCache()
 	localCache := local.NewLocalCache(client, cache)
 	redisCache := redis.NewCache(client)
 	businessConfigRepository := repository.NewBusinessConfigRepository(businessConfigDAO, localCache, redisCache)
 	businessConfigService := config.NewBusinessConfigService(businessConfigRepository)
-	callbackLogDAO := dao.NewCallbackLogDAO(db)
+	callbackLogDAO := dao.NewCallbackLogDAO(v)
 	callbackLogRepository := repository.NewCallbackLogRepository(notificationRepository, callbackLogDAO)
 	callbackService := callback.NewService(businessConfigService, callbackLogRepository)
-	channel := newChannel(v, channelTemplateService)
-	notificationSender := sender.NewSender(notificationRepository, businessConfigService, callbackService, channel)
+	channel := newChannel(v2, channelTemplateService)
+	notificationSender := initSender(notificationRepository, businessConfigService, callbackService, channel)
 	immediateSendStrategy := sendstrategy.NewImmediateStrategy(notificationRepository, notificationSender)
 	defaultSendStrategy := sendstrategy.NewDefaultStrategy(notificationRepository, businessConfigService)
 	sendStrategy := sendstrategy.NewDispatcher(immediateSendStrategy, defaultSendStrategy)
 	sendService := notification.NewSendService(channelTemplateService, service, sonyflake, sendStrategy)
-	txNotificationDAO := dao.NewTxNotificationDAO(db)
+	txNotificationDAO := dao.NewTxNotificationDAO(v)
 	txNotificationRepository := repository.NewTxNotificationRepository(txNotificationDAO)
 	dlockClient := ioc.InitDistributedLock(client)
 	txNotificationService := notification.NewTxNotificationService(txNotificationRepository, businessConfigService, notificationRepository, dlockClient, notificationSender)
@@ -78,16 +80,16 @@ func InitGrpcServer() *ioc.App {
 	notificationScheduler := scheduler.NewScheduler(service, notificationSender, dlockClient)
 	sendingTimeoutTask := notification.NewSendingTimeoutTask(dlockClient, notificationRepository)
 	txCheckTask := notification.NewTxCheckTask(txNotificationRepository, businessConfigService, dlockClient)
-	v2 := ioc.InitTasks(asyncRequestResultCallbackTask, notificationScheduler, sendingTimeoutTask, txCheckTask)
-	quotaDAO := dao.NewQuotaDAO(db)
+	v3 := ioc.InitTasks(asyncRequestResultCallbackTask, notificationScheduler, sendingTimeoutTask, txCheckTask)
+	quotaDAO := dao.NewQuotaDAO(v)
 	quotaRepository := repository.NewQuotaRepository(quotaDAO)
 	quotaService := quota.NewService(quotaRepository)
 	monthlyResetCron := quota.NewQuotaMonthlyResetCron(businessConfigRepository, quotaService)
-	v3 := ioc.Crons(monthlyResetCron, businessConfigRepository)
+	v4 := ioc.Crons(monthlyResetCron, businessConfigRepository)
 	app := &ioc.App{
 		GrpcServer: egrpcComponent,
-		Tasks:      v2,
-		Crons:      v3,
+		Tasks:      v3,
+		Crons:      v4,
 	}
 	return app
 }
@@ -101,7 +103,8 @@ var (
 	txNotificationSvcSet = wire.NewSet(notification.NewTxNotificationService, repository.NewTxNotificationRepository, dao.NewTxNotificationDAO, notification.NewTxCheckTask)
 	senderSvcSet         = wire.NewSet(
 		newSMSClients,
-		newChannel, sender.NewSender,
+		newChannel,
+		initSender,
 	)
 	sendNotificationSvcSet = wire.NewSet(notification.NewSendService, sendstrategy.NewDispatcher, sendstrategy.NewImmediateStrategy, sendstrategy.NewDefaultStrategy)
 	callbackSvcSet         = wire.NewSet(callback.NewService, repository.NewCallbackLogRepository, dao.NewCallbackLogDAO, callback.NewAsyncRequestResultCallbackTask)
@@ -115,7 +118,7 @@ func newChannel(
 	clients map[string]client.Client,
 	templateSvc manage2.ChannelTemplateService,
 ) channel.Channel {
-	return channel.NewDispatcher(map[domain.Channel]channel.Channel{domain.ChannelSMS: channel.NewSMSChannel(newSMSSelectorBuilder(clients, templateSvc))})
+	return channel.NewDispatcher(map[domain.Channel]channel.Channel{domain.ChannelEmail: channel.NewSMSChannel(newMockSMSSelectorBuilder())})
 }
 
 func newSMSSelectorBuilder(
@@ -162,4 +165,16 @@ func newSMSClients(providerSvc manage.Service) map[string]client.Client {
 		}
 	}
 	return clients
+}
+
+func newMockSMSSelectorBuilder() *sequential.SelectorBuilder {
+	return sequential.NewSelectorBuilder([]provider.Provider{metrics.NewProvider("ali", tracing.NewProvider(provider.NewMockProvider()))})
+}
+
+func initSender(repo repository.NotificationRepository,
+	configSvc config.BusinessConfigService,
+	callbackSvc callback.Service, channel2 channel.Channel,
+) sender.NotificationSender {
+	s := sender.NewSender(repo, configSvc, callbackSvc, channel2)
+	return sender.NewTracingSender(sender.NewMetricsSender(s))
 }
