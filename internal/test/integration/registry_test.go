@@ -1,3 +1,5 @@
+//go:build e2e
+
 package integration
 
 import (
@@ -14,6 +16,7 @@ import (
 	"gitee.com/flycash/notification-platform/internal/pkg/registry/etcd"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/ego-component/eetcd"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
@@ -46,7 +49,7 @@ func (s *RegistryTestSuite) TestGroup() {
 
 	// 创建etcd注册中心实例
 	etcdRegistry, err := etcd.NewRegistry(s.etcdClient.Client)
-	s.Require().NoError(err)
+	require.NoError(t, err)
 	defer etcdRegistry.Close()
 
 	// 定义超时时间
@@ -95,10 +98,7 @@ func (s *RegistryTestSuite) TestGroup() {
 	helloworldv1.RegisterGreeterServiceServer(srv.Server, gs)
 
 	go func() {
-		err := srv.Start("127.0.0.1:0")
-		if err != nil {
-			t.Logf("启动服务失败: %v", err)
-		}
+		_ = srv.Start("127.0.0.1:0")
 	}()
 
 	// 等待服务开始监听
@@ -125,8 +125,8 @@ func (s *RegistryTestSuite) TestGroup() {
 
 	// 列出所有服务，确认注册成功
 	services, err := etcdRegistry.ListServices(context.Background(), "greeter")
-	s.Require().NoError(err)
-	s.Require().Equal(4, len(services), "应该有4个服务实例注册成功")
+	require.NoError(t, err)
+	require.Equal(t, 4, len(services), "应该有4个服务实例注册成功")
 
 	// 创建客户端
 	c := NewClient(
@@ -137,7 +137,7 @@ func (s *RegistryTestSuite) TestGroup() {
 
 	// 连接服务
 	conn, err := c.Dial("greeter")
-	s.Require().NoError(err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// 创建客户端
@@ -159,7 +159,7 @@ func (s *RegistryTestSuite) TestGroup() {
 			&helloworldv1.SayHelloRequest{Name: fmt.Sprintf("test-%d", i)},
 		)
 		reqCancel()
-		s.Require().NoError(err)
+		require.NoError(t, err)
 
 		// 验证响应包含了服务器地址和组信息
 		s.Contains(resp.Message, "group=core", "响应应该来自core组服务器")
