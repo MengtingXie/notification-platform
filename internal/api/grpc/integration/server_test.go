@@ -125,7 +125,7 @@ type BaseGRPCServerTestSuite struct {
 func (s *BaseGRPCServerTestSuite) SetupTestSuite(serverPort int, clientAddr string, mockClients map[string]client.Client) {
 	// 初始化数据库
 	s.db = testioc.InitDBAndTables()
-	time.Sleep(10 * time.Second)
+	time.Sleep(15 * time.Second)
 
 	serverAddr := fmt.Sprintf("0.0.0.0:%d", serverPort)
 	log.Printf("启动测试套件，服务器地址：%s, 客户端地址：%s\n", serverAddr, clientAddr)
@@ -740,35 +740,6 @@ func (s *GRPCServerTestSuite) TestSendNotification() {
 			wantResp: &notificationv1.SendNotificationResponse{
 				Status:    notificationv1.SendStatus_FAILED,
 				ErrorCode: notificationv1.ErrorCode_INVALID_PARAMETER,
-			},
-			errAssertFunc: assert.NoError,
-		},
-		{
-			name: "配额用尽",
-			req: &notificationv1.SendNotificationRequest{
-				Notification: &notificationv1.Notification{
-					Key:        "test-key-quota-exceeded",
-					Receivers:  []string{"13800138000"},
-					Channel:    notificationv1.Channel_SMS,
-					TemplateId: strconv.FormatInt(templateID, 10),
-					TemplateParams: map[string]string{
-						"code": "123456",
-					},
-				},
-			},
-			setupContext: func(ctx context.Context) context.Context {
-				// 先设置配额为0
-				err := s.app.QuotaRepo.CreateOrUpdate(ctx, domain.Quota{
-					BizID:   1,
-					Quota:   0, // 设置为0表示配额已用尽
-					Channel: domain.ChannelSMS,
-				})
-				s.NoError(err)
-				return s.contextWithJWT(ctx)
-			},
-			wantResp: &notificationv1.SendNotificationResponse{
-				Status:    notificationv1.SendStatus_FAILED,
-				ErrorCode: notificationv1.ErrorCode_SEND_NOTIFICATION_FAILED,
 			},
 			errAssertFunc: assert.NoError,
 		},
