@@ -23,12 +23,11 @@ type Provider struct {
 	Name    string `gorm:"type:VARCHAR(64);NOT NULL;uniqueIndex:idx_name_channel;comment:'供应商名称'"`
 	Channel string `gorm:"type:ENUM('SMS','EMAIL','IN_APP');NOT NULL;uniqueIndex:idx_name_channel;comment:'支持的渠道'"`
 
-	Endpoint       string `gorm:"type:VARCHAR(255);NOT NULL;comment:'API入口地址'"`
-	RegionID       string
-	APIKey         string `gorm:"type:VARCHAR(255);NOT NULL;comment:'API密钥，明文'"`
-	APISecret      string `gorm:"type:VARCHAR(512);NOT NULL;comment:'API密钥,加密'"`
-	APPID          string `gorm:"type:VARCHAR(512);comment:'应用ID，仅腾讯云使用'"`
-	TemplateRegExp string `gorm:"type:VARCHAR(512);comment:'模版替换正则，仅腾讯云使用'"`
+	Endpoint  string `gorm:"type:VARCHAR(255);NOT NULL;comment:'API入口地址'"`
+	RegionID  string
+	APIKey    string `gorm:"type:VARCHAR(255);NOT NULL;comment:'API密钥，明文'"`
+	APISecret string `gorm:"type:VARCHAR(512);NOT NULL;comment:'API密钥,加密'"`
+	APPID     string `gorm:"type:VARCHAR(512);comment:'应用ID，仅腾讯云使用'"`
 
 	Weight           int    `gorm:"type:INT;NOT NULL;comment:'权重'"`
 	QPSLimit         int    `gorm:"type:INT;NOT NULL;comment:'每秒请求数限制'"`

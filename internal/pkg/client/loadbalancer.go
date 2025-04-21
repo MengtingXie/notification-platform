@@ -2,21 +2,23 @@ package client
 
 import (
 	"context"
+	"errors"
 	"io"
 	"sync"
 
-	"github.com/pkg/errors"
+	"github.com/ecodeclub/ekit/slice"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 )
 
-type RequestTypeKey string
-
 const (
-	RequestType    RequestTypeKey = "requestType"
-	readWeightStr  RequestTypeKey = "read_weight"
-	writeWeightStr RequestTypeKey = "write_weight"
+	RequestType    = "requestType"
+	readWeightStr  = "read_weight"
+	writeWeightStr = "write_weight"
+	groupStr       = "group"
 )
+
+type groupKey struct{}
 
 type rwServiceNode struct {
 	mutex                *sync.RWMutex
@@ -27,6 +29,7 @@ type rwServiceNode struct {
 	writeWeight          int32
 	curWriteWeight       int32
 	efficientWriteWeight int32
+	group                string
 }
 
 type RWBalancer struct {
@@ -38,11 +41,17 @@ func (r *RWBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
 
+	// 过滤出候选节点
+	candidates := slice.FilterMap(r.nodes, func(_ int, src *rwServiceNode) (*rwServiceNode, bool) {
+		return src, r.getGroup(info.Ctx) == src.group
+	})
+
 	var totalWeight int32
 	var selectedNode *rwServiceNode
 	ctx := info.Ctx
+
 	iswrite := r.isWrite(ctx)
-	for _, node := range r.nodes {
+	for _, node := range candidates {
 		node.mutex.Lock()
 		if iswrite {
 			totalWeight += node.efficientWriteWeight
@@ -106,25 +115,24 @@ func (r *RWBalancer) isWrite(ctx context.Context) bool {
 	return vv == 1
 }
 
-type WeightBalancerBuilder struct {
-	previousNodes map[balancer.SubConn]*rwServiceNode
-	mu            sync.Mutex
+func (r *RWBalancer) getGroup(ctx context.Context) string {
+	val := ctx.Value(groupKey{})
+	if val == nil {
+		return ""
+	}
+	vv, ok := val.(string)
+	if !ok {
+		return ""
+	}
+	return vv
 }
 
+type WeightBalancerBuilder struct{}
+
 func (w *WeightBalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	// Initialize previousNodes map if it's nil
-	if w.previousNodes == nil {
-		w.previousNodes = make(map[balancer.SubConn]*rwServiceNode)
-	}
-
-	// Create a new map for the current nodes
-	newNodes := make([]*rwServiceNode, 0, len(info.ReadySCs))
-
-	// Process all current subconnections
+	nodes := make([]*rwServiceNode, 0, len(info.ReadySCs))
 	for sub, subInfo := range info.ReadySCs {
+
 		readWeight, ok := subInfo.Address.Attributes.Value(readWeightStr).(int32)
 		if !ok {
 			continue
@@ -134,38 +142,29 @@ func (w *WeightBalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker
 			continue
 		}
 
-		// Check if this node already exists in previous nodes
-		if existingNode, found := w.previousNodes[sub]; found {
-			// Keep the node with its existing state
-			existingNode.conn = sub // Update connection just in case
-			newNodes = append(newNodes, existingNode)
-		} else {
-			// Create a new node with initial weights
-			newNode := &rwServiceNode{
-				mutex:                &sync.RWMutex{},
-				conn:                 sub,
-				readWeight:           readWeight,
-				curReadWeight:        readWeight,
-				efficientReadWeight:  readWeight,
-				writeWeight:          writeWeight,
-				curWriteWeight:       writeWeight,
-				efficientWriteWeight: writeWeight,
-			}
-			newNodes = append(newNodes, newNode)
-			w.previousNodes[sub] = newNode
+		group, ok := subInfo.Address.Attributes.Value(groupStr).(string)
+		if !ok {
+			continue
 		}
-	}
 
-	// Create a new map for current nodes to replace the previous one
-	currentNodes := make(map[balancer.SubConn]*rwServiceNode)
-	for _, node := range newNodes {
-		currentNodes[node.conn] = node
+		nodes = append(nodes, &rwServiceNode{
+			mutex:                &sync.RWMutex{},
+			conn:                 sub,
+			readWeight:           readWeight,
+			curReadWeight:        readWeight,
+			efficientReadWeight:  readWeight,
+			writeWeight:          writeWeight,
+			curWriteWeight:       writeWeight,
+			efficientWriteWeight: writeWeight,
+			group:                group,
+		})
 	}
-
-	// Replace the previous nodes with the current ones
-	w.previousNodes = currentNodes
 
 	return &RWBalancer{
-		nodes: newNodes,
+		nodes: nodes,
 	}
+}
+
+func WithGroup(ctx context.Context, group string) context.Context {
+	return context.WithValue(ctx, groupKey{}, group)
 }

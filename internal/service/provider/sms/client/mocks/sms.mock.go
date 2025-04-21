@@ -40,6 +40,45 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 	return m.recorder
 }
 
+// BatchQueryTemplateStatus mocks base method.
+func (m *MockClient) BatchQueryTemplateStatus(req client.BatchQueryTemplateStatusReq) (client.BatchQueryTemplateStatusResp, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BatchQueryTemplateStatus", req)
+	ret0, _ := ret[0].(client.BatchQueryTemplateStatusResp)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BatchQueryTemplateStatus indicates an expected call of BatchQueryTemplateStatus.
+func (mr *MockClientMockRecorder) BatchQueryTemplateStatus(req any) *MockClientBatchQueryTemplateStatusCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchQueryTemplateStatus", reflect.TypeOf((*MockClient)(nil).BatchQueryTemplateStatus), req)
+	return &MockClientBatchQueryTemplateStatusCall{Call: call}
+}
+
+// MockClientBatchQueryTemplateStatusCall wrap *gomock.Call
+type MockClientBatchQueryTemplateStatusCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockClientBatchQueryTemplateStatusCall) Return(arg0 client.BatchQueryTemplateStatusResp, arg1 error) *MockClientBatchQueryTemplateStatusCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockClientBatchQueryTemplateStatusCall) Do(f func(client.BatchQueryTemplateStatusReq) (client.BatchQueryTemplateStatusResp, error)) *MockClientBatchQueryTemplateStatusCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockClientBatchQueryTemplateStatusCall) DoAndReturn(f func(client.BatchQueryTemplateStatusReq) (client.BatchQueryTemplateStatusResp, error)) *MockClientBatchQueryTemplateStatusCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // CreateTemplate mocks base method.
 func (m *MockClient) CreateTemplate(req client.CreateTemplateReq) (client.CreateTemplateResp, error) {
 	m.ctrl.T.Helper()
@@ -75,45 +114,6 @@ func (c *MockClientCreateTemplateCall) Do(f func(client.CreateTemplateReq) (clie
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockClientCreateTemplateCall) DoAndReturn(f func(client.CreateTemplateReq) (client.CreateTemplateResp, error)) *MockClientCreateTemplateCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// QueryTemplateStatus mocks base method.
-func (m *MockClient) QueryTemplateStatus(req client.QueryTemplateStatusReq) (client.QueryTemplateStatusResp, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryTemplateStatus", req)
-	ret0, _ := ret[0].(client.QueryTemplateStatusResp)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// QueryTemplateStatus indicates an expected call of QueryTemplateStatus.
-func (mr *MockClientMockRecorder) QueryTemplateStatus(req any) *MockClientQueryTemplateStatusCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryTemplateStatus", reflect.TypeOf((*MockClient)(nil).QueryTemplateStatus), req)
-	return &MockClientQueryTemplateStatusCall{Call: call}
-}
-
-// MockClientQueryTemplateStatusCall wrap *gomock.Call
-type MockClientQueryTemplateStatusCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockClientQueryTemplateStatusCall) Return(arg0 client.QueryTemplateStatusResp, arg1 error) *MockClientQueryTemplateStatusCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockClientQueryTemplateStatusCall) Do(f func(client.QueryTemplateStatusReq) (client.QueryTemplateStatusResp, error)) *MockClientQueryTemplateStatusCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockClientQueryTemplateStatusCall) DoAndReturn(f func(client.QueryTemplateStatusReq) (client.QueryTemplateStatusResp, error)) *MockClientQueryTemplateStatusCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

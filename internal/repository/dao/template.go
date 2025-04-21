@@ -63,9 +63,9 @@ type ChannelTemplateProvider struct {
 	ProviderID               int64  `gorm:"type:BIGINT;NOT NULL;uniqueIndex:idx_template_version_provider,priority:3;comment:'供应商ID'"`
 	ProviderName             string `gorm:"type:VARCHAR(64);NOT NULL;uniqueIndex:idx_tmpl_ver_name_chan,priority:3;comment:'供应商名称'"`
 	ProviderChannel          string `gorm:"type:ENUM('SMS','EMAIL','IN_APP');NOT NULL;uniqueIndex:idx_tmpl_ver_name_chan,priority:4;comment:'渠道类型'"`
-	RequestID                string `gorm:"type:VARCHAR(256);comment:'审核请求在供应商侧的ID，用于排查问题'"`
+	RequestID                string `gorm:"type:VARCHAR(256);index:idx_request_id;comment:'审核请求在供应商侧的ID，用于排查问题'"`
 	ProviderTemplateID       string `gorm:"type:VARCHAR(256);comment:'当前版本模版在供应商侧的ID，审核通过后才会有值'"`
-	AuditStatus              string `gorm:"type:ENUM('PENDING','IN_REVIEW','REJECTED','APPROVED');NOT NULL;DEFAULT:'PENDING';comment:'供应商侧模版审核状态，PENDING表示未提交审核；IN_REVIEW表示已提交审核；APPROVED表示审核通过；REJECTED表示审核未通过'"`
+	AuditStatus              string `gorm:"type:ENUM('PENDING','IN_REVIEW','REJECTED','APPROVED');NOT NULL;DEFAULT:'PENDING';index:idx_audit_status;comment:'供应商侧模版审核状态，PENDING表示未提交审核；IN_REVIEW表示已提交审核；APPROVED表示审核通过；REJECTED表示审核未通过'"`
 	RejectReason             string `gorm:"type:VARCHAR(512);comment:'供应商侧拒绝原因'"`
 	LastReviewSubmissionTime int64  `gorm:"comment:'上一次提交审核时间'"`
 	Ctime                    int64
@@ -77,68 +77,76 @@ func (ChannelTemplateProvider) TableName() string {
 	return "channel_template_providers"
 }
 
-// ChannelTemplateDAO 模板数据访问接口
+// ChannelTemplateDAO 提供模板数据访问对象接口
 type ChannelTemplateDAO interface {
-	// 模版
+	// 模版相关方法
 
-	// GetTemplatesByOwner DONE
+	// GetTemplatesByOwner 获取指定所有者的模板列表
 	GetTemplatesByOwner(ctx context.Context, ownerID int64, ownerType string) ([]ChannelTemplate, error)
 
-	// GetTemplateByID DONE
+	// GetTemplateByID 根据ID获取模板
 	GetTemplateByID(ctx context.Context, id int64) (ChannelTemplate, error)
 
-	// CreateTemplate DONE
+	// CreateTemplate 创建模板
 	CreateTemplate(ctx context.Context, template ChannelTemplate) (ChannelTemplate, error)
 
-	// UpdateTemplate DONE
+	// UpdateTemplate 更新模板
 	UpdateTemplate(ctx context.Context, template ChannelTemplate) error
 
-	// SetTemplateActiveVersion DONE
+	// SetTemplateActiveVersion 设置模板的活跃版本
 	SetTemplateActiveVersion(ctx context.Context, templateID, versionID int64) error
 
-	// 模版版本
+	// 模版版本相关方法
 
-	// GetTemplateVersionsByTemplateIDs DONE
+	// GetTemplateVersionsByTemplateIDs 根据模板ID列表获取对应的版本列表
 	GetTemplateVersionsByTemplateIDs(ctx context.Context, templateIDs []int64) ([]ChannelTemplateVersion, error)
 
-	// GetTemplateVersionByID DONE
+	// GetTemplateVersionByID 根据ID获取模板版本
 	GetTemplateVersionByID(ctx context.Context, versionID int64) (ChannelTemplateVersion, error)
 
-	// CreateTemplateVersion DONE
+	// CreateTemplateVersion 创建模板版本
 	CreateTemplateVersion(ctx context.Context, version ChannelTemplateVersion) (ChannelTemplateVersion, error)
 
+	// ForkTemplateVersion 基于已有版本创建新版本
 	ForkTemplateVersion(ctx context.Context, versionID int64) (ChannelTemplateVersion, error)
 
-	// 供应商关联
+	// 供应商关联相关方法
 
-	// GetProvidersByVersionIDs DONE
+	// GetProvidersByVersionIDs 根据版本ID列表获取供应商列表
 	GetProvidersByVersionIDs(ctx context.Context, versionIDs []int64) ([]ChannelTemplateProvider, error)
 
-	// GetProviderByNameAndChannel DONE
+	// GetProviderByNameAndChannel 根据名称和渠道获取供应商
 	GetProviderByNameAndChannel(ctx context.Context, templateID, versionID int64, providerName string, channel string) ([]ChannelTemplateProvider, error)
 
-	// BatchCreateTemplateProviders DONE
+	// BatchCreateTemplateProviders 批量创建模板供应商关联
 	BatchCreateTemplateProviders(ctx context.Context, providers []ChannelTemplateProvider) ([]ChannelTemplateProvider, error)
 
-	// GetApprovedProvidersByTemplateIDAndVersionID DONE
+	// GetApprovedProvidersByTemplateIDAndVersionID 获取已审核通过的供应商列表
 	GetApprovedProvidersByTemplateIDAndVersionID(ctx context.Context, templateID, versionID int64) ([]ChannelTemplateProvider, error)
 
+	// GetProvidersByTemplateIDAndVersionID 获取模板和版本关联的所有供应商
 	GetProvidersByTemplateIDAndVersionID(ctx context.Context, templateID, versionID int64) ([]ChannelTemplateProvider, error)
 
 	// UpdateTemplateVersion 更新模板版本信息
 	UpdateTemplateVersion(ctx context.Context, version ChannelTemplateVersion) error
 
-	// BatchUpdateTemplateVersionAuditStatus 更新模板版本审核状态
-	BatchUpdateTemplateVersionAuditStatus(ctx context.Context, versions []ChannelTemplateVersion) error
+	// BatchUpdateTemplateVersionAuditInfo 批量更新模板版本审核信息
+	BatchUpdateTemplateVersionAuditInfo(ctx context.Context, versions []ChannelTemplateVersion) error
 
-	// GetProviderByRequestID 根据请求ID获取供应商关联
-	GetProviderByRequestID(ctx context.Context, requestID string) (ChannelTemplateProvider, error)
+	// UpdateTemplateProviderAuditInfo 更新模板供应商审核信息
+	UpdateTemplateProviderAuditInfo(ctx context.Context, provider ChannelTemplateProvider) error
 
-	// UpdateTemplateProvider 更新模板供应商关联
-	UpdateTemplateProvider(ctx context.Context, provider ChannelTemplateProvider) error
+	// BatchUpdateTemplateProvidersAuditInfo 批量更新模板供应商审核信息
+	BatchUpdateTemplateProvidersAuditInfo(ctx context.Context, providers []ChannelTemplateProvider) error
+
+	// GetPendingOrInReviewProviders 获取未审核或审核中的供应商关联
+	GetPendingOrInReviewProviders(ctx context.Context, offset, limit int, utime int64) ([]ChannelTemplateProvider, error)
+
+	// TotalPendingOrInReviewProviders 统计未审核或审核中的供应商关联总数
+	TotalPendingOrInReviewProviders(ctx context.Context, utime int64) (int64, error)
 }
 
-// channelTemplateDAO DAO层实现
+// channelTemplateDAO 实现了ChannelTemplateDAO接口，提供对模板数据的数据库访问实现
 type channelTemplateDAO struct {
 	db *egorm.Component
 }
@@ -401,8 +409,8 @@ func (d *channelTemplateDAO) UpdateTemplateVersion(ctx context.Context, version 
 		Updates(updateData).Error
 }
 
-// BatchUpdateTemplateVersionAuditStatus 更新模板版本审核状态
-func (d *channelTemplateDAO) BatchUpdateTemplateVersionAuditStatus(ctx context.Context, versions []ChannelTemplateVersion) error {
+// BatchUpdateTemplateVersionAuditInfo 更新模板版本审核信息
+func (d *channelTemplateDAO) BatchUpdateTemplateVersionAuditInfo(ctx context.Context, versions []ChannelTemplateVersion) error {
 	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for i := range versions {
 			updateData := map[string]any{
@@ -438,21 +446,8 @@ func (d *channelTemplateDAO) BatchUpdateTemplateVersionAuditStatus(ctx context.C
 	})
 }
 
-// GetProviderByRequestID 根据请求ID获取供应商关联
-func (d *channelTemplateDAO) GetProviderByRequestID(ctx context.Context, requestID string) (ChannelTemplateProvider, error) {
-	var provider ChannelTemplateProvider
-	err := d.db.WithContext(ctx).Where("request_id = ?", requestID).First(&provider).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ChannelTemplateProvider{}, fmt.Errorf("%w", errs.ErrProviderNotFound)
-		}
-		return ChannelTemplateProvider{}, err
-	}
-	return provider, nil
-}
-
-// UpdateTemplateProvider 更新模板供应商关联
-func (d *channelTemplateDAO) UpdateTemplateProvider(ctx context.Context, provider ChannelTemplateProvider) error {
+// UpdateTemplateProviderAuditInfo 更新模板供应商审核信息
+func (d *channelTemplateDAO) UpdateTemplateProviderAuditInfo(ctx context.Context, provider ChannelTemplateProvider) error {
 	// 构建更新数据
 	updateData := map[string]any{
 		"utime": time.Now().Unix(),
@@ -478,4 +473,71 @@ func (d *channelTemplateDAO) UpdateTemplateProvider(ctx context.Context, provide
 	return d.db.WithContext(ctx).Model(&ChannelTemplateProvider{}).
 		Where("id = ?", provider.ID).
 		Updates(updateData).Error
+}
+
+// BatchUpdateTemplateProvidersAuditInfo 批量更新模板供应商审核信息
+func (d *channelTemplateDAO) BatchUpdateTemplateProvidersAuditInfo(ctx context.Context, providers []ChannelTemplateProvider) error {
+	if len(providers) == 0 {
+		return nil
+	}
+
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for i := range providers {
+			// 构建更新数据
+			updateData := map[string]any{
+				"utime": time.Now().Unix(),
+			}
+
+			// 有条件地添加其他字段
+			if providers[i].RequestID != "" {
+				updateData["request_id"] = providers[i].RequestID
+			}
+			if providers[i].ProviderTemplateID != "" {
+				updateData["provider_template_id"] = providers[i].ProviderTemplateID
+			}
+			if providers[i].AuditStatus != "" {
+				updateData["audit_status"] = providers[i].AuditStatus
+			}
+			if providers[i].RejectReason != "" {
+				updateData["reject_reason"] = providers[i].RejectReason
+			}
+			if providers[i].LastReviewSubmissionTime > 0 {
+				updateData["last_review_submission_time"] = providers[i].LastReviewSubmissionTime
+			}
+
+			err := tx.Model(&ChannelTemplateProvider{}).
+				Where("id = ?", providers[i].ID).
+				Updates(updateData).Error
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// GetPendingOrInReviewProviders 获取未审核或审核中的供应商关联
+func (d *channelTemplateDAO) GetPendingOrInReviewProviders(ctx context.Context, offset, limit int, utime int64) ([]ChannelTemplateProvider, error) {
+	var providers []ChannelTemplateProvider
+	err := d.db.WithContext(ctx).
+		Where("(audit_status = ? OR audit_status = ?) AND utime <= ?",
+			domain.AuditStatusPending.String(),
+			domain.AuditStatusInReview.String(),
+			utime).
+		Offset(offset).
+		Limit(limit).
+		Find(&providers).Error
+	return providers, err
+}
+
+// TotalPendingOrInReviewProviders 统计未审核或审核中的供应商关联总数
+func (d *channelTemplateDAO) TotalPendingOrInReviewProviders(ctx context.Context, utime int64) (int64, error) {
+	var res int64
+	err := d.db.WithContext(ctx).Model(&ChannelTemplateProvider{}).
+		Where("(audit_status = ? OR audit_status = ?) AND utime <= ?",
+			domain.AuditStatusPending.String(),
+			domain.AuditStatusInReview.String(),
+			utime).
+		Count(&res).Error
+	return res, err
 }

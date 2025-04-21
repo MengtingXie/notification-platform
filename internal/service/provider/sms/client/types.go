@@ -2,6 +2,8 @@ package client
 
 import (
 	"errors"
+
+	"gitee.com/flycash/notification-platform/internal/domain"
 )
 
 const (
@@ -22,6 +24,23 @@ type (
 	TemplateType int32
 )
 
+type SendStatus int
+
+const (
+	TemplateTypeInternational TemplateType = 0 // 国际/港澳台消息 仅阿里云使用
+	TemplateTypeMarketing     TemplateType = 1 // 营销短信
+	TemplateTypeNotification  TemplateType = 2 // 通知短信
+	TemplateTypeVerification  TemplateType = 3 // 验证码
+
+	AuditStatusPending  AuditStatus = 0 // 审核中
+	AuditStatusApproved AuditStatus = 1 // 审核通过
+	AuditStatusRejected AuditStatus = 2 // 审核拒绝
+
+	SendStatusWaiting SendStatus = 1 // 等待回执
+	SendStatusSuccess SendStatus = 3 // 发送成功
+	SendStatusFailed  SendStatus = 2 // 发送失败
+)
+
 func (a AuditStatus) IsPending() bool {
 	return a == AuditStatusPending
 }
@@ -34,21 +53,18 @@ func (a AuditStatus) IsRejected() bool {
 	return a == AuditStatusRejected
 }
 
-type SendStatus int
-
-const (
-	TemplateTypeMarketing    TemplateType = 1 // 营销短信
-	TemplateTypeNotification TemplateType = 2 // 通知短信
-	TemplateTypeVerification TemplateType = 3 // 验证码
-
-	AuditStatusPending  AuditStatus = 0 // 审核中
-	AuditStatusApproved AuditStatus = 1 // 审核通过
-	AuditStatusRejected AuditStatus = 2 // 审核拒绝
-
-	SendStatusWaiting SendStatus = 1 // 等待回执
-	SendStatusSuccess SendStatus = 3 // 发送成功
-	SendStatusFailed  SendStatus = 2 // 发送失败
-)
+func (a AuditStatus) ToDomain() domain.AuditStatus {
+	switch a {
+	case AuditStatusPending:
+		return domain.AuditStatusInReview
+	case AuditStatusApproved:
+		return domain.AuditStatusApproved
+	case AuditStatusRejected:
+		return domain.AuditStatusRejected
+	default:
+		return domain.AuditStatusInReview
+	}
+}
 
 // Client 短信客户端接口 (抽象)
 //
@@ -56,8 +72,8 @@ const (
 type Client interface {
 	// CreateTemplate 创建模板
 	CreateTemplate(req CreateTemplateReq) (CreateTemplateResp, error)
-	// QueryTemplateStatus 查询模板状态
-	QueryTemplateStatus(req QueryTemplateStatusReq) (QueryTemplateStatusResp, error)
+	// BatchQueryTemplateStatus 批量查询模板状态
+	BatchQueryTemplateStatus(req BatchQueryTemplateStatusReq) (BatchQueryTemplateStatusResp, error)
 	// Send 发送短信
 	Send(req SendReq) (SendResp, error)
 }
@@ -76,12 +92,17 @@ type CreateTemplateResp struct {
 	TemplateID string // 模板 ID, 阿里云、腾讯云共用 (阿里云返回 TemplateCode, 腾讯云返回处理过的 TemplateID)
 }
 
-// QueryTemplateStatusReq 查询短信模板状态请求参数
-type QueryTemplateStatusReq struct {
-	TemplateID string // 模板 ID, 阿里云、腾讯云共用
+// BatchQueryTemplateStatusReq 批量查询短信模板状态请求参数
+type BatchQueryTemplateStatusReq struct {
+	TemplateIDs []string // 模板 ID, 阿里云、腾讯云共用
 }
 
-// QueryTemplateStatusResp 查询短信模板状态响应参数
+// BatchQueryTemplateStatusResp 批量查询短信模板状态响应参数
+type BatchQueryTemplateStatusResp struct {
+	Results map[string]QueryTemplateStatusResp // 键是模版ID，值是每个模版对应的响应
+}
+
+// QueryTemplateStatusResp 单个模版查询状态响应
 type QueryTemplateStatusResp struct {
 	RequestID   string      // 请求 ID,   阿里云、腾讯云共用
 	TemplateID  string      // 模板 ID, 阿里云、腾讯云共用

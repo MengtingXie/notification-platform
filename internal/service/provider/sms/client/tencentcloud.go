@@ -64,7 +64,7 @@ func (t *TencentCloudSMS) CreateTemplate(req CreateTemplateReq) (CreateTemplateR
 	}, nil
 }
 
-func (t *TencentCloudSMS) QueryTemplateStatus(req QueryTemplateStatusReq) (QueryTemplateStatusResp, error) {
+func (t *TencentCloudSMS) BatchQueryTemplateStatus(req BatchQueryTemplateStatusReq) (BatchQueryTemplateStatusResp, error) {
 	// https://cloud.tencent.com/document/product/382/52067
 
 	request := sms.NewDescribeSmsTemplateListRequest()
@@ -72,26 +72,38 @@ func (t *TencentCloudSMS) QueryTemplateStatus(req QueryTemplateStatusReq) (Query
 	international := uint64(0) // 默认国内短信
 	request.International = &international
 
-	templateID, err := strconv.ParseUint(req.TemplateID, 10, 64)
+	request.TemplateIdSet = make([]*uint64, len(req.TemplateIDs))
+
+	for i := range req.TemplateIDs {
+		templateID, err := strconv.ParseUint(req.TemplateIDs[i], 10, 64)
+		if err != nil {
+			return BatchQueryTemplateStatusResp{}, fmt.Errorf("%w: %w", ErrInvalidParameter, err)
+		}
+		request.TemplateIdSet = append(request.TemplateIdSet, &templateID)
+	}
+
+	r, err := t.client.DescribeSmsTemplateList(request)
 	if err != nil {
-		return QueryTemplateStatusResp{}, fmt.Errorf("%w: %w", ErrInvalidParameter, err)
-	}
-	request.TemplateIdSet = []*uint64{&templateID}
-
-	response, err := t.client.DescribeSmsTemplateList(request)
-	if err != nil {
-		return QueryTemplateStatusResp{}, fmt.Errorf("%w: %w", ErrQueryTemplateStatus, err)
+		return BatchQueryTemplateStatusResp{}, fmt.Errorf("%w: %w", ErrQueryTemplateStatus, err)
 	}
 
-	if len(response.Response.DescribeTemplateStatusSet) == 0 {
-		return QueryTemplateStatusResp{}, fmt.Errorf("%w: 模板未找到", ErrQueryTemplateStatus)
+	if len(r.Response.DescribeTemplateStatusSet) == 0 {
+		return BatchQueryTemplateStatusResp{}, fmt.Errorf("%w: 模板未找到", ErrQueryTemplateStatus)
 	}
 
-	return QueryTemplateStatusResp{
-		RequestID:   *response.Response.RequestId,
-		TemplateID:  strconv.FormatInt(int64(*response.Response.DescribeTemplateStatusSet[0].TemplateId), 10),
-		AuditStatus: auditStatusMapping[(*response.Response.DescribeTemplateStatusSet[0].StatusCode)],
-		Reason:      *response.Response.DescribeTemplateStatusSet[0].ReviewReply,
+	results := make(map[string]QueryTemplateStatusResp)
+	for i := range r.Response.DescribeTemplateStatusSet {
+		templateID := strconv.FormatInt(int64(*r.Response.DescribeTemplateStatusSet[i].TemplateId), 10)
+		results[templateID] = QueryTemplateStatusResp{
+			RequestID:   *r.Response.RequestId,
+			TemplateID:  templateID,
+			AuditStatus: auditStatusMapping[(*r.Response.DescribeTemplateStatusSet[i].StatusCode)],
+			Reason:      *r.Response.DescribeTemplateStatusSet[i].ReviewReply,
+		}
+	}
+
+	return BatchQueryTemplateStatusResp{
+		Results: results,
 	}, nil
 }
 

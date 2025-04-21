@@ -7,6 +7,8 @@
 package template
 
 import (
+	audit2 "gitee.com/flycash/notification-platform/internal/event/audit"
+	"gitee.com/flycash/notification-platform/internal/event/template"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/audit"
@@ -18,21 +20,34 @@ import (
 
 // Injectors from wire.go:
 
-func Init(providerSvc manage.Service, auditSvc audit.Service, clients map[string]client.Client) *Service {
+func Init(providerSvc manage.Service, auditSvc audit.Service, clients map[string]client.Client) (*Service, error) {
 	db := ioc.InitDBAndTables()
 	channelTemplateDAO := dao.NewChannelTemplateDAO(db)
 	channelTemplateRepository := repository.NewChannelTemplateRepository(channelTemplateDAO)
 	channelTemplateService := manage2.NewChannelTemplateService(channelTemplateRepository, providerSvc, auditSvc, clients)
-	service := &Service{
-		Svc:  channelTemplateService,
-		Repo: channelTemplateRepository,
+	mq := ioc.InitMQ()
+	auditResultConsumer, err := template.NewAuditResultConsumer(channelTemplateService, mq)
+	if err != nil {
+		return nil, err
 	}
-	return service
+	resultCallbackEventProducer, err := audit2.NewResultCallbackEventProducer(mq)
+	if err != nil {
+		return nil, err
+	}
+	service := &Service{
+		Svc:                 channelTemplateService,
+		Repo:                channelTemplateRepository,
+		AuditResultConsumer: auditResultConsumer,
+		AuditResultProducer: resultCallbackEventProducer,
+	}
+	return service, nil
 }
 
 // wire.go:
 
 type Service struct {
-	Svc  manage2.ChannelTemplateService
-	Repo repository.ChannelTemplateRepository
+	Svc                 manage2.ChannelTemplateService
+	Repo                repository.ChannelTemplateRepository
+	AuditResultConsumer *template.AuditResultConsumer
+	AuditResultProducer audit2.ResultCallbackEventProducer
 }

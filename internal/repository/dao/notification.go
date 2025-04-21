@@ -18,6 +18,7 @@ import (
 
 type NotificationDAO interface {
 	// Create 创建单条通知记录，但不创建对应的回调记录
+	// 可以考虑换个名字，因为它还会扣减额度，如 CreateAndDecrQuota
 	Create(ctx context.Context, data Notification) (Notification, error)
 	// CreateWithCallbackLog 创建单条通知记录，同时创建对应的回调记录
 	CreateWithCallbackLog(ctx context.Context, data Notification) (Notification, error)
@@ -104,15 +105,15 @@ func (d *notificationDAO) create(ctx context.Context, db *gorm.DB, data Notifica
 			}
 			return err
 		}
-		// 直接数据库操作，直接扣减，CAS 扣减1
-		res := tx.Model(&Quota{}).Where("quota >=1 AND biz_id = ? AND channel = ? ",
-			data.BizID, data.Channel).Updates(
-			map[string]any{
-				"quota": gorm.Expr("`quota`-1"),
+		// 直接数据库操作，直接扣减， 扣减1
+		res := tx.Model(&Quota{}).
+			Where("quota >= 1 AND biz_id = ? AND channel = ?", data.BizID, data.Channel).
+			Updates(map[string]any{
+				"quota": gorm.Expr("quota - 1"),
 				"utime": now,
 			})
-		if res.Error != nil || res.RowsAffected == 0 {
-			return fmt.Errorf("%w，原因: %w", errs.ErrNoQuota, res.Error)
+		if res.Error != nil && res.RowsAffected > 0 {
+			return fmt.Errorf("%w， 原因：%w", errs.ErrNoQuota, res.Error)
 		}
 
 		if createCallbackLog {
@@ -380,10 +381,10 @@ func (d *notificationDAO) MarkFailed(ctx context.Context, notification Notificat
 		if err != nil {
 			return err
 		}
-		return tx.Model(&Quota{}).Where("biz_id = ? AND channel = ?",
-			notification.BizID, notification.Channel).
+		return tx.Model(&Quota{}).
+			Where("biz_id = ? AND channel = ?", notification.BizID, notification.Channel).
 			Updates(map[string]any{
-				"quota": gorm.Expr("quota+1"),
+				"quota": gorm.Expr("quota + 1"),
 				"utime": now,
 			}).Error
 	})
