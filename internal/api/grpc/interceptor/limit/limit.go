@@ -52,7 +52,7 @@ func (b *Builder) Build() grpc.UnaryServerInterceptor {
 				return nil, err1
 			}
 			b.limited = true
-			return nil, status.Errorf(codes.ResourceExhausted, errs.ErrRateLimited.Error())
+			return nil, status.Errorf(codes.ResourceExhausted, "%s", errs.ErrRateLimited)
 		} else {
 			if b.limited {
 				// 限流解除后，标记已恢复
