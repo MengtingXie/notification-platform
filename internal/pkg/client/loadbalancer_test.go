@@ -287,7 +287,8 @@ func TestWeightBalancerBuilder_Build(t *testing.T) {
 
 			// 验证每个节点的权重和组信息
 			for _, node := range rwBalancer.nodes {
-				conn := node.conn.(*mockSubConn)
+				conn, ok := node.conn.(*mockSubConn)
+				require.True(t, ok)
 				nodeName := conn.Name()
 
 				// 验证读权重

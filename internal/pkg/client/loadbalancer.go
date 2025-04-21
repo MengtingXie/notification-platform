@@ -5,19 +5,20 @@ import (
 	"errors"
 	"io"
 	"sync"
-	"unsafe"
 
 	"github.com/ecodeclub/ekit/slice"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 )
 
+type CtxKey string
+
 const (
-	RequestType    = "requestType"
-	readWeightStr  = "read_weight"
-	writeWeightStr = "write_weight"
-	groupStr       = "group"
-	nodeStr        = "nodeStr"
+	readWeightStr         = "read_weight"
+	writeWeightStr        = "write_weight"
+	groupStr              = "group"
+	nodeStr               = "nodeStr"
+	RequestType    CtxKey = "requestType"
 )
 
 type groupKey struct{}
@@ -208,11 +209,6 @@ func (w *WeightBalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker
 	return &RWBalancer{
 		nodes: nodes,
 	}
-}
-
-// getConnKey 获取SubConn的唯一标识符
-func getConnKey(conn balancer.SubConn) uintptr {
-	return uintptr(unsafe.Pointer(&conn))
 }
 
 func WithGroup(ctx context.Context, group string) context.Context {
