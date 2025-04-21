@@ -25,3 +25,14 @@ type SelectorBuilder interface {
 	// Build 构造选择器，可以在Build方法上添加参数来构建更复杂的选择器
 	Build() (Selector, error)
 }
+
+// HealthCheckable 表示支持健康检查的抽象
+type HealthCheckable interface {
+	CheckHealth(ctx context.Context) error
+}
+
+// 具体Provider需同时实现Provider和HealthCheckable接口
+type HealthAwareProvider interface {
+	Provider
+	HealthCheckable
+}

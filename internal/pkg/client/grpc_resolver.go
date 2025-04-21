@@ -84,7 +84,8 @@ func (g *grpcResolver) resolve() {
 			ServerName: ins.Name,
 			Attributes: attributes.New(readWeightStr, ins.ReadWeight).
 				WithValue(writeWeightStr, ins.WriteWeight).
-				WithValue(groupStr, ins.Group),
+				WithValue(groupStr, ins.Group).
+				WithValue(nodeStr, ins.Name),
 		})
 	}
 	err = g.cc.UpdateState(resolver.State{
