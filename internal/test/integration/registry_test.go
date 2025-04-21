@@ -169,7 +169,7 @@ func (s *RegistryTestSuite) TestGroup() {
 	c := NewClient(
 		ClientWithRegistry(etcdRegistry, timeout),
 		ClientWithInsecure(),
-		ClientWithPickerBuilder("weight", &clientpkg.WeightBalancerBuilder{}),
+		ClientWithPickerBuilder("weight", clientpkg.NewWeightBalancerBuilder()),
 	)
 
 	// 连接服务

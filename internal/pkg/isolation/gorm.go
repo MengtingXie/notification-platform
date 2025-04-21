@@ -119,7 +119,6 @@ func configureConnectionPool(db *egorm.Component, config ConnectionPoolConfig) e
 	if err != nil {
 		return err
 	}
-
 	sqlDB.SetMaxOpenConns(config.MaxOpenConns)
 	sqlDB.SetMaxIdleConns(config.MaxIdleConns)
 	sqlDB.SetConnMaxLifetime(config.ConnMaxLifetime)
@@ -153,12 +152,12 @@ func (d *GORMDecorator) GetDB(businessType BusinessType) *gorm.DB {
 
 	switch businessType {
 	case CoreBusiness:
-		return d.coreDB.WithContext(context.Background())
+		return d.coreDB
 	case NonCoreBusiness:
-		return d.nonCoreDB.WithContext(context.Background())
+		return d.nonCoreDB
 	default:
 		// 默认返回核心业务DB
-		return d.coreDB.WithContext(context.Background())
+		return d.coreDB
 	}
 }
 

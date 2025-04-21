@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"unsafe"
 
 	"github.com/ecodeclub/ekit/slice"
 	"google.golang.org/grpc/balancer"
@@ -16,6 +17,7 @@ const (
 	readWeightStr  = "read_weight"
 	writeWeightStr = "write_weight"
 	groupStr       = "group"
+	nodeStr        = "nodeStr"
 )
 
 type groupKey struct{}
@@ -127,12 +129,31 @@ func (r *RWBalancer) getGroup(ctx context.Context) string {
 	return vv
 }
 
-type WeightBalancerBuilder struct{}
+type WeightBalancerBuilder struct {
+	// 存储已有的节点，使用SubConn的地址作为键
+	nodeCache map[string]*rwServiceNode
+	mu        sync.RWMutex
+}
+
+// 初始化WeightBalancerBuilder
+func NewWeightBalancerBuilder() *WeightBalancerBuilder {
+	return &WeightBalancerBuilder{
+		nodeCache: make(map[string]*rwServiceNode),
+		mu:        sync.RWMutex{},
+	}
+}
 
 func (w *WeightBalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
+	// 创建一个新的节点列表，用于存储当前可用的节点
 	nodes := make([]*rwServiceNode, 0, len(info.ReadySCs))
-	for sub, subInfo := range info.ReadySCs {
 
+	// 记录当前批次的SubConn地址，用于后续清理不再存在的节点
+	currentConns := make(map[string]struct{})
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	for sub, subInfo := range info.ReadySCs {
 		readWeight, ok := subInfo.Address.Attributes.Value(readWeightStr).(int32)
 		if !ok {
 			continue
@@ -141,28 +162,57 @@ func (w *WeightBalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker
 		if !ok {
 			continue
 		}
-
 		group, ok := subInfo.Address.Attributes.Value(groupStr).(string)
 		if !ok {
 			continue
 		}
+		nodeName, ok := subInfo.Address.Attributes.Value(nodeStr).(string)
+		if !ok {
+			continue
+		}
 
-		nodes = append(nodes, &rwServiceNode{
-			mutex:                &sync.RWMutex{},
-			conn:                 sub,
-			readWeight:           readWeight,
-			curReadWeight:        readWeight,
-			efficientReadWeight:  readWeight,
-			writeWeight:          writeWeight,
-			curWriteWeight:       writeWeight,
-			efficientWriteWeight: writeWeight,
-			group:                group,
-		})
+		currentConns[nodeName] = struct{}{}
+
+		// 检查缓存中是否存在该节点
+		if cachedNode, exists := w.nodeCache[nodeName]; exists {
+			// 存在则更新连接和组信息，但保留权重状态
+			cachedNode.conn = sub
+			cachedNode.group = group
+			// 将已有节点添加到当前节点列表
+			nodes = append(nodes, cachedNode)
+		} else {
+			// 不存在则创建新节点
+			newNode := &rwServiceNode{
+				mutex:                &sync.RWMutex{},
+				conn:                 sub,
+				readWeight:           readWeight,
+				curReadWeight:        readWeight,
+				efficientReadWeight:  readWeight,
+				writeWeight:          writeWeight,
+				curWriteWeight:       writeWeight,
+				efficientWriteWeight: writeWeight,
+				group:                group,
+			}
+			// 缓存新节点
+			w.nodeCache[nodeName] = newNode
+			nodes = append(nodes, newNode)
+		}
 	}
 
+	// 清理不再存在的节点
+	for connKey := range w.nodeCache {
+		if _, exists := currentConns[connKey]; !exists {
+			delete(w.nodeCache, connKey)
+		}
+	}
 	return &RWBalancer{
 		nodes: nodes,
 	}
+}
+
+// getConnKey 获取SubConn的唯一标识符
+func getConnKey(conn balancer.SubConn) uintptr {
+	return uintptr(unsafe.Pointer(&conn))
 }
 
 func WithGroup(ctx context.Context, group string) context.Context {
