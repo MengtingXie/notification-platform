@@ -54,7 +54,7 @@ func (s *RegistryTestSuite) TestGroup() {
 	t := s.T()
 
 	// 创建etcd注册中心实例
-	etcdRegistry, err := etcd.NewRegistry(s.etcdClient.Client)
+	etcdRegistry, err := etcd.NewRegistry(s.etcdClient)
 	require.NoError(t, err)
 	defer etcdRegistry.Close()
 
@@ -326,8 +326,8 @@ func (s *Server) Start(addr string) error {
 		s.si = registry.ServiceInstance{
 			Name:        s.name,
 			Address:     s.listener.Addr().String(),
-			ReadWeight:  int32(s.readWeight),
-			WriteWeight: int32(s.writeWeight),
+			ReadWeight:  s.readWeight,
+			WriteWeight: s.writeWeight,
 			Group:       s.group,
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), s.timeout)

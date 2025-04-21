@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"gitee.com/flycash/notification-platform/internal/pkg/registry"
+	"github.com/ego-component/eetcd"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
@@ -19,14 +20,14 @@ var typesMap = map[mvccpb.Event_EventType]registry.EventType{
 
 type Registry struct {
 	sess   *concurrency.Session
-	client *clientv3.Client
+	client *eetcd.Component
 
 	mutex       sync.RWMutex
 	watchCancel []func()
 }
 
-func NewRegistry(c *clientv3.Client) (*Registry, error) {
-	sess, err := concurrency.NewSession(c)
+func NewRegistry(c *eetcd.Component) (*Registry, error) {
+	sess, err := concurrency.NewSession(c.Client)
 	if err != nil {
 		return nil, err
 	}

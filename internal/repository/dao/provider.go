@@ -205,9 +205,9 @@ func (p *providerDAO) FindByChannel(ctx context.Context, channel string) ([]Prov
 		if providers[i].APISecret == "" {
 			continue
 		}
-		decryptedSecret, err := p.decrypt(providers[i].APISecret)
-		if err != nil {
-			return nil, err
+		decryptedSecret, err1 := p.decrypt(providers[i].APISecret)
+		if err1 != nil {
+			return nil, err1
 		}
 		providers[i].APISecret = decryptedSecret
 	}

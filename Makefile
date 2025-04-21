@@ -33,6 +33,7 @@ ut:
 .PHONY: e2e_up
 e2e_up:
 	@docker compose -p notification-platform -f scripts/test_docker_compose.yml up -d
+	@./scripts/wait.sh
 
 .PHONY: e2e_down
 e2e_down:
