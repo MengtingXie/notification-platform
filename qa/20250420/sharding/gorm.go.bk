@@ -1,0 +1,34 @@
+package sharding
+
+import (
+	"fmt"
+	"gorm.io/gorm"
+)
+
+type GormShardingPlugin struct {
+}
+
+func (p *GormShardingPlugin) beforeQuery(db *gorm.DB) {
+	user, ok := db.Statement.Model.(User)
+	// 后续就针对 user 来进行计算
+	// 按照分库分表规则，重新计算表名
+	// 它不能解决跨表查询问题
+	db.Statement.Table = ""
+	// 按照分库分表规则，计算分库，而后用对应 ConnPool 替换掉
+	db.ConnPool = nil
+}
+
+func (p *GormShardingPlugin) beforeCreate(db *gorm.DB) {
+	user, ok := db.Statement.Model.(User)
+	// 生成主键
+	user.id = 12345
+	// 继续往后执行
+}
+
+type User struct {
+	Id int64
+}
+
+func (u *User) TableName() string {
+	return fmt.Sprintf("user_%d", u.Id%10)
+}
