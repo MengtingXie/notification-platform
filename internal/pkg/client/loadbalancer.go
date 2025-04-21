@@ -104,10 +104,24 @@ func (r *RWBalancer) isWrite(ctx context.Context) bool {
 	return vv == 1
 }
 
-type WeightBalancerBuilder struct{}
+type WeightBalancerBuilder struct {
+	previousNodes map[balancer.SubConn]*rwServiceNode
+	mu            sync.Mutex
+}
 
 func (w *WeightBalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
-	nodes := make([]*rwServiceNode, 0, len(info.ReadySCs))
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	// Initialize previousNodes map if it's nil
+	if w.previousNodes == nil {
+		w.previousNodes = make(map[balancer.SubConn]*rwServiceNode)
+	}
+
+	// Create a new map for the current nodes
+	newNodes := make([]*rwServiceNode, 0, len(info.ReadySCs))
+
+	// Process all current subconnections
 	for sub, subInfo := range info.ReadySCs {
 		readWeight, ok := subInfo.Address.Attributes.Value(readWeightStr).(int32)
 		if !ok {
@@ -118,18 +132,38 @@ func (w *WeightBalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker
 			continue
 		}
 
-		nodes = append(nodes, &rwServiceNode{
-			mutex:                &sync.RWMutex{},
-			conn:                 sub,
-			readWeight:           readWeight,
-			curReadWeight:        readWeight,
-			efficientReadWeight:  readWeight,
-			writeWeight:          writeWeight,
-			curWriteWeight:       writeWeight,
-			efficientWriteWeight: writeWeight,
-		})
+		// Check if this node already exists in previous nodes
+		if existingNode, found := w.previousNodes[sub]; found {
+			// Keep the node with its existing state
+			existingNode.conn = sub // Update connection just in case
+			newNodes = append(newNodes, existingNode)
+		} else {
+			// Create a new node with initial weights
+			newNode := &rwServiceNode{
+				mutex:                &sync.RWMutex{},
+				conn:                 sub,
+				readWeight:           readWeight,
+				curReadWeight:        readWeight,
+				efficientReadWeight:  readWeight,
+				writeWeight:          writeWeight,
+				curWriteWeight:       writeWeight,
+				efficientWriteWeight: writeWeight,
+			}
+			newNodes = append(newNodes, newNode)
+			w.previousNodes[sub] = newNode
+		}
 	}
+
+	// Create a new map for current nodes to replace the previous one
+	currentNodes := make(map[balancer.SubConn]*rwServiceNode)
+	for _, node := range newNodes {
+		currentNodes[node.conn] = node
+	}
+
+	// Replace the previous nodes with the current ones
+	w.previousNodes = currentNodes
+
 	return &RWBalancer{
-		nodes: nodes,
+		nodes: newNodes,
 	}
 }
