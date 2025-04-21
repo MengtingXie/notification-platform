@@ -23,6 +23,7 @@ func (m *MultipleRegistry) Deregister(ctx context.Context, svc Service) error {
 		err := r.Deregister(ctx, svc)
 		if err != nil {
 			// 记录日志
+			continue
 		}
 	}
 	return nil
