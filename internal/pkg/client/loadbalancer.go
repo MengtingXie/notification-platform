@@ -46,7 +46,10 @@ func (r *RWBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 
 	// 过滤出候选节点
 	candidates := slice.FilterMap(r.nodes, func(_ int, src *rwServiceNode) (*rwServiceNode, bool) {
-		return src, r.getGroup(info.Ctx) == src.group
+		src.mutex.RLock()
+		nodeGroup := src.group
+		src.mutex.RUnlock()
+		return src, r.getGroup(info.Ctx) == nodeGroup
 	})
 
 	var totalWeight int32
@@ -133,14 +136,14 @@ func (r *RWBalancer) getGroup(ctx context.Context) string {
 type WeightBalancerBuilder struct {
 	// 存储已有的节点，使用SubConn的地址作为键
 	nodeCache map[string]*rwServiceNode
-	mu        sync.RWMutex
+	mu        *sync.RWMutex
 }
 
 // 初始化WeightBalancerBuilder
 func NewWeightBalancerBuilder() *WeightBalancerBuilder {
 	return &WeightBalancerBuilder{
 		nodeCache: make(map[string]*rwServiceNode),
-		mu:        sync.RWMutex{},
+		mu:        &sync.RWMutex{},
 	}
 }
 
@@ -177,8 +180,10 @@ func (w *WeightBalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker
 		// 检查缓存中是否存在该节点
 		if cachedNode, exists := w.nodeCache[nodeName]; exists {
 			// 存在则更新连接和组信息，但保留权重状态
-			cachedNode.conn = sub
+			cachedNode.mutex.Lock()
 			cachedNode.group = group
+			cachedNode.mutex.Unlock()
+
 			if cachedNode.readWeight != readWeight || cachedNode.writeWeight != writeWeight {
 				cachedNode = newRwServiceNode(sub, readWeight, writeWeight, group)
 				w.nodeCache[nodeName] = cachedNode
