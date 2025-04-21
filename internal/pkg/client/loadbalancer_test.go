@@ -87,7 +87,7 @@ func createTestNode(name string, readWeight, writeWeight int32) *rwServiceNode {
 
 func TestRWBalancer_Pick(t *testing.T) {
 	t.Parallel()
-	// 设置具有不同权重的测试节点
+	// 为了验证测试功能，先手动创建RWBalancer实例，以便可以预测权重变化
 	nodes := []*rwServiceNode{
 		createTestNode("weight-4", 1, 4), // 低读权重，高写权重
 		createTestNode("weight-3", 2, 3), // 中低读权重，中高写权重
@@ -95,53 +95,67 @@ func TestRWBalancer_Pick(t *testing.T) {
 		createTestNode("weight-1", 4, 1), // 高读权重，低写权重
 	}
 
-	b := &RWBalancer{nodes: nodes}
-
-	// 定义测试负载均衡行为的操作
-	// 每个操作指定：
-	// - requestType: 0 表示读，1 表示写
-	// - expectedName: 预期选择的节点名称
-	// - err: 在 DoneInfo 中返回的错误，模拟成功或失败的操作
+	// 基于RWBalancer实现的预期行为
 	operations := []struct {
 		requestType  int    // 0 = 读，1 = 写
 		expectedName string // 预期选择的节点名称
 		err          error  // 在 DoneInfo 中返回的错误
 		description  string // 此操作的描述
 	}{
-		{0, "weight-1", nil, "读操作应该选择最高读权重的节点"},
-		{1, "weight-4", context.DeadlineExceeded, "写操作应该选择最高写权重的节点，带超时错误"},
-		{0, "weight-2", nil, "第二次读操作应该由于权重调整选择次高读权重的节点"},
-		{1, "weight-3", io.EOF, "第二次写操作应该选择次高写权重的节点，带 EOF 错误"},
-		{0, "weight-3", nil, "第三次读操作选择已调整的读权重节点"},
-		{1, "weight-2", nil, "第三次写操作选择已调整的写权重节点"},
-		{0, "weight-1", nil, "第四次读操作选择已调整的读权重节点"},
-		{1, "weight-4", nil, "第四次写操作选择已调整的写权重节点"},
-		{0, "weight-2", nil, "第五次读操作基于权重继续轮询"},
-		{1, "weight-3", nil, "第五次写操作基于权重继续轮询"},
+		{0, "weight-1", nil, "第一次读操作选择weight-1（初始读权重最高）"},
+		{1, "weight-4", context.DeadlineExceeded, "第一次写操作选择weight-4（初始写权重最高）"},
+		{0, "weight-2", nil, "第二次读操作选择weight-2（weight-1的curReadWeight在第一次被减少）"},
+		{1, "weight-3", io.EOF, "第二次写操作选择weight-3（weight-4的curWriteWeight在第一次被减少）"},
+		{0, "weight-3", nil, "第三次读操作选择weight-3（之前节点的curReadWeight较低）"},
+		{1, "weight-2", nil, "第三次写操作选择weight-2（之前节点的curWriteWeight较低）"},
+		{0, "weight-1", nil, "第四次读操作选择weight-1（完成轮询回到第一个）"},
+		{1, "weight-4", nil, "第四次写操作选择weight-4（完成轮询回到第一个）"},
+		{0, "weight-2", nil, "第五次读操作选择weight-2（继续轮询）"},
+		{1, "weight-3", nil, "第五次写操作选择weight-3（继续轮询）"},
 	}
+
+	b := &RWBalancer{nodes: nodes}
 
 	// 顺序执行所有操作以验证负载均衡
 	for i := range operations {
 		op := operations[i]
-		t.Run(op.description, func(t *testing.T) {
-			t.Parallel()
-			// 创建具有适当请求类型的上下文
-			ctx := context.WithValue(t.Context(), RequestType, op.requestType)
+		// 打印当前操作描述
+		t.Logf("执行操作 %d: %s", i, op.description)
 
-			// 执行 Pick 方法
-			pickRes, err := b.Pick(balancer.PickInfo{Ctx: ctx})
+		// 打印权重，便于调试
+		t.Logf("== 操作 %d 前权重 ==", i)
+		for _, node := range nodes {
+			conn, _ := node.conn.(*mockSubConn)
+			t.Logf("Node %s: readWeight=%d, efficientReadWeight=%d, curReadWeight=%d, writeWeight=%d, efficientWriteWeight=%d, curWriteWeight=%d",
+				conn.Name(), node.readWeight, node.efficientReadWeight, node.curReadWeight,
+				node.writeWeight, node.efficientWriteWeight, node.curWriteWeight)
+		}
 
-			// 验证在选择过程中没有发生错误
-			require.NoError(t, err, "操作 %d 在 Pick 期间不应失败", i)
+		// 创建具有适当请求类型的上下文
+		ctx := context.WithValue(t.Context(), RequestType, op.requestType)
 
-			// 验证选择了正确的节点
-			selectedConn, ok := pickRes.SubConn.(*mockSubConn)
-			require.True(t, ok, "SubConn 应该是 mockSubConn 类型")
-			assert.Equal(t, op.expectedName, selectedConn.Name(), "操作 %d 选择了错误的节点", i)
+		// 执行 Pick 方法
+		pickRes, err := b.Pick(balancer.PickInfo{Ctx: ctx})
 
-			// 调用 Done 来模拟操作完成，带有指定的错误
-			pickRes.Done(balancer.DoneInfo{Err: op.err})
-		})
+		// 验证在选择过程中没有发生错误
+		require.NoError(t, err, "操作 %d (%s) 在 Pick 期间不应失败", i, op.description)
+
+		// 验证选择了正确的节点
+		selectedConn, ok := pickRes.SubConn.(*mockSubConn)
+		require.True(t, ok, "操作 %d (%s): SubConn 应该是 mockSubConn 类型", i, op.description)
+		assert.Equal(t, op.expectedName, selectedConn.Name(), "操作 %d (%s): 选择了错误的节点", i, op.description)
+
+		// 调用 Done 来模拟操作完成，带有指定的错误
+		pickRes.Done(balancer.DoneInfo{Err: op.err})
+
+		// 打印操作后的权重
+		t.Logf("== 操作 %d 后权重 ==", i)
+		for _, node := range nodes {
+			conn, _ := node.conn.(*mockSubConn)
+			t.Logf("Node %s: readWeight=%d, efficientReadWeight=%d, curReadWeight=%d, writeWeight=%d, efficientWriteWeight=%d, curWriteWeight=%d",
+				conn.Name(), node.readWeight, node.efficientReadWeight, node.curReadWeight,
+				node.writeWeight, node.efficientWriteWeight, node.curWriteWeight)
+		}
 	}
 }
 
