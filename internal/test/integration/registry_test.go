@@ -69,7 +69,8 @@ func (s *RegistryTestSuite) TestGroup() {
 	// 使用通道来安全地获取服务器地址
 	for i := 0; i < 3; i++ {
 		gs := &greeterServer{group: "core"}
-		srv := NewServer("greeter",
+		name := fmt.Sprintf("greeter-%d", i)
+		srv := NewServer(name,
 			ServerWithRegistry(etcdRegistry),
 			ServerWithTimeout(timeout),
 			ServerWithGroup("core"))

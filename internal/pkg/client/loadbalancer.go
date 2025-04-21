@@ -179,21 +179,15 @@ func (w *WeightBalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker
 			// 存在则更新连接和组信息，但保留权重状态
 			cachedNode.conn = sub
 			cachedNode.group = group
+			if cachedNode.readWeight != readWeight || cachedNode.writeWeight != writeWeight {
+				cachedNode = newRwServiceNode(sub, readWeight, writeWeight, group)
+				w.nodeCache[nodeName] = cachedNode
+			}
 			// 将已有节点添加到当前节点列表
 			nodes = append(nodes, cachedNode)
 		} else {
 			// 不存在则创建新节点
-			newNode := &rwServiceNode{
-				mutex:                &sync.RWMutex{},
-				conn:                 sub,
-				readWeight:           readWeight,
-				curReadWeight:        readWeight,
-				efficientReadWeight:  readWeight,
-				writeWeight:          writeWeight,
-				curWriteWeight:       writeWeight,
-				efficientWriteWeight: writeWeight,
-				group:                group,
-			}
+			newNode := newRwServiceNode(sub, readWeight, writeWeight, group)
 			// 缓存新节点
 			w.nodeCache[nodeName] = newNode
 			nodes = append(nodes, newNode)
@@ -213,4 +207,18 @@ func (w *WeightBalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker
 
 func WithGroup(ctx context.Context, group string) context.Context {
 	return context.WithValue(ctx, groupKey{}, group)
+}
+
+func newRwServiceNode(conn balancer.SubConn, readWeight, writeWeight int32, group string) *rwServiceNode {
+	return &rwServiceNode{
+		mutex:                &sync.RWMutex{},
+		conn:                 conn,
+		readWeight:           readWeight,
+		curReadWeight:        readWeight,
+		efficientReadWeight:  readWeight,
+		writeWeight:          writeWeight,
+		curWriteWeight:       writeWeight,
+		efficientWriteWeight: writeWeight,
+		group:                group,
+	}
 }
