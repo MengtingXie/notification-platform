@@ -10,10 +10,12 @@ import (
 	"google.golang.org/grpc/balancer/base"
 )
 
+type RequestTypeKey string
+
 const (
-	RequestType    = "requestType"
-	readWeightStr  = "read_weight"
-	writeWeightStr = "write_weight"
+	RequestType    RequestTypeKey = "requestType"
+	readWeightStr  RequestTypeKey = "read_weight"
+	writeWeightStr RequestTypeKey = "write_weight"
 )
 
 type rwServiceNode struct {

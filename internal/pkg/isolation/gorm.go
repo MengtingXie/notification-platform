@@ -33,23 +33,32 @@ type ConnectionPoolConfig struct {
 	ConnMaxIdleTime time.Duration
 }
 
+const (
+	CoreMaxOpenConns       = 100
+	CoreMaxIdleConns       = 20
+	CoreConnMaxLifetime    = 30 * time.Minute
+	NonCoreMaxOpenConns    = 20
+	NonCoreMaxIdleConns    = 4
+	NonCoreConnMaxLifetime = 15 * time.Minute
+)
+
 // DefaultCoreConfig 核心业务的默认连接池配置
 func DefaultCoreConfig() ConnectionPoolConfig {
 	return ConnectionPoolConfig{
-		MaxOpenConns:    100,
-		MaxIdleConns:    20,
+		MaxOpenConns:    CoreMaxOpenConns,
+		MaxIdleConns:    CoreMaxIdleConns,
 		ConnMaxLifetime: time.Hour,
-		ConnMaxIdleTime: 30 * time.Minute,
+		ConnMaxIdleTime: CoreConnMaxLifetime,
 	}
 }
 
 // DefaultNonCoreConfig 非核心业务的默认连接池配置
 func DefaultNonCoreConfig() ConnectionPoolConfig {
 	return ConnectionPoolConfig{
-		MaxOpenConns:    20,
-		MaxIdleConns:    5,
+		MaxOpenConns:    NonCoreMaxOpenConns,
+		MaxIdleConns:    NonCoreMaxIdleConns,
 		ConnMaxLifetime: time.Hour,
-		ConnMaxIdleTime: 15 * time.Minute,
+		ConnMaxIdleTime: NonCoreConnMaxLifetime,
 	}
 }
 
@@ -70,7 +79,7 @@ type GORMDecorator struct {
 // - dataSourceName: 配置中的数据源名称，如"mysql"
 // - coreConfig: 核心业务的连接池配置
 // - nonCoreConfig: 非核心业务的连接池配置
-func NewGORMDecorator(dataSourceName string, coreConfig ConnectionPoolConfig, nonCoreConfig ConnectionPoolConfig) (*GORMDecorator, error) {
+func NewGORMDecorator(dataSourceName string, coreConfig, nonCoreConfig ConnectionPoolConfig) (*GORMDecorator, error) {
 	// 创建装饰器
 	decorator := &GORMDecorator{
 		dataSourceName: dataSourceName,
