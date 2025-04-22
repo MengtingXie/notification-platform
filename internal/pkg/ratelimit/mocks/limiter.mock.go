@@ -40,6 +40,21 @@ func (m *MockLimiter) EXPECT() *MockLimiterMockRecorder {
 	return m.recorder
 }
 
+// IsLimitedAfter mocks base method.
+func (m *MockLimiter) IsLimitedAfter(ctx context.Context, key string, sinceMillis int64) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsLimitedAfter", ctx, key, sinceMillis)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IsLimitedAfter indicates an expected call of IsLimitedAfter.
+func (mr *MockLimiterMockRecorder) IsLimitedAfter(ctx, key, sinceMillis any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsLimitedAfter", reflect.TypeOf((*MockLimiter)(nil).IsLimitedAfter), ctx, key, sinceMillis)
+}
+
 // Limit mocks base method.
 func (m *MockLimiter) Limit(ctx context.Context, key string) (bool, error) {
 	m.ctrl.T.Helper()
