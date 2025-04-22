@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -31,7 +32,7 @@ type timeoutServer struct {
 }
 
 // 实现SayHello方法
-func (g *timeoutServer) SayHello(ctx context.Context, req *helloworldv1.SayHelloRequest) (*helloworldv1.SayHelloResponse, error) {
+func (g *timeoutServer) SayHello(ctx context.Context, _ *helloworldv1.SayHelloRequest) (*helloworldv1.SayHelloResponse, error) {
 	err := g.f1(ctx)
 	if err != nil {
 		return nil, err
@@ -53,6 +54,7 @@ func (g *timeoutServer) f1(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	fmt.Println("f1xxxxxxx")
 	g.cache.LPush(ctx, "timeout:test", "f1")
 	return nil
 }
@@ -62,6 +64,7 @@ func (g *timeoutServer) f2(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	fmt.Println("f2xxxxxxx")
 	g.cache.LPush(ctx, "timeout:test", "f2")
 	return nil
 }
@@ -71,6 +74,7 @@ func (g *timeoutServer) f3(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	fmt.Println("f3xxxxxxx")
 	g.cache.LPush(ctx, "timeout:test", "f3")
 	return nil
 }
@@ -108,11 +112,11 @@ func (s *TimeoutTestSuite) TestTimeout() {
 	defer srv.Stop()
 
 	// 创建gRPC客户端
-	conn, _ := grpc.Dial(lis.Addr().String(),
+	conn, _ := grpc.NewClient(lis.Addr().String(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithUnaryInterceptor(
 			// 注入客户端超时拦截器
-			clientpkg.TimeoutInjectorInterceptor(),
+			clientpkg.InjectorInterceptor(),
 		),
 	)
 	defer func() {

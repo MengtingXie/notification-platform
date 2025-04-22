@@ -10,8 +10,8 @@ import (
 
 const timeoutStr = "timeout"
 
-// TimeoutInjectorInterceptor 超时时间注入拦截器
-func TimeoutInjectorInterceptor() grpc.UnaryClientInterceptor {
+// InjectorInterceptor 超时时间注入拦截器
+func InjectorInterceptor() grpc.UnaryClientInterceptor {
 	return func(
 		ctx context.Context,
 		method string,
