@@ -17,11 +17,18 @@ func WaitForDBSetup(dsn string) {
 	if err != nil {
 		panic(err)
 	}
+	sqlDB.SetConnMaxLifetime(time.Second)
+	if err1 := ping(sqlDB); err1 != nil {
+		panic(err1)
+	}
+}
+
+func ping(sqlDB *sql.DB) error {
 	const maxInterval = 10 * time.Second
 	const maxRetries = 10
 	strategy, err := retry.NewExponentialBackoffRetryStrategy(time.Second, maxInterval, maxRetries)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	const timeout = 5 * time.Second
@@ -34,10 +41,11 @@ func WaitForDBSetup(dsn string) {
 		}
 		next, ok := strategy.Next()
 		if !ok {
-			panic("WaitForDBSetup 重试失败......")
+			panic("Ping DB 重试失败......")
 		}
 		time.Sleep(next)
 	}
+	return nil
 }
 
 var (

@@ -18,7 +18,7 @@ var (
 	ErrTemplateVersionNotApprovedByProvider = errors.New("模板版本未被供应商审核通过")
 	ErrTemplateAndVersionMisMatch           = errors.New("模板和版本不匹配")
 	ErrChannelDisabled                      = errors.New("渠道已禁用")
-	ErrRateLimited                          = errors.New("频率受限")
+	ErrRateLimited                          = errors.New("请求频率受限")
 	ErrNoAvailableProvider                  = errors.New("无可用供应商")
 	ErrNoAvailableChannel                   = errors.New("无可用渠道")
 	ErrConfigNotFound                       = errors.New("业务配置不存在")
@@ -37,6 +37,9 @@ var (
 	ErrUpdateTemplateProviderAuditStatusFailed = errors.New("更新渠道供应商审核状态失败")
 	ErrSubmitVersionForInternalReviewFailed    = errors.New("提交模版版本内部审核失败")
 	ErrSubmitVersionForProviderReviewFailed    = errors.New("提交模版版本供应商审核失败")
+
+	ErrNoAvailableFailoverService = errors.New("没有需要接管的故障服务")
+
 	// 系统错误
 	ErrNotificationDuplicate       = errors.New("通知记录主键冲突")
 	ErrNotificationVersionMismatch = errors.New("通知记录版本不匹配")

@@ -125,7 +125,7 @@ type BaseGRPCServerTestSuite struct {
 func (s *BaseGRPCServerTestSuite) SetupTestSuite(serverPort int, clientAddr string, mockClients map[string]client.Client) {
 	// 初始化数据库
 	s.db = testioc.InitDBAndTables()
-	time.Sleep(15 * time.Second)
+	// time.Sleep(15 * time.Second)
 
 	serverAddr := fmt.Sprintf("0.0.0.0:%d", serverPort)
 	log.Printf("启动测试套件，服务器地址：%s, 客户端地址：%s\n", serverAddr, clientAddr)
