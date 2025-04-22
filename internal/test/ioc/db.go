@@ -17,7 +17,6 @@ func WaitForDBSetup(dsn string) {
 	if err != nil {
 		panic(err)
 	}
-	sqlDB.SetConnMaxLifetime(time.Second)
 	if err1 := ping(sqlDB); err1 != nil {
 		panic(err1)
 	}
