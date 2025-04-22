@@ -1232,7 +1232,7 @@ func (s *GRPCServerTestSuite) TestBatchSendNotifications() {
 				notifications := make([]*notificationv1.Notification, 101) // 假设批量限制为100
 				for i := 0; i < 101; i++ {
 					notifications[i] = &notificationv1.Notification{
-						Key:        fmt.Sprintf("batch-limit-key-%d", i),
+						Key:        fmt.Sprintf("batch-ratelimit-key-%d", i),
 						Receivers:  []string{fmt.Sprintf("1380013%04d", i)},
 						Channel:    notificationv1.Channel_SMS,
 						TemplateId: strconv.FormatInt(templateID, 10),
@@ -1775,7 +1775,7 @@ func (s *GRPCServerTestSuite) TestBatchSendNotificationsAsync() {
 				notifications := make([]*notificationv1.Notification, 101) // 假设批量限制为100
 				for i := 0; i < 101; i++ {
 					notifications[i] = &notificationv1.Notification{
-						Key:        fmt.Sprintf("batch-async-limit-key-%d", i),
+						Key:        fmt.Sprintf("batch-async-ratelimit-key-%d", i),
 						Receivers:  []string{fmt.Sprintf("1380013%04d", i)},
 						Channel:    notificationv1.Channel_SMS,
 						TemplateId: strconv.FormatInt(templateID, 10),
@@ -2172,7 +2172,7 @@ func (s *GRPCServerTestSuite) TestBatchQueryNotifications() {
 			req: func() *notificationv1.BatchQueryNotificationsRequest {
 				closeToLimitKeys := make([]string, batchSizeLimit-1)
 				for i := 0; i < batchSizeLimit-1; i++ {
-					closeToLimitKeys[i] = fmt.Sprintf("close-to-limit-key-%d", i)
+					closeToLimitKeys[i] = fmt.Sprintf("close-to-ratelimit-key-%d", i)
 				}
 				return &notificationv1.BatchQueryNotificationsRequest{
 					Keys: closeToLimitKeys,
@@ -2190,7 +2190,7 @@ func (s *GRPCServerTestSuite) TestBatchQueryNotifications() {
 				n := batchSizeLimit + 1
 				closeToLimitKeys := make([]string, n)
 				for i := 0; i < n; i++ {
-					closeToLimitKeys[i] = fmt.Sprintf("over-limit-key-%d", i)
+					closeToLimitKeys[i] = fmt.Sprintf("over-ratelimit-key-%d", i)
 				}
 				return &notificationv1.BatchQueryNotificationsRequest{
 					Keys: closeToLimitKeys,
