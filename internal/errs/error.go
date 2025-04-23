@@ -19,6 +19,7 @@ var (
 	ErrTemplateAndVersionMisMatch           = errors.New("模板和版本不匹配")
 	ErrChannelDisabled                      = errors.New("渠道已禁用")
 	ErrRateLimited                          = errors.New("请求频率受限")
+	ErrCircuitBreaker                       = errors.New("服务熔断，请稍后重试")
 	ErrNoAvailableProvider                  = errors.New("无可用供应商")
 	ErrNoAvailableChannel                   = errors.New("无可用渠道")
 	ErrConfigNotFound                       = errors.New("业务配置不存在")
