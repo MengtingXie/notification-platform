@@ -20,12 +20,12 @@ const (
 
 // SendStrategyConfig 发送策略配置
 type SendStrategyConfig struct {
-	Type          SendStrategyType // 发送策略类型
-	Delay         time.Duration    // 延迟发送策略使用
-	ScheduledTime time.Time        // 定时发送策略使用，计划发送时间
-	StartTime     time.Time        // 窗口发送策略使用，开始时间（毫秒）
-	EndTime       time.Time        // 窗口发送策略使用，结束时间（毫秒）
-	DeadlineTime  time.Time        // 截止日期策略使用，截止日期
+	Type          SendStrategyType `json:"type"`          // 发送策略类型
+	Delay         time.Duration    `json:"delay"`         // 延迟发送策略使用
+	ScheduledTime time.Time        `json:"scheduledTime"` // 定时发送策略使用，计划发送时间
+	StartTime     time.Time        `json:"startTime"`     // 窗口发送策略使用，开始时间（毫秒）
+	EndTime       time.Time        `json:"endTime"`       // 窗口发送策略使用，结束时间（毫秒）
+	DeadlineTime  time.Time        `json:"deadlineTime"`  // 截止日期策略使用，截止日期
 }
 
 // SendTimeWindow 计算最早发送时间和最晚发送时间

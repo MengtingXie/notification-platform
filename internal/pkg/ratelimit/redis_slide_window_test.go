@@ -86,9 +86,9 @@ func (s *RedisSlidingWindowLimiterTestSuite) TestLimit_ExceedThreshold() {
 	assert.True(t, limited, "第6个请求应该被限流")
 
 	// 验证Redis中记录了限流事件
-	eventCnt, err := s.rdb.ZCard(ctx, s.limiter.getLimitedEventsKey(key)).Result()
+	exists, err := s.rdb.Exists(ctx, s.limiter.getLimitedEventKey(key)).Result()
 	require.NoError(t, err)
-	assert.Equal(t, int64(1), eventCnt, "应该记录一个限流事件")
+	assert.Equal(t, int64(1), exists, "应该存在限流记录")
 }
 
 // TestLimit_DifferentKeys 测试不同key之间互不影响
@@ -171,31 +171,31 @@ func (s *RedisSlidingWindowLimiterTestSuite) TestLimit_CustomTime() {
 	assert.Equal(t, int64(3), cnt, "应该记录三个请求")
 
 	// 验证限流事件记录
-	eventCnt, err := s.rdb.ZCard(ctx, customLimiter.getLimitedEventsKey(key)).Result()
+	exists, err := s.rdb.Exists(ctx, customLimiter.getLimitedEventKey(key)).Result()
 	require.NoError(t, err)
-	assert.Equal(t, int64(1), eventCnt, "应该记录一个限流事件")
+	assert.Equal(t, int64(1), exists, "应该存在限流记录")
 }
 
-// TestIsLimitedAfter_NoEvents 测试没有限流事件时的查询
-func (s *RedisSlidingWindowLimiterTestSuite) TestIsLimitedAfter_NoEvents() {
+// TestLastLimitTime_NoEvents 测试没有限流事件时的查询
+func (s *RedisSlidingWindowLimiterTestSuite) TestLastLimitTime_NoEvents() {
 	t := s.T()
 	ctx := t.Context()
 	key := s.getUniqueKey("no_limit_events")
 
 	// 没有限流事件发生
-	limited, err := s.limiter.IsLimitedAfter(ctx, key, time.Now().Add(-1*time.Hour).UnixMilli())
+	limitTime, err := s.limiter.LastLimitTime(ctx, key)
 	require.NoError(t, err)
-	assert.False(t, limited, "没有限流事件时应返回false")
+	assert.True(t, limitTime.IsZero(), "没有限流事件时应返回零值时间")
 }
 
-// TestIsLimitedAfter_WithEvents 测试有限流事件时的查询
-func (s *RedisSlidingWindowLimiterTestSuite) TestIsLimitedAfter_WithEvents() {
+// TestLastLimitTime_WithEvents 测试有限流事件时的查询
+func (s *RedisSlidingWindowLimiterTestSuite) TestLastLimitTime_WithEvents() {
 	t := s.T()
 	ctx := t.Context()
 	key := s.getUniqueKey("with_limit_events")
 
 	// 获取当前时间作为测试起点
-	startTime := time.Now().UnixMilli()
+	startTime := time.Now()
 
 	// 填满限流窗口并触发限流
 	for i := 0; i < 5; i++ {
@@ -204,69 +204,63 @@ func (s *RedisSlidingWindowLimiterTestSuite) TestIsLimitedAfter_WithEvents() {
 		assert.False(t, limited, fmt.Sprintf("第%d个请求不应该被限流", i+1))
 	}
 
-	// 验证第6个请求被限流
+	// 触发限流
 	limited, err := s.limiter.Limit(ctx, key)
 	require.NoError(t, err)
 	assert.True(t, limited, "第6个请求应该被限流")
 
-	// 查询从起点时间后是否有限流事件
-	limited, err = s.limiter.IsLimitedAfter(ctx, key, startTime)
+	// 查询最后限流时间
+	limitTime, err := s.limiter.LastLimitTime(ctx, key)
 	require.NoError(t, err)
-	assert.True(t, limited, "应该检测到限流事件")
+	assert.False(t, limitTime.IsZero(), "应该有限流时间")
 
-	// 查询从未来时间点后是否有限流事件
-	futureTime := time.Now().Add(1 * time.Second).UnixMilli()
-	limited, err = s.limiter.IsLimitedAfter(ctx, key, futureTime)
-	require.NoError(t, err)
-	assert.False(t, limited, "未来时间点后不应有限流事件")
+	// 验证时间在合理范围内
+	assert.True(t, limitTime.After(startTime) || limitTime.Equal(startTime), "限流时间应该在测试开始之后或相等")
+	assert.True(t, limitTime.Before(time.Now().Add(1*time.Second)), "限流时间应该接近当前时间")
 }
 
-// TestIsLimitedAfter_TimeRangeAccuracy 测试时间范围查询的准确性
-func (s *RedisSlidingWindowLimiterTestSuite) TestIsLimitedAfter_TimeRangeAccuracy() {
+// TestLastLimitTime_MultipleEvents 测试多次限流情况下获取最新的限流时间
+func (s *RedisSlidingWindowLimiterTestSuite) TestLastLimitTime_MultipleEvents() {
 	t := s.T()
 	ctx := t.Context()
-	key := s.getUniqueKey("time_range")
+	key := s.getUniqueKey("multiple_limit_events")
 
-	// 阶段1: 记录时间点
-	timeBeforeLimiting := time.Now().UnixMilli()
-
-	// 触发限流
+	// 第一次限流
 	for i := 0; i < 5; i++ {
 		limited, err := s.limiter.Limit(ctx, key)
 		require.NoError(t, err)
-		assert.False(t, limited, fmt.Sprintf("第%d个请求不应该被限流", i+1))
+		assert.False(t, limited, fmt.Sprintf("第一轮第%d个请求不应该被限流", i+1))
 	}
 
-	// 验证第6个请求被限流
+	// 触发第一次限流
 	limited, err := s.limiter.Limit(ctx, key)
 	require.NoError(t, err)
-	assert.True(t, limited, "第6个请求应该被限流")
+	assert.True(t, limited, "第一轮第6个请求应该被限流")
 
-	// 阶段2: 记录限流后的时间点
-	timeAfterLimiting := time.Now().UnixMilli()
-
-	// 使用限流前的时间点查询，应该可以检测到限流
-	limited, err = s.limiter.IsLimitedAfter(ctx, key, timeBeforeLimiting)
+	firstLimitTime, err := s.limiter.LastLimitTime(ctx, key)
 	require.NoError(t, err)
-	assert.True(t, limited, "从限流前的时间点查询应该检测到限流")
+	assert.False(t, firstLimitTime.IsZero())
 
 	// 等待窗口滑动
 	time.Sleep(150 * time.Millisecond)
 
-	// 阶段3: 在限流事件之后再触发一次新的限流
+	// 第二次限流
 	for i := 0; i < 5; i++ {
 		limited, err := s.limiter.Limit(ctx, key)
 		require.NoError(t, err)
-		assert.False(t, limited, fmt.Sprintf("窗口滑动后第%d个请求不应被限流", i+1))
+		assert.False(t, limited, fmt.Sprintf("第二轮第%d个请求不应该被限流", i+1))
 	}
 
-	// 验证再次触发限流
+	time.Sleep(10 * time.Millisecond) // 确保时间戳有差异
+
+	// 触发第二次限流
 	limited, err = s.limiter.Limit(ctx, key)
 	require.NoError(t, err)
-	assert.True(t, limited, "应该再次触发限流")
+	assert.True(t, limited, "第二轮第6个请求应该被限流")
 
-	// 使用第一次限流后的时间点查询，应该只检测到第二次限流
-	limited, err = s.limiter.IsLimitedAfter(ctx, key, timeAfterLimiting)
+	secondLimitTime, err := s.limiter.LastLimitTime(ctx, key)
 	require.NoError(t, err)
-	assert.True(t, limited, "从限流后的时间点查询应该检测到第二次限流")
+
+	// 验证第二次限流时间晚于第一次
+	assert.True(t, secondLimitTime.After(firstLimitTime), "第二次限流应晚于第一次")
 }
