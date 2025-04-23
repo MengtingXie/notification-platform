@@ -57,6 +57,7 @@ func InitDBAndTables() *egorm.Component {
 		if db != nil {
 			return
 		}
+
 		econf.Set("mysql", map[string]any{
 			"dsn":   "root:root@tcp(localhost:13316)/notification?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true",
 			"debug": true,
@@ -67,5 +68,6 @@ func InitDBAndTables() *egorm.Component {
 			panic(err)
 		}
 	})
+
 	return db
 }

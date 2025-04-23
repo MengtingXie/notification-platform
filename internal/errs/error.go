@@ -47,4 +47,6 @@ var (
 	ErrDatabaseError               = errors.New("数据库错误")
 	ErrExternalServiceError        = errors.New("外部服务调用错误")
 	ErrBatchSizeOverLimit          = errors.New("批量大小超过限制")
+
+	ErrToAsync = errors.New("服务崩溃已转异步")
 )
