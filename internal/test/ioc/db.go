@@ -6,6 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"github.com/ecodeclub/ekit/retry"
 	"github.com/ego-component/egorm"
@@ -57,17 +60,29 @@ func InitDBAndTables() *egorm.Component {
 		if db != nil {
 			return
 		}
-
 		econf.Set("mysql", map[string]any{
 			"dsn":   "root:root@tcp(localhost:13316)/notification?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true",
 			"debug": true,
 		})
 		WaitForDBSetup(econf.GetStringMapString("mysql")["dsn"])
 		db = egorm.Load("mysql").Build()
+
 		if err := dao.InitTables(db); err != nil {
 			panic(err)
 		}
 	})
 
 	return db
+}
+
+func InitDBWithCustomConnPool(cp gorm.ConnPool) *gorm.DB {
+	gdb, err := gorm.Open(mysql.New(mysql.Config{
+		Conn: cp,
+	}), &gorm.Config{
+		ConnPool: cp,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return gdb
 }

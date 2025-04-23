@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ecodeclub/mq-api/kafka"
+
 	"github.com/ecodeclub/ekit/retry"
 	"github.com/ecodeclub/mq-api"
 	"github.com/ecodeclub/mq-api/memory"
@@ -53,9 +55,70 @@ func initMQ() (mq.MQ, error) {
 			Name:       "audit_result_events",
 			Partitions: 1,
 		},
+		{
+			Name:       "fail_over_event",
+			Partitions: 1,
+		},
 	}
 	// 替换用内存实现，方便测试
 	qq := memory.NewMQ()
+	for _, t := range topics {
+		err := qq.CreateTopic(context.Background(), t.Name, t.Partitions)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return qq, nil
+}
+
+func InitKafkaMq() mq.MQ {
+	mqInitOnce.Do(func() {
+		const maxInterval = 10 * time.Second
+		const maxRetries = 10
+		strategy, err := retry.NewExponentialBackoffRetryStrategy(time.Second, maxInterval, maxRetries)
+		if err != nil {
+			panic(err)
+		}
+		for {
+			q, err = initKafkaMq()
+			if err == nil {
+				break
+			}
+			next, ok := strategy.Next()
+			if !ok {
+				panic("InitMQ 重试失败......")
+			}
+			time.Sleep(next)
+		}
+	})
+	return q
+}
+
+func initKafkaMq() (mq.MQ, error) {
+	type Topic struct {
+		Name       string `yaml:"name"`
+		Partitions int    `yaml:"partitions"`
+	}
+
+	topics := []Topic{
+		{
+			Name:       "test",
+			Partitions: 1,
+		},
+		{
+			Name:       "audit_result_events",
+			Partitions: 1,
+		},
+		{
+			Name:       "fail_over_event",
+			Partitions: 1,
+		},
+	}
+
+	qq, err := kafka.NewMQ("tcp", []string{"127.0.0.1:9092"})
+	if err != nil {
+		panic(err)
+	}
 	for _, t := range topics {
 		err := qq.CreateTopic(context.Background(), t.Name, t.Partitions)
 		if err != nil {
