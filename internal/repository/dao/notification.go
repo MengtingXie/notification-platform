@@ -73,6 +73,26 @@ type Notification struct {
 
 type notificationDAO struct {
 	db *egorm.Component
+
+	coreDB     *egorm.Component
+	noneCoreDB *egorm.Component
+}
+
+//nolint:unused // 这是我的演示代码
+func (d *notificationDAO) selectDB(ctx context.Context) *egorm.Component {
+	if ctx.Value("Priority") == "high" {
+		return d.coreDB
+	}
+	return d.noneCoreDB
+}
+
+func NewNotificationDAOV1(coreDB *egorm.Component,
+	noneCoreDB *egorm.Component,
+) NotificationDAO {
+	return &notificationDAO{
+		coreDB:     coreDB,
+		noneCoreDB: noneCoreDB,
+	}
 }
 
 // NewNotificationDAO 创建通知DAO实例
