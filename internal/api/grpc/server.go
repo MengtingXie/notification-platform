@@ -93,7 +93,7 @@ func (s *NotificationServer) isSystemError(err error) bool {
 }
 
 func (s *NotificationServer) buildNotification(ctx context.Context, n *notificationv1.Notification, bizID int64) (domain.Notification, error) {
-	notification, err := n.ToDomainNotification()
+	notification, err := domain.NewNotificationFromAPI(n)
 	if err != nil {
 		return domain.Notification{}, err
 	}

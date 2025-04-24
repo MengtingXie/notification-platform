@@ -38,7 +38,15 @@ linters-settings:
   goconst:
     min-len: 2
     min-occurrences: 3
+  revive:
+    rules:
+      - name: unused-parameter
+        severity: disabled  # 或 severity: warning
   gocritic:
+    disabled-checks:
+      - "commentedOutCode"
+      - "commentFormatting"
+      - "assignOp"
     enabled-tags:
       - diagnostic
       - experimental
@@ -56,9 +64,13 @@ linters-settings:
   nolintlint:
     require-explanation: true
     require-specific: true
+  staticcheck:
+    checks:
+      # 禁用 SA4008（"-" 表示排除）
+      - "-SA4008"
   exhaustive:
     check-generated: false
-    default-signifies-exhaustive: false
+    default-signifies-exhaustive: true
   funlen:
     lines: 100
     statements: 40

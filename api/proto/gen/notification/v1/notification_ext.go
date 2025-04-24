@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"time"
-
-	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/errs"
 )
 
 func (x *Notification) FindReceivers() []string {
@@ -71,91 +68,4 @@ func (x *BatchSendNotificationsRequest) Name() string {
 
 func (x *BatchSendNotificationsAsyncRequest) Name() string {
 	return "BatchSendNotificationsAsync"
-}
-
-func (x *Notification) ToDomainNotification() (domain.Notification, error) {
-	if x == nil {
-		return domain.Notification{}, fmt.Errorf("%w: 通知信息不能为空", errs.ErrInvalidParameter)
-	}
-
-	tid, err := strconv.ParseInt(x.TemplateId, 10, 64)
-	if err != nil {
-		return domain.Notification{}, fmt.Errorf("%w: 模板ID: %s", errs.ErrInvalidParameter, x.TemplateId)
-	}
-
-	channel, err := x.getDomainChannel()
-	if err != nil {
-		return domain.Notification{}, err
-	}
-
-	return domain.Notification{
-		Key:       x.Key,
-		Receivers: x.FindReceivers(),
-		Channel:   channel,
-		Template: domain.Template{
-			ID:     tid,
-			Params: x.TemplateParams,
-		},
-		SendStrategyConfig: x.getDomainSendStrategyConfig(),
-	}, nil
-}
-
-func (x *Notification) getDomainChannel() (domain.Channel, error) {
-	switch x.Channel {
-	case Channel_SMS:
-		return domain.ChannelSMS, nil
-	case Channel_EMAIL:
-		return domain.ChannelEmail, nil
-	case Channel_IN_APP:
-		return domain.ChannelInApp, nil
-	default:
-		return "", fmt.Errorf("%w", errs.ErrUnknownChannel)
-	}
-}
-
-func (x *Notification) getDomainSendStrategyConfig() domain.SendStrategyConfig {
-	// 构建发送策略
-	sendStrategyType := domain.SendStrategyImmediate // 默认为立即发送
-	var delaySeconds int64
-	var scheduledTime time.Time
-	var startTimeMilliseconds int64
-	var endTimeMilliseconds int64
-	var deadlineTime time.Time
-
-	// 处理发送策略
-	if x.Strategy != nil {
-		switch s := x.Strategy.StrategyType.(type) {
-		case *SendStrategy_Immediate:
-			sendStrategyType = domain.SendStrategyImmediate
-		case *SendStrategy_Delayed:
-			if s.Delayed != nil && s.Delayed.DelaySeconds > 0 {
-				sendStrategyType = domain.SendStrategyDelayed
-				delaySeconds = s.Delayed.DelaySeconds
-			}
-		case *SendStrategy_Scheduled:
-			if s.Scheduled != nil && s.Scheduled.SendTime != nil {
-				sendStrategyType = domain.SendStrategyScheduled
-				scheduledTime = s.Scheduled.SendTime.AsTime()
-			}
-		case *SendStrategy_TimeWindow:
-			if s.TimeWindow != nil {
-				sendStrategyType = domain.SendStrategyTimeWindow
-				startTimeMilliseconds = s.TimeWindow.StartTimeMilliseconds
-				endTimeMilliseconds = s.TimeWindow.EndTimeMilliseconds
-			}
-		case *SendStrategy_Deadline:
-			if s.Deadline != nil && s.Deadline.Deadline != nil {
-				sendStrategyType = domain.SendStrategyDeadline
-				deadlineTime = s.Deadline.Deadline.AsTime()
-			}
-		}
-	}
-	return domain.SendStrategyConfig{
-		Type:          sendStrategyType,
-		Delay:         time.Duration(delaySeconds) * time.Second,
-		ScheduledTime: scheduledTime,
-		StartTime:     time.Unix(startTimeMilliseconds, 0),
-		EndTime:       time.Unix(endTimeMilliseconds, 0),
-		DeadlineTime:  deadlineTime,
-	}
 }

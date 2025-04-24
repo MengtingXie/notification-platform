@@ -73,7 +73,7 @@ func (b *EnqueueRateLimitedRequestBuilder) Build() grpc.UnaryServerInterceptor {
 		ns := notificationHandler.GetNotifications()
 		domainNotifications := make([]domain.Notification, len(ns))
 		for i := range ns {
-			notification, err3 := ns[i].ToDomainNotification()
+			notification, err3 := domain.NewNotificationFromAPI(ns[i])
 			if err3 != nil {
 				b.logger.Warn("转换为domain.NotificationB失败",
 					elog.FieldErr(err3),
@@ -82,26 +82,8 @@ func (b *EnqueueRateLimitedRequestBuilder) Build() grpc.UnaryServerInterceptor {
 				return nil, status.Errorf(codes.ResourceExhausted, "%s", errs.ErrRateLimited)
 			}
 
-			tmpl, err4 := b.templateSvc.GetTemplateByID(ctx, notification.Template.ID)
-			if err4 != nil {
-				b.logger.Warn("模板ID非法",
-					elog.FieldErr(err4),
-					elog.Any("req", req),
-					elog.Any("info", info),
-					elog.Any("模板ID", notification.Template.ID))
-				return nil, status.Errorf(codes.ResourceExhausted, "%s", errs.ErrRateLimited)
-			}
-
-			if !tmpl.HasPublished() {
-				b.logger.Warn("模板ID未发布",
-					elog.Any("req", req),
-					elog.Any("info", info),
-					elog.Any("模板ID", notification.Template.ID))
-				return nil, status.Errorf(codes.ResourceExhausted, "%s", errs.ErrRateLimited)
-			}
 			// 设置业务ID及已发布的模版版本
 			notification.BizID = bizID
-			notification.Template.VersionID = tmpl.ActiveVersionID
 			domainNotifications[i] = notification
 		}
 
