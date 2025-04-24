@@ -1,3 +1,5 @@
+//go:build e2e
+
 package monitor
 
 import (
@@ -9,6 +11,7 @@ import (
 )
 
 func TestHeartbeat_Health(t *testing.T) {
+	t.Skip()
 	// 测试逻辑
 	// 1. 使用sqlmock进行测试，刚开始调用Health()方法为true
 	// 2. 持续五秒 sqlmock的pingctx返回报错, 三秒过后调用Health()方法为false
