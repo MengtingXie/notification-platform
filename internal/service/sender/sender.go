@@ -92,6 +92,8 @@ func (d *sender) BatchSend(ctx context.Context, notifications []domain.Notificat
 	wg.Add(len(notifications))
 	for i := range notifications {
 		n := notifications[i]
+		// 用 ekit 的 pool 来改造它
+		// 最大 goroutine 数量可以很大。 2000
 		go func() {
 			defer wg.Done()
 

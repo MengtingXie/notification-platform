@@ -100,6 +100,12 @@ func (b *InterceptorBuilder) JwtAuthInterceptor() grpc.UnaryServerInterceptor {
 			bizId := v.(float64)
 			ctx = context.WithValue(ctx, BizIDName, int64(bizId))
 		}
+
+		v, ok = val["Priority"]
+		if ok {
+			ctx = context.WithValue(ctx, "Priority", v)
+		}
+
 		return handler(ctx, req)
 	}
 }

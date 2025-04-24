@@ -30,8 +30,6 @@ func NewSmsProviderV2(name string, templateSvc manage.ChannelTemplateService, cl
 }
 
 // Send 发送短信
-//
-//nolint:gocritic // 留着给你看
 func (p *smsProviderV2) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
 	// tmpl, err := p.templateSvc.GetTemplateV1(ctx,
 	//	notification.Template.ID,
