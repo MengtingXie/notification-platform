@@ -64,7 +64,6 @@ func (s *ConnPoolSuite) SetupSuite() {
 			return false
 		}
 		return true
-
 	}).AnyTimes()
 
 	cp := connpool.NewDBWithFailOver(db, s.mockMonitor, s.mockProducer)

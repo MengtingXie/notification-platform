@@ -25,13 +25,16 @@ type DBMonitor interface {
 func NewHeartbeatDBMonitor(db *sql.DB) *Heartbeat {
 	he := &atomic.Bool{}
 	he.Store(true)
-	return &Heartbeat{
+
+	h := &Heartbeat{
 		db:          db,
 		logger:      elog.DefaultLogger,
 		health:      he,
 		failCounter: &atomic.Int32{},
 		succCounter: &atomic.Int32{},
 	}
+	go h.healthCheck(context.Background())
+	return h
 }
 
 // Heartbeat 心跳监控
@@ -49,13 +52,14 @@ func (h *Heartbeat) Health() bool {
 
 func (*Heartbeat) Report(error) {}
 
-func (h *Heartbeat) healthCheck(ctx context.Context) error {
+func (h *Heartbeat) healthCheck(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
 		// 如果超时就返回
 		if ctx.Err() != nil {
-			return ctx.Err()
+			h.logger.Error("ctx超时退出", elog.FieldErr(ctx.Err()))
+			return
 		}
 		// 执行健康检查
 		timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -65,7 +69,6 @@ func (h *Heartbeat) healthCheck(ctx context.Context) error {
 			h.logger.Error("ConnPool健康检查失败", elog.FieldErr(err))
 		}
 	}
-	return nil
 }
 
 func (h *Heartbeat) healthOneLoop(ctx context.Context) error {

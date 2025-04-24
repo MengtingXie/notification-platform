@@ -4,6 +4,8 @@ package integration
 
 import (
 	"database/sql"
+	"testing"
+
 	pkgis "gitee.com/flycash/notification-platform/internal/pkg/isolation"
 	"gitee.com/flycash/notification-platform/internal/test/integration/testdata/isolation"
 	"gitee.com/flycash/notification-platform/internal/test/ioc"
@@ -11,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"gorm.io/gorm"
-	"testing"
 )
 
 type User1 struct {
@@ -23,7 +24,7 @@ type IsolationSuite struct {
 	suite.Suite
 	coreDB      *isolation.DB
 	nonCoresDB  *isolation.DB
-	isolationDB *pkgis.IsolationDB
+	isolationDB *pkgis.DB
 	gormDB      *gorm.DB
 }
 
@@ -51,8 +52,8 @@ func (s *IsolationSuite) SetupSuite() {
 	if err != nil {
 		s.T().Fatal(err)
 	}
-
 }
+
 func (s *IsolationSuite) TearDownSuite() {
 	s.gormDB.Exec("Truncate  table `user1`")
 }
