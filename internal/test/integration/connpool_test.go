@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 
 	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/event/failover"
@@ -55,6 +56,17 @@ func (s *ConnPoolSuite) SetupSuite() {
 	s.mockCtrl = gomock.NewController(s.T())
 	s.mockMonitor = monitormocks.NewMockDBMonitor(s.mockCtrl)
 	s.mockProducer = porducerMock.NewMockConnPoolEventProducer(s.mockCtrl)
+	start := time.Now().Unix()
+	// 设置默认的Health方法期望，确保在初始化期间被调用时不会出错
+	s.mockMonitor.EXPECT().Health().DoAndReturn(func() bool {
+		end := time.Now().Unix()
+		if end-start > 1 {
+			return false
+		}
+		return true
+
+	}).AnyTimes()
+
 	cp := connpool.NewDBWithFailOver(db, s.mockMonitor, s.mockProducer)
 	s.gormDB = ioc.InitDBWithCustomConnPool(cp)
 	err = s.gormDB.AutoMigrate(&User{})
@@ -87,8 +99,7 @@ func (s *ConnPoolSuite) TearDownSuite() {
 
 // TestUnhealthyDatabaseFailover 测试数据库不健康时的故障转移流程
 func (s *ConnPoolSuite) TestUnhealthyDatabaseFailover() {
-	// 设置DBMonitor健康状态为不正常
-	s.mockMonitor.EXPECT().Health().Return(false).AnyTimes()
+	time.Sleep(2 * time.Second)
 
 	// 设置Producer期望接收到正确的事件
 	s.mockProducer.EXPECT().
