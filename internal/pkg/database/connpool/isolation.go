@@ -7,6 +7,8 @@ import (
 	"gorm.io/gorm"
 )
 
+// IsolationConnPool 我在 isolation 里面额外写了一个比较独立的
+// 没有和 Priority 耦合在一起的
 type IsolationConnPool struct {
 	core     gorm.ConnPool
 	noneCore gorm.ConnPool
