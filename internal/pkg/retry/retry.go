@@ -7,7 +7,7 @@ import (
 	"gitee.com/flycash/notification-platform/internal/pkg/retry/strategy"
 )
 
-// NewRetry 当配置不对的时候，会返回默认的重试策略
+// NewRetry 当配置不对的时候报错
 func NewRetry(cfg Config) (strategy.Strategy, error) {
 	// 根据 config 中的字段来检测
 	switch cfg.Type {
@@ -16,7 +16,7 @@ func NewRetry(cfg Config) (strategy.Strategy, error) {
 	case "exponential":
 		return strategy.NewExponentialBackoffRetryStrategy(cfg.ExponentialBackoff.InitialInterval, cfg.ExponentialBackoff.MaxInterval, cfg.ExponentialBackoff.MaxRetries), nil
 	default:
-		return nil, fmt.Errorf("unknown retry type: %s", cfg.Type)
+		return nil, fmt.Errorf("未知重试类型: %s", cfg.Type)
 	}
 }
 

@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	mqx "gitee.com/flycash/notification-platform/internal/pkg/mqx2"
 	"gitee.com/flycash/notification-platform/internal/pkg/ratelimit"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
-	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/gotomicro/ego/core/elog"
 )
 
@@ -16,18 +17,9 @@ const (
 	defaultPollInterval = time.Second
 )
 
-//go:generate mockgen -source=./consumer.go -package=evtmocks -destination=../mocks/kafka_consumer.mock.go -typed KafkaConsumer
-type KafkaConsumer interface {
-	ReadMessage(timeout time.Duration) (*kafka.Message, error)
-	Pause(partitions []kafka.TopicPartition) (err error)
-	Resume(partitions []kafka.TopicPartition) (err error)
-	Poll(timeoutMs int) (event kafka.Event)
-	CommitMessage(m *kafka.Message) ([]kafka.TopicPartition, error)
-}
-
 type RequestRateLimitedEventConsumer struct {
 	srv      notificationsvc.SendService
-	consumer KafkaConsumer
+	consumer mqx.Consumer
 
 	limiter          ratelimit.Limiter
 	limitedKey       string
@@ -45,6 +37,11 @@ func NewRequestLimitedEventConsumer(
 	lookbackDuration time.Duration,
 	sleepDuration time.Duration,
 ) (*RequestRateLimitedEventConsumer, error) {
+	err := consumer.SubscribeTopics([]string{eventName}, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	return &RequestRateLimitedEventConsumer{
 		srv:              srv,
 		consumer:         consumer,
@@ -73,6 +70,40 @@ func (c *RequestRateLimitedEventConsumer) Consume(ctx context.Context) error {
 		return fmt.Errorf("获取消息失败: %w", err)
 	}
 
+	// 等待限流期结束
+	if err2 := c.waitUntilRateLimitExpires(ctx, msg); err2 != nil {
+		return err2
+	}
+
+	var evt RequestRateLimitedEvent
+	err = json.Unmarshal(msg.Value, &evt)
+	if err != nil {
+		c.logger.Warn("解析消息失败",
+			elog.FieldErr(err),
+			elog.Any("msg", msg))
+		return err
+	}
+
+	// 不管通知的原始发送策略是什么，经过MQ转存后，一律强转为默认的截止日期前发送，等地异步任务调度并发送
+	_, err = c.srv.BatchSendNotificationsAsync(ctx, evt.Notifications...)
+	if err != nil {
+		c.logger.Warn("处理限流请求事件失败",
+			elog.FieldErr(err),
+			elog.Any("evt", evt))
+	}
+
+	// 消费完成，提交消费进度
+	_, err = c.consumer.CommitMessage(msg)
+	if err != nil {
+		c.logger.Warn("提交消息失败",
+			elog.FieldErr(err),
+			elog.Any("msg", msg))
+		return err
+	}
+	return nil
+}
+
+func (c *RequestRateLimitedEventConsumer) waitUntilRateLimitExpires(ctx context.Context, msg *kafka.Message) error {
 	for {
 		// 是否发送过限流
 		lastLimitTime, err1 := c.limiter.LastLimitTime(ctx, c.limitedKey)
@@ -85,7 +116,7 @@ func (c *RequestRateLimitedEventConsumer) Consume(ctx context.Context) error {
 
 		// 未发生限流，或者最近一次发生限流的时间不在预期时间段内
 		if lastLimitTime.IsZero() || time.Since(lastLimitTime) > c.lookbackDuration {
-			break
+			return nil
 		}
 
 		// 发生过限流，睡眠一段时间，醒了继续判断是否被限流
@@ -110,54 +141,6 @@ func (c *RequestRateLimitedEventConsumer) Consume(ctx context.Context) error {
 			return err3
 		}
 	}
-
-	var evt RequestRateLimitedEvent
-	err = json.Unmarshal(msg.Value, &evt)
-	if err != nil {
-		c.logger.Warn("解析消息失败",
-			elog.FieldErr(err),
-			elog.Any("msg", msg))
-		return err
-	}
-
-	// 执行操作入库
-	err = c.handleEvent(ctx, evt)
-	if err != nil {
-		c.logger.Warn("处理限流请求事件失败",
-			elog.FieldErr(err),
-			elog.Any("evt", evt))
-	}
-
-	// 消费完成，提交消费进度
-	_, err = c.consumer.CommitMessage(msg)
-	if err != nil {
-		c.logger.Warn("提交消息失败",
-			elog.FieldErr(err),
-			elog.Any("msg", msg))
-		return err
-	}
-	return nil
-}
-
-func (c *RequestRateLimitedEventConsumer) handleEvent(ctx context.Context, evt RequestRateLimitedEvent) error {
-	const first = 0
-	var err error
-	switch evt.HandlerName {
-	case "SendNotification":
-		_, err = c.srv.SendNotification(ctx, evt.Notifications[first])
-	case "SendNotificationAsync":
-		_, err = c.srv.SendNotificationAsync(ctx, evt.Notifications[first])
-	case "BatchSendNotifications":
-		_, err = c.srv.BatchSendNotifications(ctx, evt.Notifications...)
-	case "BatchSendNotificationsAsync":
-		_, err = c.srv.BatchSendNotificationsAsync(ctx, evt.Notifications...)
-	default:
-		c.logger.Warn("未知业务消息类型",
-			elog.Any("request", evt.Notifications),
-		)
-		err = nil
-	}
-	return err
 }
 
 func (c *RequestRateLimitedEventConsumer) sleepAndPoll(subTime time.Duration) {

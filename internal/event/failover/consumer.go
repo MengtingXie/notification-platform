@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/pkg/database/monitor"
-	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/ecodeclub/mq-api"
 	"github.com/gotomicro/ego/core/elog"
 	"gorm.io/gorm"

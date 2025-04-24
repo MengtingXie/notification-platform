@@ -7,6 +7,5 @@ const (
 )
 
 type RequestRateLimitedEvent struct {
-	HandlerName   string                `json:"handlerName"`
 	Notifications []domain.Notification `json:"notifications"`
 }
