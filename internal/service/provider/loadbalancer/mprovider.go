@@ -5,6 +5,7 @@ import (
 	"math/bits"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
@@ -19,11 +20,13 @@ const (
 	bitsPerUint64Shift = 6    // log2(64), used for division by 64
 	bitMask            = 63   // 2^6 - 1, used for modulo 64
 	initialHealth      = true // Initial health status
+	recoverSecond      = 5
 )
 
 type mprovider struct {
-	provider.HealthAwareProvider
+	provider.Provider
 	healthy       *atomic.Bool
+	failedTime    int64
 	ringBuffer    []uint64 // 比特环（滑动窗口存储）
 	reqCount      uint64   // 请求数量
 	bufferLen     int      // 滑动窗口长度
@@ -33,12 +36,14 @@ type mprovider struct {
 }
 
 func (s *mprovider) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
-	res, err := s.HealthAwareProvider.Send(ctx, notification)
+	res, err := s.Provider.Send(ctx, notification)
 	if err != nil {
 		s.markFail()
 		v := s.getFailed()
 		if v > s.failThreshold {
-			s.healthy.Store(false)
+			if s.healthy.CompareAndSwap(true, false) {
+				s.failedTime = time.Now().Unix()
+			}
 		}
 	} else {
 		s.markSuccess()
@@ -46,17 +51,17 @@ func (s *mprovider) Send(ctx context.Context, notification domain.Notification) 
 	return res, err
 }
 
-func newMprovider(pro provider.HealthAwareProvider, bufferLen int) mprovider {
+func newMprovider(pro provider.Provider, bufferLen int) mprovider {
 	health := &atomic.Bool{}
 	health.Store(initialHealth)
 	return mprovider{
-		HealthAwareProvider: pro,
-		healthy:             health,
-		bufferLen:           bufferLen,
-		ringBuffer:          make([]uint64, bufferLen),
-		bitCnt:              uint64(defaultNumberLen) * uint64(bufferLen),
-		mu:                  &sync.RWMutex{},
-		failThreshold:       int(float64(bufferLen) * defaultFailPercent),
+		Provider:      pro,
+		healthy:       health,
+		bufferLen:     bufferLen,
+		ringBuffer:    make([]uint64, bufferLen),
+		bitCnt:        uint64(defaultNumberLen) * uint64(bufferLen),
+		mu:            &sync.RWMutex{},
+		failThreshold: int(float64(bufferLen) * defaultFailPercent),
 	}
 }
 
@@ -91,6 +96,12 @@ func (s *mprovider) getFailed() int {
 	return failCount
 }
 
-func (s *mprovider) markHealthy() {
-	s.healthy.Store(true)
+func (s *mprovider) checkAndRecover() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().Unix()
+	if s.failedTime+recoverSecond < now {
+		s.ringBuffer = make([]uint64, s.bufferLen)
+		s.healthy.Store(true)
+	}
 }
