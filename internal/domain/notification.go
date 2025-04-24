@@ -25,27 +25,27 @@ func (s SendStatus) String() string {
 }
 
 type Template struct {
-	ID        int64             // 模板ID
-	VersionID int64             // 版本ID
-	Params    map[string]string // 渲染模版时使用的参数
+	ID        int64             `json:"id"`        // 模板ID
+	VersionID int64             `json:"versionId"` // 版本ID
+	Params    map[string]string `json:"params"`    // 渲染模版时使用的参数
 
 	// 只做版本兼容演示代码用，其余忽略
-	Version string
+	Version string `json:"version"`
 }
 
 // Notification 通知领域模型
 type Notification struct {
-	ID                 uint64     // 通知唯一标识
-	BizID              int64      // 业务唯一标识
-	Key                string     // 业务内唯一标识
-	Receivers          []string   // 接收者(手机/邮箱/用户ID)
-	Channel            Channel    // 发送渠道
-	Template           Template   // 关联的模版
-	Status             SendStatus // 发送状态
-	ScheduledSTime     time.Time  // 计划发送开始时间
-	ScheduledETime     time.Time  // 计划发送结束时间
-	Version            int        // 版本号
-	SendStrategyConfig SendStrategyConfig
+	ID                 uint64             `json:"id"`             // 通知唯一标识
+	BizID              int64              `json:"bizId"`          // 业务唯一标识
+	Key                string             `json:"key"`            // 业务内唯一标识
+	Receivers          []string           `json:"receivers"`      // 接收者(手机/邮箱/用户ID)
+	Channel            Channel            `json:"channel"`        // 发送渠道
+	Template           Template           `json:"template"`       // 关联的模版
+	Status             SendStatus         `json:"status"`         // 发送状态
+	ScheduledSTime     time.Time          `json:"scheduledSTime"` // 计划发送开始时间
+	ScheduledETime     time.Time          `json:"scheduledETime"` // 计划发送结束时间
+	Version            int                `json:"version"`        // 版本号
+	SendStrategyConfig SendStrategyConfig `json:"sendStrategyConfig"`
 }
 
 func (n *Notification) SetSendTime() {

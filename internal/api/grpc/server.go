@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
-	"time"
 
 	"gitee.com/flycash/notification-platform/internal/errs"
 	templatesvc "gitee.com/flycash/notification-platform/internal/service/template/manage"
@@ -95,16 +93,12 @@ func (s *NotificationServer) isSystemError(err error) bool {
 }
 
 func (s *NotificationServer) buildNotification(ctx context.Context, n *notificationv1.Notification, bizID int64) (domain.Notification, error) {
-	if n == nil {
-		return domain.Notification{}, fmt.Errorf("%w: 通知信息不能为空", errs.ErrInvalidParameter)
-	}
-
-	tid, err := strconv.ParseInt(n.TemplateId, 10, 64)
+	notification, err := n.ToDomainNotification()
 	if err != nil {
-		return domain.Notification{}, fmt.Errorf("%w: 模板ID: %s", errs.ErrInvalidParameter, n.TemplateId)
+		return domain.Notification{}, err
 	}
 
-	tmpl, err := s.templateSvc.GetTemplateByID(ctx, tid)
+	tmpl, err := s.templateSvc.GetTemplateByID(ctx, notification.Template.ID)
 	if err != nil {
 		return domain.Notification{}, fmt.Errorf("%w: 模板ID: %s", errs.ErrInvalidParameter, n.TemplateId)
 	}
@@ -113,88 +107,9 @@ func (s *NotificationServer) buildNotification(ctx context.Context, n *notificat
 		return domain.Notification{}, fmt.Errorf("%w: 模板ID: %s 未发布", errs.ErrInvalidParameter, n.TemplateId)
 	}
 
-	channel, err := s.convertToChannel(n.Channel)
-	if err != nil {
-		return domain.Notification{}, err
-	}
-
-	// receivers := n.Receivers
-	// if n.Receiver != "" {
-	//	receivers = append(receivers, n.Receiver)
-	// }
-	receivers := n.FindReceivers()
-	return domain.Notification{
-		BizID:     bizID,
-		Key:       n.Key,
-		Receivers: receivers,
-		Channel:   channel,
-		Template: domain.Template{
-			ID:        tid,
-			VersionID: tmpl.ActiveVersionID,
-			Params:    n.TemplateParams,
-		},
-		SendStrategyConfig: s.buildSendStrategyConfig(n),
-	}, nil
-}
-
-func (s *NotificationServer) convertToChannel(channel notificationv1.Channel) (domain.Channel, error) {
-	switch channel {
-	case notificationv1.Channel_SMS:
-		return domain.ChannelSMS, nil
-	case notificationv1.Channel_EMAIL:
-		return domain.ChannelEmail, nil
-	case notificationv1.Channel_IN_APP:
-		return domain.ChannelInApp, nil
-	default:
-		return "", errs.ErrUnknownChannel
-	}
-}
-
-func (s *NotificationServer) buildSendStrategyConfig(n *notificationv1.Notification) domain.SendStrategyConfig {
-	// 构建发送策略
-	sendStrategyType := domain.SendStrategyImmediate // 默认为立即发送
-	var delaySeconds int64
-	var scheduledTime time.Time
-	var startTimeMilliseconds int64
-	var endTimeMilliseconds int64
-	var deadlineTime time.Time
-
-	// 处理发送策略
-	if n.Strategy != nil {
-		switch s := n.Strategy.StrategyType.(type) {
-		case *notificationv1.SendStrategy_Immediate:
-			sendStrategyType = domain.SendStrategyImmediate
-		case *notificationv1.SendStrategy_Delayed:
-			if s.Delayed != nil && s.Delayed.DelaySeconds > 0 {
-				sendStrategyType = domain.SendStrategyDelayed
-				delaySeconds = s.Delayed.DelaySeconds
-			}
-		case *notificationv1.SendStrategy_Scheduled:
-			if s.Scheduled != nil && s.Scheduled.SendTime != nil {
-				sendStrategyType = domain.SendStrategyScheduled
-				scheduledTime = s.Scheduled.SendTime.AsTime()
-			}
-		case *notificationv1.SendStrategy_TimeWindow:
-			if s.TimeWindow != nil {
-				sendStrategyType = domain.SendStrategyTimeWindow
-				startTimeMilliseconds = s.TimeWindow.StartTimeMilliseconds
-				endTimeMilliseconds = s.TimeWindow.EndTimeMilliseconds
-			}
-		case *notificationv1.SendStrategy_Deadline:
-			if s.Deadline != nil && s.Deadline.Deadline != nil {
-				sendStrategyType = domain.SendStrategyDeadline
-				deadlineTime = s.Deadline.Deadline.AsTime()
-			}
-		}
-	}
-	return domain.SendStrategyConfig{
-		Type:          sendStrategyType,
-		Delay:         time.Duration(delaySeconds) * time.Second,
-		ScheduledTime: scheduledTime,
-		StartTime:     time.Unix(startTimeMilliseconds, 0),
-		EndTime:       time.Unix(endTimeMilliseconds, 0),
-		DeadlineTime:  deadlineTime,
-	}
+	notification.BizID = bizID
+	notification.Template.VersionID = tmpl.ActiveVersionID
+	return notification, nil
 }
 
 // convertToGRPCSendStatus 将领域发送状态转换为gRPC发送状态
