@@ -1,11 +1,11 @@
-package ratelimit
+package notification
 
 import "gitee.com/flycash/notification-platform/internal/domain"
 
 const (
-	eventName = "request_rate_limited_events"
+	eventName = "notification_events"
 )
 
-type RequestRateLimitedEvent struct {
+type Event struct {
 	Notifications []domain.Notification `json:"notifications"`
 }

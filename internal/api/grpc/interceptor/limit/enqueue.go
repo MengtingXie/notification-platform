@@ -81,21 +81,19 @@ func (b *EnqueueRateLimitedRequestBuilder) Build() grpc.UnaryServerInterceptor {
 					elog.Any("info", info))
 				return nil, status.Errorf(codes.ResourceExhausted, "%s", errs.ErrRateLimited)
 			}
-
-			// 设置业务ID及已发布的模版版本
+			// 设置业务ID
 			notification.BizID = bizID
 			domainNotifications[i] = notification
 		}
 
 		// 转存MQ
-		err5 := b.producer.Produce(ctx, ratelimitevt.RequestRateLimitedEvent{
-			HandlerName:   notificationHandler.Name(),
+		err4 := b.producer.Produce(ctx, ratelimitevt.RequestRateLimitedEvent{
 			Notifications: domainNotifications,
 		})
-		if err5 != nil {
+		if err4 != nil {
 			// 只记录日志
 			b.logger.Warn("转存限流请求失败",
-				elog.FieldErr(err5),
+				elog.FieldErr(err4),
 				elog.Any("req", req),
 				elog.Any("info", info))
 		}

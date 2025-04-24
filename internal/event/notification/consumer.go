@@ -1,4 +1,4 @@
-package ratelimit
+package notification
 
 import (
 	"context"
@@ -41,7 +41,6 @@ func NewRequestLimitedEventConsumer(
 	if err != nil {
 		return nil, err
 	}
-
 	return &RequestRateLimitedEventConsumer{
 		srv:              srv,
 		consumer:         consumer,
@@ -65,6 +64,10 @@ func (c *RequestRateLimitedEventConsumer) Start(ctx context.Context) {
 }
 
 func (c *RequestRateLimitedEventConsumer) Consume(ctx context.Context) error {
+	return c.consume(ctx)
+}
+
+func (c *RequestRateLimitedEventConsumer) consume(ctx context.Context) error {
 	msg, err := c.consumer.ReadMessage(-1)
 	if err != nil {
 		return fmt.Errorf("获取消息失败: %w", err)
@@ -108,7 +111,7 @@ func (c *RequestRateLimitedEventConsumer) Consume(ctx context.Context) error {
 		}
 	}
 
-	var evt RequestRateLimitedEvent
+	var evt Event
 	err = json.Unmarshal(msg.Value, &evt)
 	if err != nil {
 		c.logger.Warn("解析消息失败",
@@ -118,7 +121,7 @@ func (c *RequestRateLimitedEventConsumer) Consume(ctx context.Context) error {
 	}
 
 	// 执行操作入库
-	_, err = c.srv.BatchSendNotificationsAsync(ctx, evt.Notifications...)
+	err = c.handleEvent(ctx, evt)
 	if err != nil {
 		c.logger.Warn("处理限流请求事件失败",
 			elog.FieldErr(err),
@@ -134,6 +137,18 @@ func (c *RequestRateLimitedEventConsumer) Consume(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+func (c *RequestRateLimitedEventConsumer) handleEvent(ctx context.Context, evt Event) error {
+	// start
+	_, err := c.srv.BatchSendNotificationsAsync(ctx, evt.Notifications...)
+	// end.Since(start) <
+
+	// 批次调整间隔 < 10s 忽略
+	// 阈值 150ms - 200ms - 批次默认100
+	// 低于 150ms - 增大，5等距增大，批次
+	// 高于 200ms - 减小，5等减小
+	return err
 }
 
 func (c *RequestRateLimitedEventConsumer) sleepAndPoll(subTime time.Duration) {
