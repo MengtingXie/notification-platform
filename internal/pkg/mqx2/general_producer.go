@@ -20,30 +20,23 @@ type GeneralProducer[T any] struct {
 	topic    string
 }
 
-func NewGeneralProducer[T any](addr, topic string) (*GeneralProducer[T], error) {
-	producer, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers": addr,
-	})
-	if err != nil {
-		return nil, err
-	}
+func NewGeneralProducer[T any](producer *kafka.Producer, topic string) (*GeneralProducer[T], error) {
 	return &GeneralProducer[T]{
 		producer: producer,
 		topic:    topic,
-	}, err
+	}, nil
 }
 
 func (p *GeneralProducer[T]) Produce(ctx context.Context, evt T) error {
-	// 1. 序列化消息
 	data, err := json.Marshal(&evt)
 	if err != nil {
 		return fmt.Errorf("序列化失败: %w", err)
 	}
 
-	// 2. 创建专用递送通道
+	// 创建专用递送通道
 	deliveryChan := make(chan kafka.Event, 1)
 
-	// 3. 发送消息，处理队列满的情况
+	// 发送消息，处理队列满的情况
 	for {
 		select {
 		case <-ctx.Done():
@@ -81,7 +74,7 @@ func (p *GeneralProducer[T]) Produce(ctx context.Context, evt T) error {
 		break
 	}
 
-	// 4. 等待递送报告，带上下文控制
+	// 等待递送报告，带上下文控制
 	select {
 	case <-ctx.Done():
 		return ctx.Err()

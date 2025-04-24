@@ -9,7 +9,6 @@ import (
 	"gitee.com/flycash/notification-platform/internal/errs"
 	ratelimitevt "gitee.com/flycash/notification-platform/internal/event/ratelimit"
 	"gitee.com/flycash/notification-platform/internal/pkg/ratelimit"
-	templatesvc "gitee.com/flycash/notification-platform/internal/service/template/manage"
 	"github.com/gotomicro/ego/core/elog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -20,25 +19,20 @@ import (
 type EnqueueRateLimitedRequestBuilder struct {
 	limitedKey string
 	limiter    ratelimit.Limiter
-
-	producer    ratelimitevt.RequestRateLimitedEventProducer
-	templateSvc templatesvc.ChannelTemplateService
-
-	logger *elog.Component
+	producer   ratelimitevt.RequestRateLimitedEventProducer
+	logger     *elog.Component
 }
 
 func NewEnqueueRateLimitedRequestBuilder(
 	limitedKey string,
 	limiter ratelimit.Limiter,
 	producer ratelimitevt.RequestRateLimitedEventProducer,
-	templateSvc templatesvc.ChannelTemplateService,
 ) *EnqueueRateLimitedRequestBuilder {
 	return &EnqueueRateLimitedRequestBuilder{
-		limitedKey:  limitedKey,
-		limiter:     limiter,
-		producer:    producer,
-		templateSvc: templateSvc,
-		logger:      elog.DefaultLogger,
+		limitedKey: limitedKey,
+		limiter:    limiter,
+		producer:   producer,
+		logger:     elog.DefaultLogger,
 	}
 }
 
@@ -55,8 +49,8 @@ func (b *EnqueueRateLimitedRequestBuilder) Build() grpc.UnaryServerInterceptor {
 			return handler(ctx, req)
 		}
 
-		// 已限流，判断是否转存请求 —— 通知写请求
-		notificationHandler, ok := req.(notificationv1.NotificationHandler)
+		// 已限流，判断是否为需要转存的请求 —— 通知写请求
+		notificationCarrier, ok := req.(notificationv1.NotificationCarrier)
 		if !ok {
 			return nil, status.Errorf(codes.ResourceExhausted, "%s", errs.ErrRateLimited)
 		}
@@ -70,10 +64,10 @@ func (b *EnqueueRateLimitedRequestBuilder) Build() grpc.UnaryServerInterceptor {
 			return nil, status.Errorf(codes.ResourceExhausted, "%s", errs.ErrRateLimited)
 		}
 
-		ns := notificationHandler.GetNotifications()
+		ns := notificationCarrier.GetNotifications()
 		domainNotifications := make([]domain.Notification, len(ns))
 		for i := range ns {
-			notification, err3 := domain.NewNotificationFromAPI(ns[i])
+			n, err3 := domain.NewNotificationFromAPI(ns[i])
 			if err3 != nil {
 				b.logger.Warn("转换为domain.NotificationB失败",
 					elog.FieldErr(err3),
@@ -82,8 +76,8 @@ func (b *EnqueueRateLimitedRequestBuilder) Build() grpc.UnaryServerInterceptor {
 				return nil, status.Errorf(codes.ResourceExhausted, "%s", errs.ErrRateLimited)
 			}
 			// 设置业务ID
-			notification.BizID = bizID
-			domainNotifications[i] = notification
+			n.BizID = bizID
+			domainNotifications[i] = n
 		}
 
 		// 转存MQ

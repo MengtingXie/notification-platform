@@ -41,31 +41,22 @@ func (x *Notification) ReceiversAsUid() ([]int64, error) {
 	return result, nil
 }
 
-type NotificationHandler interface {
-	Name() string
+type NotificationCarrier interface {
 	GetNotifications() []*Notification
 }
 
-func (x *SendNotificationRequest) Name() string {
-	return "SendNotification"
-}
-
 func (x *SendNotificationRequest) GetNotifications() []*Notification {
-	return []*Notification{x.GetNotification()}
-}
-
-func (x *SendNotificationAsyncRequest) Name() string {
-	return "SendNotificationAsync"
+	n := x.GetNotification()
+	if n != nil {
+		return []*Notification{n}
+	}
+	return nil
 }
 
 func (x *SendNotificationAsyncRequest) GetNotifications() []*Notification {
-	return []*Notification{x.GetNotification()}
-}
-
-func (x *BatchSendNotificationsRequest) Name() string {
-	return "BatchSendNotifications"
-}
-
-func (x *BatchSendNotificationsAsyncRequest) Name() string {
-	return "BatchSendNotificationsAsync"
+	n := x.GetNotification()
+	if n != nil {
+		return []*Notification{n}
+	}
+	return nil
 }

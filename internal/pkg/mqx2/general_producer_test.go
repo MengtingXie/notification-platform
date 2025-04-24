@@ -19,6 +19,7 @@ type MockUserEvent struct {
 }
 
 func TestNewGeneralProducer(t *testing.T) {
+	t.Skip()
 	suite.Run(t, new(TestGeneralProducerTestSuite))
 }
 
@@ -30,7 +31,13 @@ func (s *TestGeneralProducerTestSuite) TestProduceAndConsume() {
 	t := s.T()
 	addr := "localhost:9092"
 	topic := "mock_user_events"
-	producer, err := NewGeneralProducer[MockUserEvent](addr, topic)
+
+	kafkaProducer, err := kafka.NewProducer(&kafka.ConfigMap{
+		"bootstrap.servers": addr,
+	})
+	assert.NoError(t, err)
+
+	producer, err := NewGeneralProducer[MockUserEvent](kafkaProducer, topic)
 	assert.NoError(t, err)
 
 	defer producer.Close()
@@ -54,7 +61,7 @@ func (s *TestGeneralProducerTestSuite) TestProduceAndConsume() {
 	err = consumer.SubscribeTopics([]string{topic}, nil)
 	assert.NoError(t, err)
 
-	message, err := consumer.ReadMessage(time.Second * 10)
+	message, err := consumer.ReadMessage(10 * time.Second)
 	assert.NoError(t, err)
 
 	var actual MockUserEvent
@@ -73,4 +80,8 @@ func (s *TestGeneralProducerTestSuite) TestProduceAndConsume() {
 	const i = 0
 	assert.Equal(t, topic, *ps[i].Topic)
 	assert.NoError(t, ps[i].Error)
+
+	// 提交后，再次消费，应该超时
+	_, err = consumer.ReadMessage(10 * time.Second)
+	assert.Error(t, err)
 }

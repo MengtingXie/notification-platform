@@ -117,7 +117,7 @@ func (c *RequestRateLimitedEventConsumer) Consume(ctx context.Context) error {
 		return err
 	}
 
-	// 执行操作入库
+	// 不管通知的原始发送策略是什么，经过MQ转存后，一律强转为默认的截止日期前发送，等地异步任务调度并发送
 	_, err = c.srv.BatchSendNotificationsAsync(ctx, evt.Notifications...)
 	if err != nil {
 		c.logger.Warn("处理限流请求事件失败",
