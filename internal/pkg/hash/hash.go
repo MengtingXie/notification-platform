@@ -1,0 +1,47 @@
+package hash
+
+import (
+	"hash/fnv"
+	"math/bits"
+	"strconv"
+)
+
+// Hash 生成一个64位哈希值，基于bizId和key，具有极低的碰撞概率。
+// 它使用FNV-1a算法结合额外的位运算混合技术。
+func Hash(bizId int64, key string) int64 {
+	// 将bizId和字符串key组合成一个字符串以最大化熵值
+	combinedKey := strconv.FormatInt(bizId, 10) + ":" + key
+
+	// 使用FNV-1a作为基础算法（64位）
+	h := fnv.New64a()
+	h.Write([]byte(combinedKey))
+	hash := h.Sum64()
+
+	// 应用额外的混合函数进一步减少碰撞
+	hash = mixHash(hash, uint64(bizId))
+
+	// 转换为int64类型
+	return int64(hash)
+}
+
+// mixHash 应用额外的混合算法以改善哈希分布
+func mixHash(h uint64, salt uint64) uint64 {
+	// 选择具有良好分布特性的常量
+	const (
+		prime1 = 11400714819323198485
+		prime2 = 14029467366897019727
+		prime3 = 1609587929392839161
+	)
+
+	// 用盐值（bizId）进行混合
+	h ^= salt + prime1
+
+	// 应用位旋转和乘法以产生雪崩效应
+	h = bits.RotateLeft64(h, 13)
+	h *= prime2
+	h = bits.RotateLeft64(h, 29)
+	h *= prime3
+	h = bits.RotateLeft64(h, 31)
+
+	return h
+}

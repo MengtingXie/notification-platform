@@ -51,3 +51,4 @@ var (
 
 	ErrToAsync = errors.New("服务崩溃已转异步")
 )
+

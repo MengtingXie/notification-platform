@@ -1,0 +1,123 @@
+package id
+
+import (
+	"testing"
+	"time"
+
+	"gitee.com/flycash/notification-platform/internal/pkg/hash"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestGenerateAndExtract(t *testing.T) {
+	generator := NewGenerator()
+
+	// 测试数据
+	bizId := int64(43)
+	key := "test-key1"
+	testTime := time.Date(2024, 6, 15, 14, 30, 0, 0, time.UTC)
+
+	// 生成ID
+	id := generator.GenerateID(bizId, key, testTime)
+
+	// 提取并验证时间戳
+	extractedTime := ExtractTimestamp(id)
+	// 由于毫秒精度的转换，允许1秒误差
+	if testTime.Sub(extractedTime).Abs() > time.Second {
+		t.Errorf("时间戳提取不正确，期望: %v, 实际: %v", testTime, extractedTime)
+	}
+
+	// 提取并验证哈希值
+	hashValue := ExtractHashValue(id)
+	hashWantVal := hash.Hash(bizId, key)
+	assert.Equal(t, hashWantVal%1024, hashValue)
+	if hashValue < 0 || hashValue >= 1024 {
+		t.Errorf("哈希值不在有效范围内: %d", hashValue)
+	}
+
+	// 提取并验证序列号
+	sequence := ExtractSequence(id)
+	// 第一个生成的ID的序列号应该是0
+	assert.Equal(t, int64(0), sequence)
+	if sequence < 0 || sequence >= (1<<12) {
+		t.Errorf("序列号不在有效范围内: %d", sequence)
+	}
+}
+
+func TestIDUniqueness(t *testing.T) {
+	generator := NewGenerator()
+
+	// 生成多个ID并检查唯一性
+	idCount := 1000
+	idSet := make(map[int64]struct{}, idCount)
+
+	for i := 0; i < idCount; i++ {
+		bizId := int64(i % 100)                // 循环使用一些bizId
+		key := "key-" + string(rune('A'+i%26)) // 循环使用一些key
+
+		id := generator.GenerateID(bizId, key, time.Time{}) // 使用当前时间
+
+		if _, exists := idSet[id]; exists {
+			t.Fatalf("发现重复ID: %d", id)
+		}
+
+		idSet[id] = struct{}{}
+	}
+
+	t.Logf("成功生成 %d 个不同的ID", idCount)
+}
+
+func TestSequenceIncrement(t *testing.T) {
+	// 测试序列号自增功能
+	generator := NewGenerator()
+
+	// 使用相同的bizId, key和时间生成多个ID
+	bizId := int64(123)
+	key := "same-key"
+	testTime := time.Date(2024, 6, 15, 14, 30, 0, 0, time.UTC)
+
+	// 生成多个ID并验证序列号递增
+	count := 10
+	ids := make([]int64, count)
+	for i := 0; i < count; i++ {
+		ids[i] = generator.GenerateID(bizId, key, testTime)
+
+		// 验证序列号是否递增
+		sequence := ExtractSequence(ids[i])
+		assert.Equal(t, int64(i), sequence, "序列号应该从0开始递增")
+	}
+
+	// 验证时间戳和哈希值部分相同
+	for i := 1; i < count; i++ {
+		// 时间戳应该相同
+		timestamp1 := ExtractTimestamp(ids[0])
+		timestamp2 := ExtractTimestamp(ids[i])
+		assert.Equal(t, timestamp1, timestamp2, "相同输入产生的不同ID的时间戳应该一致")
+
+		// 哈希值应该相同
+		hash1 := ExtractHashValue(ids[0])
+		hash2 := ExtractHashValue(ids[i])
+		assert.Equal(t, hash1, hash2, "相同输入产生的不同ID的哈希值应该一致")
+	}
+}
+
+func TestSequenceRollover(t *testing.T) {
+	// 测试序列号溢出回环
+	generator := NewGenerator()
+
+	// 直接修改generator中的序列号为最大值
+	generator.sequence = sequenceMask
+
+	bizId := int64(456)
+	key := "rollover-test"
+	testTime := time.Date(2024, 6, 16, 10, 0, 0, 0, time.UTC)
+
+	// 生成第一个ID，此时序列号应为最大值
+	id1 := generator.GenerateID(bizId, key, testTime)
+	seq1 := ExtractSequence(id1)
+	assert.Equal(t, int64(sequenceMask), seq1, "序列号应为最大值")
+
+	// 生成第二个ID，此时序列号应回环为0
+	id2 := generator.GenerateID(bizId, key, testTime)
+	seq2 := ExtractSequence(id2)
+	assert.Equal(t, int64(0), seq2, "序列号溢出后应回环为0")
+}
