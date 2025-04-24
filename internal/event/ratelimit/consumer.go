@@ -70,42 +70,9 @@ func (c *RequestRateLimitedEventConsumer) Consume(ctx context.Context) error {
 		return fmt.Errorf("获取消息失败: %w", err)
 	}
 
-	for {
-		// 是否发送过限流
-		lastLimitTime, err1 := c.limiter.LastLimitTime(ctx, c.limitedKey)
-		if err1 != nil {
-			c.logger.Warn("获取限流状态失败",
-				elog.FieldErr(err1),
-				elog.Any("limitedKey", c.limitedKey))
-			return err1
-		}
-
-		// 未发生限流，或者最近一次发生限流的时间不在预期时间段内
-		if lastLimitTime.IsZero() || time.Since(lastLimitTime) > c.lookbackDuration {
-			break
-		}
-
-		// 发生过限流，睡眠一段时间，醒了继续判断是否被限流
-		// 暂停分区消费
-		err2 := c.consumer.Pause([]kafka.TopicPartition{msg.TopicPartition})
-		if err2 != nil {
-			c.logger.Warn("暂停分区失败",
-				elog.FieldErr(err2),
-				elog.Any("msg", msg))
-			return err2
-		}
-
-		// 睡眠
-		c.sleepAndPoll(c.sleepDuration)
-
-		// 恢复分区消费
-		err3 := c.consumer.Resume([]kafka.TopicPartition{msg.TopicPartition})
-		if err3 != nil {
-			c.logger.Warn("恢复分区失败",
-				elog.FieldErr(err3),
-				elog.Any("msg", msg))
-			return err3
-		}
+	// 等待限流期结束
+	if err2 := c.waitUntilRateLimitExpires(ctx, msg); err2 != nil {
+		return err2
 	}
 
 	var evt RequestRateLimitedEvent
@@ -134,6 +101,46 @@ func (c *RequestRateLimitedEventConsumer) Consume(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+func (c *RequestRateLimitedEventConsumer) waitUntilRateLimitExpires(ctx context.Context, msg *kafka.Message) error {
+	for {
+		// 是否发送过限流
+		lastLimitTime, err1 := c.limiter.LastLimitTime(ctx, c.limitedKey)
+		if err1 != nil {
+			c.logger.Warn("获取限流状态失败",
+				elog.FieldErr(err1),
+				elog.Any("limitedKey", c.limitedKey))
+			return err1
+		}
+
+		// 未发生限流，或者最近一次发生限流的时间不在预期时间段内
+		if lastLimitTime.IsZero() || time.Since(lastLimitTime) > c.lookbackDuration {
+			return nil
+		}
+
+		// 发生过限流，睡眠一段时间，醒了继续判断是否被限流
+		// 暂停分区消费
+		err2 := c.consumer.Pause([]kafka.TopicPartition{msg.TopicPartition})
+		if err2 != nil {
+			c.logger.Warn("暂停分区失败",
+				elog.FieldErr(err2),
+				elog.Any("msg", msg))
+			return err2
+		}
+
+		// 睡眠
+		c.sleepAndPoll(c.sleepDuration)
+
+		// 恢复分区消费
+		err3 := c.consumer.Resume([]kafka.TopicPartition{msg.TopicPartition})
+		if err3 != nil {
+			c.logger.Warn("恢复分区失败",
+				elog.FieldErr(err3),
+				elog.Any("msg", msg))
+			return err3
+		}
+	}
 }
 
 func (c *RequestRateLimitedEventConsumer) sleepAndPoll(subTime time.Duration) {
