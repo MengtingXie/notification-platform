@@ -2,7 +2,6 @@ package loadbalancer
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -11,30 +10,13 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/provider"
 )
 
-const (
-	defaultTimeout         = time.Second * 5
-	defaultHealthyInterval = 30 * time.Second
-)
-
-// 定义包级别错误，提高错误处理的一致性
-var (
-	ErrNoProvidersAvailable = errors.New("no providers available")
-	ErrNoHealthyProvider    = errors.New("no healthy provider available")
-)
-
-// Provider 实现了基于轮询的负载均衡通知发送
-// 它会自动跳过不健康的provider，确保通知可靠发送
-type Provider struct {
+type Selector struct {
 	providers []*mprovider  // 被封装的provider列表
 	count     int64         // 轮询计数器
 	mu        *sync.RWMutex // 保护providers的并发访问
 }
 
-// NewProvider 创建一个新的负载均衡Provider
-// 参数:
-//   - providers: 基础provider列表
-//   - bufferLen: 健康状态监控的环形缓冲区长度，用于异常检测
-func NewProvider(providers []provider.Provider, bufferLen int) *Provider {
+func NewSelector(providers []provider.Provider, bufferLen int) *Selector {
 	if bufferLen <= 0 {
 		bufferLen = 10 // 默认缓冲区长度
 	}
@@ -46,25 +28,24 @@ func NewProvider(providers []provider.Provider, bufferLen int) *Provider {
 		mproviders = append(mproviders, &mp)
 	}
 
-	return &Provider{
+	return &Selector{
 		providers: mproviders,
 		count:     0,
 		mu:        &sync.RWMutex{},
 	}
 }
 
-// Send 轮询查找健康的provider来发送通知
-// 如果所有provider都不健康，则返回错误
-// 前提：p.providers的长度在使用过程中不会改变
-func (p *Provider) Send(ctx context.Context, notification domain.Notification) (domain.SendResponse, error) {
-	providers := p.providers
+func (s *Selector) Next(_ context.Context, _ domain.Notification) (provider.Provider, error) {
+	// 获取provider列表的快照，由于长度不会改变，只需一次加锁操作
+	providers := s.providers
 	providerCount := len(providers)
+
 	if providerCount == 0 {
-		return domain.SendResponse{}, ErrNoProvidersAvailable
+		return nil, ErrNoProvidersAvailable
 	}
 
 	// 原子操作获取并递增计数，确保均匀分配负载
-	current := atomic.AddInt64(&p.count, 1) - 1
+	current := atomic.AddInt64(&s.count, 1) - 1
 
 	// 轮询所有provider
 	for i := 0; i < providerCount; i++ {
@@ -73,28 +54,25 @@ func (p *Provider) Send(ctx context.Context, notification domain.Notification) (
 
 		// 由于providers长度不变，可以安全地直接访问
 		pro := providers[idx]
+
+		// 检查provider是否健康
 		if pro != nil && pro.healthy.Load() {
-			// 使用健康的provider发送通知
-			resp, err := pro.Send(ctx, notification)
-			if err == nil {
-				return resp, nil
-			}
+			return pro, nil
 		}
 	}
 
 	// 所有provider都不健康或发送失败
-	return domain.SendResponse{}, ErrNoHealthyProvider
+	return nil, ErrNoHealthyProvider
 }
 
 // MonitorProvidersHealth 监控不健康的provider，当它们恢复健康时更新状态
 // 参数:
 //   - ctx: 上下文，用于取消监控
 //   - checkInterval: 检查间隔时间，决定多久检查一次不健康的provider
-func (p *Provider) MonitorProvidersHealth(ctx context.Context, checkInterval time.Duration) {
+func (s *Selector) MonitorProvidersHealth(ctx context.Context, checkInterval time.Duration) {
 	if checkInterval <= 0 {
 		checkInterval = defaultHealthyInterval // 默认检查间隔
 	}
-
 	ticker := time.NewTicker(checkInterval)
 	defer ticker.Stop()
 
@@ -103,14 +81,14 @@ func (p *Provider) MonitorProvidersHealth(ctx context.Context, checkInterval tim
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			p.checkAndUpdateProvidersHealth()
+			s.checkAndUpdateProvidersHealth()
 		}
 	}
 }
 
 // checkAndUpdateProvidersHealth 检查所有不健康的provider并更新它们的状态
-func (p *Provider) checkAndUpdateProvidersHealth() {
-	for _, pro := range p.providers {
+func (s *Selector) checkAndUpdateProvidersHealth() {
+	for _, pro := range s.providers {
 		// 只检查不健康的provider
 		if pro != nil && !pro.healthy.Load() {
 			pro.checkAndRecover()

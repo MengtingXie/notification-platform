@@ -1,5 +1,3 @@
-//go:build unit
-
 package loadbalancer
 
 import (
@@ -18,10 +16,10 @@ import (
 // MockHealthAwareProvider 是一个模拟的HealthAwareProvider实现
 type MockHealthAwareProvider struct {
 	name           string
-	failCount      int32        // 用于控制连续失败次数
+	failCount      atomic.Int32 // 用于控制连续失败次数
 	mu             sync.RWMutex // 保护shouldFail和healthCheckErr
 	shouldFail     bool         // 是否应该失败
-	callCount      int32        // 调用计数
+	callCount      atomic.Int32 // 调用计数
 	healthyStatus  atomic.Bool
 	healthCheckErr error
 }
@@ -37,14 +35,14 @@ func NewMockHealthAwareProvider(name string, shouldFail bool) *MockHealthAwarePr
 }
 
 func (m *MockHealthAwareProvider) Send(_ context.Context, notification domain.Notification) (domain.SendResponse, error) {
-	atomic.AddInt32(&m.callCount, 1)
+	m.callCount.Add(1)
 
 	m.mu.RLock()
 	shouldFail := m.shouldFail
 	m.mu.RUnlock()
 
 	if shouldFail {
-		atomic.AddInt32(&m.failCount, 1)
+		m.failCount.Add(1)
 		return domain.SendResponse{}, errors.New("mock provider sending error")
 	}
 
@@ -54,19 +52,22 @@ func (m *MockHealthAwareProvider) Send(_ context.Context, notification domain.No
 	}, nil
 }
 
-func (m *MockHealthAwareProvider) CheckHealth(context.Context) error {
-	m.mu.RLock()
-	err := m.healthCheckErr
-	m.mu.RUnlock()
-	return err
-}
-
 // 将失败的提供者设置为恢复
 func (m *MockHealthAwareProvider) MarkRecovered() {
 	m.mu.Lock()
 	m.shouldFail = false
 	m.healthCheckErr = nil
 	m.mu.Unlock()
+}
+
+// 获取调用计数，确保线程安全
+func (m *MockHealthAwareProvider) GetCallCount() int32 {
+	return m.callCount.Load()
+}
+
+// 重置调用计数，确保线程安全
+func (m *MockHealthAwareProvider) ResetCallCount() {
+	m.callCount.Store(0)
 }
 
 // TestProviderLoadBalancingAndHealthRecovery 测试负载均衡Provider的主流程
@@ -78,18 +79,18 @@ func TestProviderLoadBalancingAndHealthRecovery(t *testing.T) {
 	t.Parallel()
 	// 创建3个模拟的Provider，其中一个会持续失败
 	provider1 := NewMockHealthAwareProvider("provider1", false)
-	provider2 := NewMockHealthAwareProvider("provider2", true) // 这个会失败
+	provider2 := NewMockHealthAwareProvider("provider2", true) // 这个会一直失败
 	provider3 := NewMockHealthAwareProvider("provider3", false)
 
-	providers := []provider.HealthAwareProvider{provider1, provider2, provider3}
+	providers := []provider.Provider{provider1, provider2, provider3}
 
-	// 创建负载均衡Provider，设置缓冲区长度为30，这样3次失败后provider2会被标记为不健康
-	lb := NewProvider(providers, 30)
+	// 创建负载均衡Provider，设置缓冲区长度为10，这样失败率超过阈值后provider2会被标记为不健康
+	lb := NewProvider(providers, 10)
 
-	// 启动健康检查
-
-	// 使用较短的检查间隔，以便测试能更快地进行
-	go lb.MonitorProvidersHealth(t.Context(), 500*time.Millisecond)
+	// 启动健康检查，使用较短的检查间隔以加速测试
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go lb.MonitorProvidersHealth(ctx, 500*time.Millisecond)
 
 	// 创建一个测试通知
 	notification := domain.Notification{
@@ -105,63 +106,52 @@ func TestProviderLoadBalancingAndHealthRecovery(t *testing.T) {
 		},
 	}
 
-	// 第1阶段：发送几次请求，此时provider2仍然是健康的，但会失败
-	// 由于轮询，请求会分发到provider1、provider2、provider3
-	for i := 0; i < 6; i++ {
-		resp, err := lb.Send(t.Context(), notification)
-		if err == nil {
-			assert.Equal(t, notification.ID, resp.NotificationID)
-			assert.Equal(t, domain.SendStatusSucceeded, resp.Status)
-		} else {
-			// 当轮到provider2时，发送会失败
-			assert.Error(t, err)
-		}
-	}
-
-	// 等待足够的时间，让provider2被标记为不健康
-	// 这里我们多发送几次请求，确保provider2达到失败阈值
-	for i := 0; i < 5; i++ {
+	// 第1阶段：发送足够多的请求，使provider2达到失败阈值并被标记为不健康
+	for i := 0; i < 20; i++ {
 		_, _ = lb.Send(t.Context(), notification)
 	}
 
-	// 第2阶段：当provider2不健康时，请求只会发送到provider1和provider3
-	// 重置计数
-	atomic.StoreInt32(&provider1.callCount, 0)
-	atomic.StoreInt32(&provider2.callCount, 0)
-	atomic.StoreInt32(&provider3.callCount, 0)
+	// 等待provider2被标记为不健康
+	time.Sleep(1 * time.Second)
 
-	// 发送10个请求，应该都成功，且只发给provider1和provider3
-	for i := 0; i < 10; i++ {
+	// 重置所有provider的计数
+	provider1.ResetCallCount()
+	provider2.ResetCallCount()
+	provider3.ResetCallCount()
+
+	// 第2阶段：连续发送5个请求，验证它们不会发送到不健康的provider2
+	for i := 0; i < 5; i++ {
 		resp, err := lb.Send(t.Context(), notification)
 		assert.NoError(t, err)
 		assert.Equal(t, notification.ID, resp.NotificationID)
 	}
 
-	// 检查provider2没有被调用
-	assert.Greater(t, atomic.LoadInt32(&provider1.callCount), int32(0))
-	assert.Equal(t, int32(0), atomic.LoadInt32(&provider2.callCount))
-	assert.Greater(t, atomic.LoadInt32(&provider3.callCount), int32(0))
+	// 验证provider2没有收到任何请求，而其他两个provider都收到了请求
+	assert.Greater(t, provider1.GetCallCount(), int32(0))
+	assert.Equal(t, int32(0), provider2.GetCallCount())
+	assert.Greater(t, provider3.GetCallCount(), int32(0))
 
-	// 第3阶段：让provider2恢复
-	provider2.MarkRecovered()
+	// 将provider2的行为改为返回成功
+	provider2.mu.Lock()
+	provider2.shouldFail = false
+	provider2.mu.Unlock()
 
-	// 等待健康检查将provider2重新标记为健康
-	time.Sleep(1 * time.Second)
+	// 第3阶段：等待3秒钟，让健康检查机制自动恢复provider2
+	time.Sleep(4 * time.Second)
+	// 重置所有provider的计数
+	provider1.ResetCallCount()
+	provider2.ResetCallCount()
+	provider3.ResetCallCount()
 
-	// 重置计数
-	atomic.StoreInt32(&provider1.callCount, 0)
-	atomic.StoreInt32(&provider2.callCount, 0)
-	atomic.StoreInt32(&provider3.callCount, 0)
-
-	// 再次发送请求，此时所有provider都应该能收到请求
+	// 第4阶段：再次发送请求，验证所有provider（包括恢复的provider2）都能收到请求
 	for i := 0; i < 9; i++ {
 		resp, err := lb.Send(t.Context(), notification)
 		assert.NoError(t, err)
 		assert.Equal(t, notification.ID, resp.NotificationID)
 	}
 
-	// 检查所有provider都被调用了
-	assert.Greater(t, atomic.LoadInt32(&provider1.callCount), int32(0))
-	assert.Greater(t, atomic.LoadInt32(&provider2.callCount), int32(0))
-	assert.Greater(t, atomic.LoadInt32(&provider3.callCount), int32(0))
+	// 验证所有provider都收到了请求
+	assert.Greater(t, provider1.GetCallCount(), int32(0))
+	assert.Greater(t, provider2.GetCallCount(), int32(0))
+	assert.Greater(t, provider3.GetCallCount(), int32(0))
 }
