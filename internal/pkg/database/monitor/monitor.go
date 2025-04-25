@@ -55,18 +55,23 @@ func (*Heartbeat) Report(error) {}
 func (h *Heartbeat) healthCheck(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
-	for range ticker.C {
-		// 如果超时就返回
-		if ctx.Err() != nil {
-			h.logger.Error("ctx超时退出", elog.FieldErr(ctx.Err()))
+	for {
+		select {
+		case <-ctx.Done():
+			// 如果超时就返回
+			if ctx.Err() != nil {
+				h.logger.Error("ctx超时退出", elog.FieldErr(ctx.Err()))
+				return
+			}
 			return
-		}
-		// 执行健康检查
-		timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
-		err := h.healthOneLoop(timeoutCtx)
-		cancel()
-		if err != nil {
-			h.logger.Error("ConnPool健康检查失败", elog.FieldErr(err))
+		case <-ticker.C:
+			// 执行健康检查
+			timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+			err := h.healthOneLoop(timeoutCtx)
+			cancel()
+			if err != nil {
+				h.logger.Error("ConnPool健康检查失败", elog.FieldErr(err))
+			}
 		}
 	}
 }

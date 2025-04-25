@@ -3,8 +3,10 @@ package connpool
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"gitee.com/flycash/notification-platform/internal/errs"
+
 	"gitee.com/flycash/notification-platform/internal/event/failover"
 	"gitee.com/flycash/notification-platform/internal/pkg/database/monitor"
 	"github.com/gotomicro/ego/core/elog"
@@ -19,35 +21,43 @@ type DBWithFailOver struct {
 }
 
 func (d *DBWithFailOver) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
+	if !d.dbMonitor.Health() {
+		// 可以考虑直接拒绝
+		return nil, errs.ErrDatabaseError
+	}
 	return d.db.PrepareContext(ctx, query)
 }
 
 func (d *DBWithFailOver) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	if !d.dbMonitor.Health() {
+		// 可以考虑直接拒绝
+		return nil, errs.ErrDatabaseError
+	}
 	return d.db.QueryContext(ctx, query, args...)
 }
 
 func (d *DBWithFailOver) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	//if !d.dbMonitor.Health() {
+	//	// 可以考虑直接拒绝
+	//	return &sql.Row{
+	//		// 私有字段，要考虑使用 unsafe 来赋值
+	//		err: errs.ErrDatabaseError,
+	//	}
+	//}
 	return d.db.QueryRowContext(ctx, query, args...)
 }
 
-// checkHealth 检查健康状态并在不健康时发送事件
-func (d *DBWithFailOver) checkHealth(ctx context.Context, query string, args ...interface{}) error {
+func (d *DBWithFailOver) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	if !d.dbMonitor.Health() {
 		err := d.producer.Produce(ctx, failover.ConnPoolEvent{
 			SQL:  query,
 			Args: args,
 		})
 		if err != nil {
-			d.logger.Error("发送通用转异步的消息失败", elog.FieldErr(err))
+			return nil, fmt.Errorf("数据库有问题转异步失败")
 		}
-		return errs.ErrToAsync
-	}
-	return nil
-}
-
-func (d *DBWithFailOver) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	if err := d.checkHealth(ctx, query, args...); err != nil {
-		return nil, err
+		// 通过 ErrToAsync 代表我这边转异步了
+		return nil, errs.ErrToAsync
 	}
 	return d.db.ExecContext(ctx, query, args...)
 }

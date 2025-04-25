@@ -26,7 +26,6 @@ const (
 type mprovider struct {
 	provider.Provider
 	healthy       *atomic.Bool
-	failedTime    int64    // This field needs proper synchronization
 	ringBuffer    []uint64 // 比特环（滑动窗口存储）
 	reqCount      uint64   // 请求数量
 	bufferLen     int      // 滑动窗口长度
@@ -41,11 +40,15 @@ func (s *mprovider) Send(ctx context.Context, notification domain.Notification) 
 		s.markFail()
 		v := s.getFailed()
 		if v > s.failThreshold {
-			// Use the mutex to protect the write to failedTime
-			s.mu.Lock()
-			s.healthy.Store(false)
-			s.failedTime = time.Now().Unix()
-			s.mu.Unlock()
+			if s.healthy.CompareAndSwap(true, false) {
+				const waitTime = time.Minute
+				time.AfterFunc(waitTime, func() {
+					s.healthy.Store(true)
+					s.mu.Lock()
+					s.ringBuffer = make([]uint64, s.bufferLen)
+					s.mu.Unlock()
+				})
+			}
 		}
 	} else {
 		s.markSuccess()
@@ -98,12 +101,6 @@ func (s *mprovider) getFailed() int {
 	return failCount
 }
 
-func (s *mprovider) checkAndRecover() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	now := time.Now().Unix()
-	if s.failedTime+recoverSecond < now {
-		s.ringBuffer = make([]uint64, s.bufferLen)
-		s.healthy.Store(true)
-	}
+func (s *mprovider) isHealthy() bool {
+	return s.healthy.Load()
 }
