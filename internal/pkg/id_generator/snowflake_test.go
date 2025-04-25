@@ -1,7 +1,6 @@
 package id
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -10,15 +9,16 @@ import (
 )
 
 func TestGenerateAndExtract(t *testing.T) {
+	t.Parallel()
 	generator := NewGenerator()
 
 	// 测试数据
-	bizId := int64(43)
+	bizID := int64(43)
 	key := "test-key1"
 	testTime := time.Date(2024, 6, 15, 14, 30, 0, 0, time.UTC)
 
 	// 生成ID
-	id := generator.GenerateID(bizId, key, testTime)
+	id := generator.GenerateID(bizID, key, testTime)
 
 	// 提取并验证时间戳
 	extractedTime := ExtractTimestamp(id)
@@ -29,7 +29,7 @@ func TestGenerateAndExtract(t *testing.T) {
 
 	// 提取并验证哈希值
 	hashValue := ExtractHashValue(id)
-	hashWantVal := hash.Hash(bizId, key)
+	hashWantVal := hash.Hash(bizID, key)
 	assert.Equal(t, hashWantVal%1024, hashValue)
 	if hashValue < 0 || hashValue >= 1024 {
 		t.Errorf("哈希值不在有效范围内: %d", hashValue)
@@ -45,6 +45,7 @@ func TestGenerateAndExtract(t *testing.T) {
 }
 
 func TestIDUniqueness(t *testing.T) {
+	t.Parallel()
 	generator := NewGenerator()
 
 	// 生成多个ID并检查唯一性
@@ -52,10 +53,10 @@ func TestIDUniqueness(t *testing.T) {
 	idSet := make(map[int64]struct{}, idCount)
 
 	for i := 0; i < idCount; i++ {
-		bizId := int64(i % 100)                // 循环使用一些bizId
+		bizID := int64(i % 100)                // 循环使用一些bizId
 		key := "key-" + string(rune('A'+i%26)) // 循环使用一些key
 
-		id := generator.GenerateID(bizId, key, time.Time{}) // 使用当前时间
+		id := generator.GenerateID(bizID, key, time.Time{}) // 使用当前时间
 
 		if _, exists := idSet[id]; exists {
 			t.Fatalf("发现重复ID: %d", id)
@@ -68,11 +69,12 @@ func TestIDUniqueness(t *testing.T) {
 }
 
 func TestSequenceIncrement(t *testing.T) {
+	t.Parallel()
 	// 测试序列号自增功能
 	generator := NewGenerator()
 
 	// 使用相同的bizId, key和时间生成多个ID
-	bizId := int64(123)
+	bizID := int64(123)
 	key := "same-key"
 	testTime := time.Date(2024, 6, 15, 14, 30, 0, 0, time.UTC)
 
@@ -80,7 +82,7 @@ func TestSequenceIncrement(t *testing.T) {
 	count := 10
 	ids := make([]int64, count)
 	for i := 0; i < count; i++ {
-		ids[i] = generator.GenerateID(bizId, key, testTime)
+		ids[i] = generator.GenerateID(bizID, key, testTime)
 
 		// 验证序列号是否递增
 		sequence := ExtractSequence(ids[i])
@@ -102,32 +104,33 @@ func TestSequenceIncrement(t *testing.T) {
 }
 
 func TestSequenceRollover(t *testing.T) {
+	t.Parallel()
 	// 测试序列号溢出回环
 	generator := NewGenerator()
 
 	// 直接修改generator中的序列号为最大值
 	generator.sequence = sequenceMask
 
-	bizId := int64(456)
+	bizID := int64(456)
 	key := "rollover-test"
 	testTime := time.Date(2024, 6, 16, 10, 0, 0, 0, time.UTC)
 
 	// 生成第一个ID，此时序列号应为最大值
-	id1 := generator.GenerateID(bizId, key, testTime)
+	id1 := generator.GenerateID(bizID, key, testTime)
 	seq1 := ExtractSequence(id1)
 	assert.Equal(t, int64(sequenceMask), seq1, "序列号应为最大值")
 
 	// 生成第二个ID，此时序列号应回环为0
-	id2 := generator.GenerateID(bizId, key, testTime)
+	id2 := generator.GenerateID(bizID, key, testTime)
 	seq2 := ExtractSequence(id2)
 	assert.Equal(t, int64(0), seq2, "序列号溢出后应回环为0")
 }
 
-func TestGenerateID(t *testing.T) {
-	generator := NewGenerator()
-	bizId := int64(4003)
-	key := "order_batchupdate_failed_001"
-
-	id := generator.GenerateID(bizId, key, time.Now())
-	fmt.Println(id)
-}
+//func TestGenerateID(t *testing.T) {
+//	generator := NewGenerator()
+//	bizId := int64(4003)
+//	key := "order_batchupdate_failed_001"
+//
+//	id := generator.GenerateID(bizId, key, time.Now())
+//	fmt.Println(id)
+//}

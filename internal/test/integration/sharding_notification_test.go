@@ -95,23 +95,23 @@ func (s *ShardingNotificationSuite) TestCreate() {
 	}
 	actualNotifications := s.getAllNotifications()
 	s.assertNotifications(map[[2]string][]dao.Notification{
-		[2]string{
+		{
 			"notification_0",
 			"notification_0",
 		}: {
 			noti,
 		},
-		[2]string{
+		{
 			"notification_0",
 			"notification_1",
 		}: {},
-		[2]string{
+		{
 			"notification_1",
 			"notification_0",
 		}: {
 			noti2,
 		},
-		[2]string{
+		{
 			"notification_1",
 			"notification_1",
 		}: {
@@ -121,19 +121,19 @@ func (s *ShardingNotificationSuite) TestCreate() {
 
 	actualCallbackLogs := s.getAllCallbackLogs()
 	s.assertCallbackLogs(map[[2]string][]dao.CallbackLog{
-		[2]string{
+		{
 			"notification_0",
 			"callback_log_0",
 		}: {},
-		[2]string{
+		{
 			"notification_0",
 			"callback_log_1",
 		}: {},
-		[2]string{
+		{
 			"notification_1",
 			"callback_log_0",
 		}: {},
-		[2]string{
+		{
 			"notification_1",
 			"callback_log_1",
 		}: {},

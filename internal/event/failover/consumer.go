@@ -60,8 +60,6 @@ func (c *ConnPoolEventConsumer) Start(ctx context.Context) {
 func (c *ConnPoolEventConsumer) Consume(ctx context.Context) error {
 	// 检查数据库健康状态
 	if !c.dbMonitor.Health() {
-		c.logger.Warn("数据库不健康，暂停消费2秒")
-		fmt.Println("数据库不健康，暂停消费2秒")
 		// 获取当前消费者分配的分区
 		assigned, err := c.consumer.Assignment()
 		if err != nil {
@@ -93,7 +91,6 @@ func (c *ConnPoolEventConsumer) Consume(ctx context.Context) error {
 	if ev == nil {
 		return nil // 没有可用消息，稍后重试
 	}
-	fmt.Println("接收到消息", ev.String())
 
 	switch e := ev.(type) {
 	case *kafka.Message:

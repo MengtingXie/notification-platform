@@ -28,7 +28,7 @@ func TestHeartbeat_Health(t *testing.T) {
 	monitor := NewHeartbeatDBMonitor(db)
 
 	go func() {
-		_ = monitor.healthCheck(t.Context())
+		monitor.healthCheck(t.Context())
 	}()
 
 	// 阶段1: 初始化状态健康应为true

@@ -2,6 +2,7 @@ package sharding
 
 import (
 	"fmt"
+
 	"gitee.com/flycash/notification-platform/internal/pkg/hash"
 	idgen "gitee.com/flycash/notification-platform/internal/pkg/id_generator"
 )

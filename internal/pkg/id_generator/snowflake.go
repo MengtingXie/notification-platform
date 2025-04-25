@@ -1,7 +1,6 @@
 package id
 
 import (
-	"math/rand"
 	"sync/atomic"
 	"time"
 
@@ -25,25 +24,25 @@ const (
 	timestampMask = (1 << timestampBits) - 1
 
 	// 基准时间 - 2024年1月1日，可以根据实际需求调整
-	epochMillis = int64(1704067200000) // 2024-01-01 00:00:00 UTC in milliseconds
+	epochMillis   = int64(1704067200000) // 2024-01-01 00:00:00 UTC in milliseconds
+	number        = int64(1024)
+	number1000    = int64(1000)
+	number1000000 = int64(1000000)
 )
 
 // Generator 是ID生成器结构
 type Generator struct {
-	rand     *rand.Rand // 保留以防其他地方使用
-	sequence int64      // 序列号计数器，使用原子操作访问
-	lastTime int64      // 上次生成ID的时间戳
-	epoch    time.Time  // 基准时间点
+	sequence int64     // 序列号计数器，使用原子操作访问
+	lastTime int64     // 上次生成ID的时间戳
+	epoch    time.Time // 基准时间点
 }
 
 // NewGenerator 创建一个新的ID生成器
 func NewGenerator() *Generator {
-	source := rand.NewSource(time.Now().UnixNano())
 	return &Generator{
-		rand:     rand.New(source),
 		sequence: 0,
 		lastTime: 0,
-		epoch:    time.Unix(epochMillis/1000, (epochMillis%1000)*1000000),
+		epoch:    time.Unix(epochMillis/number1000, (epochMillis%number1000)*number1000000),
 	}
 }
 
@@ -51,7 +50,7 @@ func NewGenerator() *Generator {
 // bizId: 业务ID
 // key: 业务关键字
 // stime: 发送时间，如果为0则使用当前时间
-func (g *Generator) GenerateID(bizId int64, key string, stime time.Time) int64 {
+func (g *Generator) GenerateID(bizID int64, key string, stime time.Time) int64 {
 	var timestamp int64
 
 	// 获取当前时间戳（毫秒）
@@ -62,9 +61,9 @@ func (g *Generator) GenerateID(bizId int64, key string, stime time.Time) int64 {
 	}
 
 	// 计算hash值并取余
-	hashValue := hash.Hash(bizId, key) % 1024
+	hashValue := hash.Hash(bizID, key) % number
 	if hashValue < 0 {
-		hashValue += 1024 // 处理负数hash值
+		hashValue += number // 处理负数hash值
 	}
 
 	// 使用原子操作安全地递增序列号

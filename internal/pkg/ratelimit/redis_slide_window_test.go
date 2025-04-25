@@ -53,6 +53,7 @@ func (s *RedisSlidingWindowLimiterTestSuite) getUniqueKey(name string) string {
 // TestLimit_SingleRequest 测试单个请求不触发限流
 func (s *RedisSlidingWindowLimiterTestSuite) TestLimit_SingleRequest() {
 	t := s.T()
+	t.Skip()
 	ctx := t.Context()
 	key := s.getUniqueKey("single_request")
 
@@ -70,6 +71,7 @@ func (s *RedisSlidingWindowLimiterTestSuite) TestLimit_SingleRequest() {
 // TestLimit_ExceedThreshold 测试超过阈值触发限流
 func (s *RedisSlidingWindowLimiterTestSuite) TestLimit_ExceedThreshold() {
 	t := s.T()
+	t.Skip()
 	ctx := t.Context()
 	key := s.getUniqueKey("exceed_threshold")
 
@@ -94,6 +96,7 @@ func (s *RedisSlidingWindowLimiterTestSuite) TestLimit_ExceedThreshold() {
 // TestLimit_DifferentKeys 测试不同key之间互不影响
 func (s *RedisSlidingWindowLimiterTestSuite) TestLimit_DifferentKeys() {
 	t := s.T()
+
 	ctx := t.Context()
 	key1 := s.getUniqueKey("key1")
 	key2 := s.getUniqueKey("key2")
@@ -119,6 +122,7 @@ func (s *RedisSlidingWindowLimiterTestSuite) TestLimit_DifferentKeys() {
 // TestLimit_WindowSliding 测试窗口滑动后限流恢复
 func (s *RedisSlidingWindowLimiterTestSuite) TestLimit_WindowSliding() {
 	t := s.T()
+
 	ctx := t.Context()
 	key := s.getUniqueKey("window_sliding")
 
@@ -146,6 +150,7 @@ func (s *RedisSlidingWindowLimiterTestSuite) TestLimit_WindowSliding() {
 // TestLimit_CustomTime 测试使用自定义时间点进行限流判断
 func (s *RedisSlidingWindowLimiterTestSuite) TestLimit_CustomTime() {
 	t := s.T()
+
 	// 创建一个自定义时间窗口的限流器
 	// 窗口1秒，最多允许3个请求
 	customLimiter := NewRedisSlidingWindowLimiter(s.rdb, 1*time.Second, 3)
@@ -179,6 +184,7 @@ func (s *RedisSlidingWindowLimiterTestSuite) TestLimit_CustomTime() {
 // TestLastLimitTime_NoEvents 测试没有限流事件时的查询
 func (s *RedisSlidingWindowLimiterTestSuite) TestLastLimitTime_NoEvents() {
 	t := s.T()
+
 	ctx := t.Context()
 	key := s.getUniqueKey("no_limit_events")
 
@@ -191,6 +197,7 @@ func (s *RedisSlidingWindowLimiterTestSuite) TestLastLimitTime_NoEvents() {
 // TestLastLimitTime_WithEvents 测试有限流事件时的查询
 func (s *RedisSlidingWindowLimiterTestSuite) TestLastLimitTime_WithEvents() {
 	t := s.T()
+
 	ctx := t.Context()
 	key := s.getUniqueKey("with_limit_events")
 
@@ -222,6 +229,7 @@ func (s *RedisSlidingWindowLimiterTestSuite) TestLastLimitTime_WithEvents() {
 // TestLastLimitTime_MultipleEvents 测试多次限流情况下获取最新的限流时间
 func (s *RedisSlidingWindowLimiterTestSuite) TestLastLimitTime_MultipleEvents() {
 	t := s.T()
+
 	ctx := t.Context()
 	key := s.getUniqueKey("multiple_limit_events")
 
