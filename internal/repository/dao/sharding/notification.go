@@ -21,15 +21,25 @@ const (
 	maxBatchSize = 20
 )
 
-type NotificationSvc struct {
-	dbs                     syncx.Map[string, *gorm.DB]
-	db                      *gorm.DB
-	notificationShardingSvc sharding.ShardingSvc
-	callbackLogShardingSvc  sharding.ShardingSvc
+type NotificationShardingDAO struct {
+	dbs                     *syncx.Map[string, *gorm.DB]
+	notificationShardingSvc sharding.ShardingStrategy
+	callbackLogShardingSvc  sharding.ShardingStrategy
+}
+
+func NewNotificationSvc(dbs *syncx.Map[string, *gorm.DB],
+	notificationShardingSvc sharding.ShardingStrategy,
+	callbackLogShardingSvc sharding.ShardingStrategy,
+) *NotificationShardingDAO {
+	return &NotificationShardingDAO{
+		dbs:                     dbs,
+		notificationShardingSvc: notificationShardingSvc,
+		callbackLogShardingSvc:  callbackLogShardingSvc,
+	}
 }
 
 // isUniqueConstraintError 检查是否是唯一索引冲突错误
-func (d *NotificationSvc) isUniqueConstraintError(err error) bool {
+func (d *NotificationShardingDAO) isUniqueConstraintError(err error) bool {
 	if err == nil {
 		return false
 	}
@@ -40,11 +50,11 @@ func (d *NotificationSvc) isUniqueConstraintError(err error) bool {
 	}
 	return false
 }
-func (s *NotificationSvc) Create(ctx context.Context, data dao.Notification) (dao.Notification, error) {
+func (s *NotificationShardingDAO) Create(ctx context.Context, data dao.Notification) (dao.Notification, error) {
 	return s.create(ctx, data, false)
 }
 
-func (s *NotificationSvc) create(ctx context.Context, data dao.Notification, createCallbackLog bool) (dao.Notification, error) {
+func (s *NotificationShardingDAO) create(ctx context.Context, data dao.Notification, createCallbackLog bool) (dao.Notification, error) {
 	now := time.Now().UnixMilli()
 	data.Ctime, data.Utime = now, now
 	data.Version = 1
@@ -68,6 +78,8 @@ func (s *NotificationSvc) create(ctx context.Context, data dao.Notification, cre
 				NotificationID: data.ID,
 				Status:         domain.CallbackLogStatusInit.String(),
 				NextRetryTime:  now,
+				Ctime:          now,
+				Utime:          now,
 			}).Error; err != nil {
 				return fmt.Errorf("%w", errs.ErrCreateCallbackLogFailed)
 			}
@@ -77,19 +89,19 @@ func (s *NotificationSvc) create(ctx context.Context, data dao.Notification, cre
 	return data, err
 }
 
-func (s *NotificationSvc) CreateWithCallbackLog(ctx context.Context, data dao.Notification) (dao.Notification, error) {
+func (s *NotificationShardingDAO) CreateWithCallbackLog(ctx context.Context, data dao.Notification) (dao.Notification, error) {
 	return s.create(ctx, data, true)
 }
 
-func (s *NotificationSvc) BatchCreate(ctx context.Context, dataList []dao.Notification) ([]dao.Notification, error) {
+func (s *NotificationShardingDAO) BatchCreate(ctx context.Context, dataList []dao.Notification) ([]dao.Notification, error) {
 	return s.batchCreate(ctx, dataList, false)
 }
 
-func (s *NotificationSvc) BatchCreateWithCallbackLog(ctx context.Context, datas []dao.Notification) ([]dao.Notification, error) {
+func (s *NotificationShardingDAO) BatchCreateWithCallbackLog(ctx context.Context, datas []dao.Notification) ([]dao.Notification, error) {
 	return s.batchCreate(ctx, datas, true)
 }
 
-func (s *NotificationSvc) GetByID(ctx context.Context, id uint64) (dao.Notification, error) {
+func (s *NotificationShardingDAO) GetByID(ctx context.Context, id uint64) (dao.Notification, error) {
 	dst := s.notificationShardingSvc.ShardWithID(int64(id))
 	gormdb, ok := s.dbs.Load(dst.DB)
 	if !ok {
@@ -108,7 +120,7 @@ func (s *NotificationSvc) GetByID(ctx context.Context, id uint64) (dao.Notificat
 	return data, nil
 }
 
-func (s *NotificationSvc) BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]dao.Notification, error) {
+func (s *NotificationShardingDAO) BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]dao.Notification, error) {
 	idsMap := make(map[[2]string][]uint64, len(ids))
 	for _, id := range ids {
 		dst := s.notificationShardingSvc.ShardWithID(int64(id))
@@ -157,7 +169,7 @@ func (s *NotificationSvc) BatchGetByIDs(ctx context.Context, ids []uint64) (map[
 	return notifiMap, eg.Wait()
 }
 
-func (s *NotificationSvc) GetByKey(ctx context.Context, bizID int64, key string) (dao.Notification, error) {
+func (s *NotificationShardingDAO) GetByKey(ctx context.Context, bizID int64, key string) (dao.Notification, error) {
 	dst := s.notificationShardingSvc.Shard(bizID, key)
 	gormdb, ok := s.dbs.Load(dst.DB)
 	if !ok {
@@ -173,7 +185,7 @@ func (s *NotificationSvc) GetByKey(ctx context.Context, bizID int64, key string)
 	return data, nil
 }
 
-func (s *NotificationSvc) GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]dao.Notification, error) {
+func (s *NotificationShardingDAO) GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]dao.Notification, error) {
 	notiMap := make(map[[2]string][]string, len(keys))
 	for idx := range keys {
 		key := keys[idx]
@@ -216,10 +228,11 @@ func (s *NotificationSvc) GetByKeys(ctx context.Context, bizID int64, keys ...st
 			return notificationList.Append(data...)
 		})
 	}
-	return notificationList.AsSlice(), eg.Wait()
+	err := eg.Wait()
+	return notificationList.AsSlice(), err
 }
 
-func (s *NotificationSvc) CASStatus(ctx context.Context, notification dao.Notification) error {
+func (s *NotificationShardingDAO) CASStatus(ctx context.Context, notification dao.Notification) error {
 	updates := map[string]any{
 		"status":  notification.Status,
 		"version": gorm.Expr("version + 1"),
@@ -245,7 +258,7 @@ func (s *NotificationSvc) CASStatus(ctx context.Context, notification dao.Notifi
 	return nil
 }
 
-func (s *NotificationSvc) UpdateStatus(ctx context.Context, notification dao.Notification) error {
+func (s *NotificationShardingDAO) UpdateStatus(ctx context.Context, notification dao.Notification) error {
 	dst := s.notificationShardingSvc.ShardWithID(int64(notification.ID))
 	gormDb, ok := s.dbs.Load(dst.DB)
 	if !ok {
@@ -262,7 +275,7 @@ func (s *NotificationSvc) UpdateStatus(ctx context.Context, notification dao.Not
 		}).Error
 }
 
-func (s *NotificationSvc) BatchUpdateStatusSucceededOrFailed(ctx context.Context, successNotifications, failedNotifications []dao.Notification) error {
+func (s *NotificationShardingDAO) BatchUpdateStatusSucceededOrFailed(ctx context.Context, successNotifications, failedNotifications []dao.Notification) error {
 	if len(successNotifications) == 0 && len(failedNotifications) == 0 {
 		return nil
 	}
@@ -287,10 +300,11 @@ func (s *NotificationSvc) BatchUpdateStatusSucceededOrFailed(ctx context.Context
 		} else {
 			v.successIds = append(v.successIds, no.ID)
 		}
+		tabdbMap[[2]string{dst.DB, dst.Table}] = v
 	}
 
 	for idx := range failedNotifications {
-		no := successNotifications[idx]
+		no := failedNotifications[idx]
 		dst := s.notificationShardingSvc.ShardWithID(int64(no.ID))
 		v, ok := tabdbMap[[2]string{dst.DB, dst.Table}]
 		if !ok {
@@ -300,6 +314,7 @@ func (s *NotificationSvc) BatchUpdateStatusSucceededOrFailed(ctx context.Context
 		} else {
 			v.failedIds = append(v.failedIds, no.ID)
 		}
+		tabdbMap[[2]string{dst.DB, dst.Table}] = v
 	}
 
 	var eg errgroup.Group
@@ -341,12 +356,12 @@ func (s *NotificationSvc) BatchUpdateStatusSucceededOrFailed(ctx context.Context
 }
 
 // FindReadyNotifications 这个是循环任务用的不在这个dao中实现
-func (s *NotificationSvc) FindReadyNotifications(ctx context.Context, offset, limit int) ([]dao.Notification, error) {
+func (s *NotificationShardingDAO) FindReadyNotifications(ctx context.Context, offset, limit int) ([]dao.Notification, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (s *NotificationSvc) MarkSuccess(ctx context.Context, entity dao.Notification) error {
+func (s *NotificationShardingDAO) MarkSuccess(ctx context.Context, entity dao.Notification) error {
 	now := time.Now().UnixMilli()
 	dst := s.notificationShardingSvc.ShardWithID(int64(entity.ID))
 	callbackLogDst := s.callbackLogShardingSvc.ShardWithID(int64(entity.ID))
@@ -379,7 +394,7 @@ func (s *NotificationSvc) MarkSuccess(ctx context.Context, entity dao.Notificati
 	})
 }
 
-func (s *NotificationSvc) MarkFailed(ctx context.Context, entity dao.Notification) error {
+func (s *NotificationShardingDAO) MarkFailed(ctx context.Context, entity dao.Notification) error {
 	now := time.Now().UnixMilli()
 	dst := s.notificationShardingSvc.ShardWithID(int64(entity.ID))
 	gormDb, ok := s.dbs.Load(dst.DB)
@@ -399,12 +414,12 @@ func (s *NotificationSvc) MarkFailed(ctx context.Context, entity dao.Notificatio
 	})
 }
 
-func (s *NotificationSvc) MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error) {
+func (s *NotificationShardingDAO) MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (d *NotificationSvc) batchCreate(ctx context.Context, datas []dao.Notification, createCallbackLog bool) ([]dao.Notification, error) {
+func (d *NotificationShardingDAO) batchCreate(ctx context.Context, datas []dao.Notification, createCallbackLog bool) ([]dao.Notification, error) {
 	if len(datas) == 0 {
 		return []dao.Notification{}, nil
 	}
@@ -472,7 +487,7 @@ func (d *NotificationSvc) batchCreate(ctx context.Context, datas []dao.Notificat
 	return datas, eg.Wait()
 }
 
-func (d *NotificationSvc) batchMarkSuccess(tx *gorm.DB, notiTab, callbackLogTab string, successIDs []uint64) error {
+func (d *NotificationShardingDAO) batchMarkSuccess(tx *gorm.DB, notiTab, callbackLogTab string, successIDs []uint64) error {
 	now := time.Now().Unix()
 	err := tx.Model(&dao.Notification{}).
 		Table(notiTab).

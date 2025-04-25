@@ -1,6 +1,7 @@
 package id
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -120,4 +121,13 @@ func TestSequenceRollover(t *testing.T) {
 	id2 := generator.GenerateID(bizId, key, testTime)
 	seq2 := ExtractSequence(id2)
 	assert.Equal(t, int64(0), seq2, "序列号溢出后应回环为0")
+}
+
+func TestGenerateID(t *testing.T) {
+	generator := NewGenerator()
+	bizId := int64(4003)
+	key := "order_batchupdate_failed_001"
+
+	id := generator.GenerateID(bizId, key, time.Now())
+	fmt.Println(id)
 }

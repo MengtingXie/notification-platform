@@ -6,7 +6,7 @@ import (
 	idgen "gitee.com/flycash/notification-platform/internal/pkg/id_generator"
 )
 
-type ShardingSvc struct {
+type ShardingStrategy struct {
 	dbPrefix      string
 	tablePrefix   string
 	tableSharding int64
@@ -18,7 +18,16 @@ type Dst struct {
 	DB    string
 }
 
-func (s *ShardingSvc) Shard(bizID int64, key string) Dst {
+func NewShardingStrategy(dbPrefix, tablePrefix string, tableSharding, dbSharding int64) ShardingStrategy {
+	return ShardingStrategy{
+		dbSharding:    dbSharding,
+		tableSharding: tableSharding,
+		dbPrefix:      dbPrefix,
+		tablePrefix:   tablePrefix,
+	}
+}
+
+func (s *ShardingStrategy) Shard(bizID int64, key string) Dst {
 	hashValue := hash.Hash(bizID, key)
 	dbHash := hashValue % s.dbSharding
 	tabHash := (hashValue / s.dbSharding) % s.tableSharding
@@ -28,7 +37,7 @@ func (s *ShardingSvc) Shard(bizID int64, key string) Dst {
 	}
 }
 
-func (s *ShardingSvc) ShardWithID(id int64) Dst {
+func (s *ShardingStrategy) ShardWithID(id int64) Dst {
 	hashValue := idgen.ExtractHashValue(id)
 	dbHash := hashValue % s.dbSharding
 	tabHash := (hashValue / s.dbSharding) % s.tableSharding
@@ -36,4 +45,17 @@ func (s *ShardingSvc) ShardWithID(id int64) Dst {
 		Table: fmt.Sprintf("%s_%d", s.tablePrefix, tabHash),
 		DB:    fmt.Sprintf("%s_%d", s.dbPrefix, dbHash),
 	}
+}
+
+func (s *ShardingStrategy) Broadcast() []Dst {
+	ans := make([]Dst, 0, s.tableSharding*s.dbSharding)
+	for i := 0; i < int(s.dbSharding); i++ {
+		for j := 0; j < int(s.tableSharding); j++ {
+			ans = append(ans, Dst{
+				Table: fmt.Sprintf("%s_%d", s.tablePrefix, j),
+				DB:    fmt.Sprintf("%s_%d", s.dbPrefix, i),
+			})
+		}
+	}
+	return ans
 }
