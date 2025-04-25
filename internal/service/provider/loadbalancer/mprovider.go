@@ -20,7 +20,7 @@ const (
 	bitsPerUint64Shift = 6    // log2(64), used for division by 64
 	bitMask            = 63   // 2^6 - 1, used for modulo 64
 	initialHealth      = true // Initial health status
-	recoverSecond      = 5
+	recoverSecond      = 3
 )
 
 type mprovider struct {
