@@ -35,31 +35,20 @@ func NewSelector(providers []provider.Provider, bufferLen int) *Selector {
 }
 
 func (s *Selector) Next(_ context.Context, _ domain.Notification) (provider.Provider, error) {
-	// 获取provider列表的快照，由于长度不会改变，只需一次加锁操作
+	s.mu.RLock()
 	providers := s.providers
-	providerCount := len(providers)
-
-	if providerCount == 0 {
+	s.mu.RUnlock()
+	providerLen := len(providers)
+	if providerLen == 0 {
 		return nil, ErrNoProvidersAvailable
 	}
-
-	// 原子操作获取并递增计数，确保均匀分配负载
-	current := atomic.AddInt64(&s.count, 1) - 1
-
-	// 轮询所有provider
-	for i := 0; i < providerCount; i++ {
-		// 计算当前要使用的provider索引
-		idx := (int(current) + i) % providerCount
-
-		// 由于providers长度不变，可以安全地直接访问
+	current := atomic.AddInt64(&s.count, 1)
+	for i := 0; i < providerLen; i++ {
+		idx := (int(current) + i) % providerLen
 		pro := providers[idx]
-
-		// 检查provider是否健康
-		if pro != nil && pro.healthy.Load() {
+		if pro != nil && pro.isHealthy() {
 			return pro, nil
 		}
 	}
-
-	// 所有provider都不健康或发送失败
 	return nil, ErrNoHealthyProvider
 }

@@ -44,6 +44,9 @@ func (s *mprovider) Send(ctx context.Context, notification domain.Notification) 
 				const waitTime = time.Minute
 				time.AfterFunc(waitTime, func() {
 					s.healthy.Store(true)
+					s.mu.Lock()
+					s.ringBuffer = make([]uint64, s.bufferLen)
+					s.mu.Unlock()
 				})
 			}
 		}
@@ -96,4 +99,8 @@ func (s *mprovider) getFailed() int {
 		failCount += bits.OnesCount64(v)
 	}
 	return failCount
+}
+
+func (s *mprovider) isHealthy() bool {
+	return s.healthy.Load()
 }
