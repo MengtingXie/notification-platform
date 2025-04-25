@@ -4,7 +4,6 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
@@ -63,35 +62,4 @@ func (s *Selector) Next(_ context.Context, _ domain.Notification) (provider.Prov
 
 	// 所有provider都不健康或发送失败
 	return nil, ErrNoHealthyProvider
-}
-
-// MonitorProvidersHealth 监控不健康的provider，当它们恢复健康时更新状态
-// 参数:
-//   - ctx: 上下文，用于取消监控
-//   - checkInterval: 检查间隔时间，决定多久检查一次不健康的provider
-func (s *Selector) MonitorProvidersHealth(ctx context.Context, checkInterval time.Duration) {
-	if checkInterval <= 0 {
-		checkInterval = defaultHealthyInterval // 默认检查间隔
-	}
-	ticker := time.NewTicker(checkInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.checkAndUpdateProvidersHealth()
-		}
-	}
-}
-
-// checkAndUpdateProvidersHealth 检查所有不健康的provider并更新它们的状态
-func (s *Selector) checkAndUpdateProvidersHealth() {
-	for _, pro := range s.providers {
-		// 只检查不健康的provider
-		if pro != nil && !pro.healthy.Load() {
-			pro.checkAndRecover()
-		}
-	}
 }

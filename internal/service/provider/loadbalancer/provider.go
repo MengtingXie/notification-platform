@@ -5,15 +5,9 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/provider"
-)
-
-const (
-	defaultTimeout         = time.Second * 5
-	defaultHealthyInterval = 30 * time.Second
 )
 
 // 定义包级别错误，提高错误处理的一致性
@@ -84,36 +78,4 @@ func (p *Provider) Send(ctx context.Context, notification domain.Notification) (
 
 	// 所有provider都不健康或发送失败
 	return domain.SendResponse{}, ErrNoHealthyProvider
-}
-
-// MonitorProvidersHealth 监控不健康的provider，当它们恢复健康时更新状态
-// 参数:
-//   - ctx: 上下文，用于取消监控
-//   - checkInterval: 检查间隔时间，决定多久检查一次不健康的provider
-func (p *Provider) MonitorProvidersHealth(ctx context.Context, checkInterval time.Duration) {
-	if checkInterval <= 0 {
-		checkInterval = defaultHealthyInterval // 默认检查间隔
-	}
-
-	ticker := time.NewTicker(checkInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			p.checkAndUpdateProvidersHealth()
-		}
-	}
-}
-
-// checkAndUpdateProvidersHealth 检查所有不健康的provider并更新它们的状态
-func (p *Provider) checkAndUpdateProvidersHealth() {
-	for _, pro := range p.providers {
-		// 只检查不健康的provider
-		if pro != nil && !pro.healthy.Load() {
-			pro.checkAndRecover()
-		}
-	}
 }

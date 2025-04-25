@@ -87,11 +87,6 @@ func TestProviderLoadBalancingAndHealthRecovery(t *testing.T) {
 	// 创建负载均衡Provider，设置缓冲区长度为10，这样失败率超过阈值后provider2会被标记为不健康
 	lb := NewProvider(providers, 10)
 
-	// 启动健康检查，使用较短的检查间隔以加速测试
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	go lb.MonitorProvidersHealth(ctx, 500*time.Millisecond)
-
 	// 创建一个测试通知
 	notification := domain.Notification{
 		ID:        123,

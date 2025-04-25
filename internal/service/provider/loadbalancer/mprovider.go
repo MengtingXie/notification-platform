@@ -26,7 +26,6 @@ const (
 type mprovider struct {
 	provider.Provider
 	healthy       *atomic.Bool
-	failedTime    int64
 	ringBuffer    []uint64 // 比特环（滑动窗口存储）
 	reqCount      uint64   // 请求数量
 	bufferLen     int      // 滑动窗口长度
@@ -42,7 +41,10 @@ func (s *mprovider) Send(ctx context.Context, notification domain.Notification) 
 		v := s.getFailed()
 		if v > s.failThreshold {
 			if s.healthy.CompareAndSwap(true, false) {
-				s.failedTime = time.Now().Unix()
+				const waitTime = time.Minute
+				time.AfterFunc(waitTime, func() {
+					s.healthy.Store(true)
+				})
 			}
 		}
 	} else {
@@ -94,14 +96,4 @@ func (s *mprovider) getFailed() int {
 		failCount += bits.OnesCount64(v)
 	}
 	return failCount
-}
-
-func (s *mprovider) checkAndRecover() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	now := time.Now().Unix()
-	if s.failedTime+recoverSecond < now {
-		s.ringBuffer = make([]uint64, s.bufferLen)
-		s.healthy.Store(true)
-	}
 }
