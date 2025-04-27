@@ -9,7 +9,9 @@ GRANT CREATE
 , ALTER
 , INDEX, LOCK TABLES, REFERENCES,
 UPDATE,
-DELETE, DROP,
+DELETE
+, DROP
+,
 SELECT,
 INSERT
 ON `notification`.* TO 'notification'@'%';
@@ -95,6 +97,38 @@ CREATE TABLE `notification_1`
     INDEX                 `idx_scheduled` (`scheduled_stime`, `scheduled_etime`, `status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通知记录表';
 
+CREATE TABLE `tx_notification_0`
+(
+    `tx_id`           BIGINT       NOT NULL AUTO_INCREMENT COMMENT '事务ID',
+    `key`             VARCHAR(256) NOT NULL COMMENT '业务内唯一标识，区分同一个业务内的不同通知',
+    `notification_id` BIGINT UNSIGNED NOT NULL COMMENT '创建的通知ID',
+    `biz_id`          BIGINT       NOT NULL COMMENT '业务方唯一标识',
+    `status`          VARCHAR(20)  NOT NULL DEFAULT 'PREPARE' COMMENT '通知状态',
+    `check_count`     INT          NOT NULL DEFAULT 1 COMMENT '第几次检查从1开始',
+    `next_check_time` BIGINT       NOT NULL DEFAULT 0 COMMENT '下一次的回查时间戳',
+    `ctime`           BIGINT       NOT NULL COMMENT '创建时间',
+    `utime`           BIGINT       NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (`tx_id`),
+    UNIQUE INDEX `idx_biz_id_key` (`biz_id`, `key`),
+    INDEX             `idx_next_check_time_status` (`next_check_time`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='事务通知表';
+
+CREATE TABLE `tx_notification_1`
+(
+    `tx_id`           BIGINT       NOT NULL AUTO_INCREMENT COMMENT '事务ID',
+    `key`             VARCHAR(256) NOT NULL COMMENT '业务内唯一标识，区分同一个业务内的不同通知',
+    `notification_id` BIGINT UNSIGNED NOT NULL COMMENT '创建的通知ID',
+    `biz_id`          BIGINT       NOT NULL COMMENT '业务方唯一标识',
+    `status`          VARCHAR(20)  NOT NULL DEFAULT 'PREPARE' COMMENT '通知状态',
+    `check_count`     INT          NOT NULL DEFAULT 1 COMMENT '第几次检查从1开始',
+    `next_check_time` BIGINT       NOT NULL DEFAULT 0 COMMENT '下一次的回查时间戳',
+    `ctime`           BIGINT       NOT NULL COMMENT '创建时间',
+    `utime`           BIGINT       NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (`tx_id`),
+    UNIQUE INDEX `idx_biz_id_key` (`biz_id`, `key`),
+    INDEX             `idx_next_check_time_status` (`next_check_time`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='事务通知表';
+
 CREATE
 DATABASE IF NOT EXISTS `notification_1`;
 
@@ -171,3 +205,36 @@ CREATE TABLE `notification_1`
     INDEX                 `idx_biz_id_status` (`biz_id`, `status`),
     INDEX                 `idx_scheduled` (`scheduled_stime`, `scheduled_etime`, `status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通知记录表';
+
+
+CREATE TABLE `tx_notification_0`
+(
+    `tx_id`           BIGINT       NOT NULL AUTO_INCREMENT COMMENT '事务ID',
+    `key`             VARCHAR(256) NOT NULL COMMENT '业务内唯一标识，区分同一个业务内的不同通知',
+    `notification_id` BIGINT UNSIGNED NOT NULL COMMENT '创建的通知ID',
+    `biz_id`          BIGINT       NOT NULL COMMENT '业务方唯一标识',
+    `status`          VARCHAR(20)  NOT NULL DEFAULT 'PREPARE' COMMENT '通知状态',
+    `check_count`     INT          NOT NULL DEFAULT 1 COMMENT '第几次检查从1开始',
+    `next_check_time` BIGINT       NOT NULL DEFAULT 0 COMMENT '下一次的回查时间戳',
+    `ctime`           BIGINT       NOT NULL COMMENT '创建时间',
+    `utime`           BIGINT       NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (`tx_id`),
+    UNIQUE INDEX `idx_biz_id_key` (`biz_id`, `key`),
+    INDEX             `idx_next_check_time_status` (`next_check_time`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='事务通知表';
+
+CREATE TABLE `tx_notification_1`
+(
+    `tx_id`           BIGINT       NOT NULL AUTO_INCREMENT COMMENT '事务ID',
+    `key`             VARCHAR(256) NOT NULL COMMENT '业务内唯一标识，区分同一个业务内的不同通知',
+    `notification_id` BIGINT UNSIGNED NOT NULL COMMENT '创建的通知ID',
+    `biz_id`          BIGINT       NOT NULL COMMENT '业务方唯一标识',
+    `status`          VARCHAR(20)  NOT NULL DEFAULT 'PREPARE' COMMENT '通知状态',
+    `check_count`     INT          NOT NULL DEFAULT 1 COMMENT '第几次检查从1开始',
+    `next_check_time` BIGINT       NOT NULL DEFAULT 0 COMMENT '下一次的回查时间戳',
+    `ctime`           BIGINT       NOT NULL COMMENT '创建时间',
+    `utime`           BIGINT       NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (`tx_id`),
+    UNIQUE INDEX `idx_biz_id_key` (`biz_id`, `key`),
+    INDEX             `idx_next_check_time_status` (`next_check_time`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='事务通知表';

@@ -71,6 +71,7 @@ func (t *txNotificationService) StartTask(ctx context.Context) {
 }
 
 func (t *txNotificationService) Prepare(ctx context.Context, notification domain.Notification) (uint64, error) {
+	// todo
 	notification.Status = domain.SendStatusPrepare
 	notification.SetSendTime()
 	txn := domain.TxNotification{

@@ -649,9 +649,9 @@ func (s *ShardingNotificationSuite) clearTables() {
 		require.NoError(s.T(), err)
 		err = db.Exec("truncate table `callback_log_1`").Error
 		require.NoError(s.T(), err)
-		err = db.Exec("truncate table `notification_0`").Error
+		err = db.Exec("delete from `notification_0` where biz_id < 10000").Error
 		require.NoError(s.T(), err)
-		err = db.Exec("truncate table `notification_1`").Error
+		err = db.Exec("delete from `notification_1` where biz_id < 10000").Error
 		require.NoError(s.T(), err)
 		return true
 	})

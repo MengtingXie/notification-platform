@@ -18,6 +18,10 @@ func InitNotificationSharding() (notificationStrategy, callbacklogStrategy shard
 	return sharding.NewShardingStrategy("notification", "notification", testTableNum, testDBNum), sharding.NewShardingStrategy("notification", "callback_log", testTableNum, testDBNum)
 }
 
+func InitTxnSharding() (notificationStrategy,txnStrategy sharding.ShardingStrategy) {
+	return sharding.NewShardingStrategy("notification", "notification", testTableNum, testDBNum), sharding.NewShardingStrategy("notification", "tx_notification", testTableNum, testDBNum)
+}
+
 func InitDbs() *syncx.Map[string, *gorm.DB] {
 	dsn0 := "root:root@tcp(localhost:13316)/notification_0?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true"
 	ioc.WaitForDBSetup(dsn0)

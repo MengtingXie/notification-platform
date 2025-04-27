@@ -23,7 +23,8 @@ type ConnPoolEventConsumer struct {
 	db        *gorm.DB
 	dbMonitor monitor.DBMonitor
 	logger    *elog.Component
-	topic     string
+
+	topic string
 }
 
 // NewConnPoolEventConsumer 创建一个新的连接池事件消费者
