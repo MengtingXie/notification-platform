@@ -47,8 +47,6 @@ func (t *TxNotification) TableName() string {
 }
 
 type TxNotificationDAO interface {
-	// Create 直接保存即可
-	Create(ctx context.Context, notification TxNotification) (int64, error)
 	// FindCheckBack 查找需要回查的事务通知，筛选条件是status为PREPARE，并且下一次回查时间小于当前时间
 	FindCheckBack(ctx context.Context, offset, limit int) ([]TxNotification, error)
 	// CASStatus 变更状态 用于用户提交/取消

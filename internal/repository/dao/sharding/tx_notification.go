@@ -35,10 +35,6 @@ func NewTxNShardingDAO(
 	}
 }
 
-func (t *TxNShardingDAO) Create(ctx context.Context, notification dao.TxNotification) (int64, error) {
-	//TODO implement me
-	panic("implement me")
-}
 
 func (t *TxNShardingDAO) FindCheckBack(ctx context.Context, offset, limit int) ([]dao.TxNotification, error) {
 	//TODO implement me
