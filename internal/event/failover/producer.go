@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/ecodeclub/mq-api"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
 const (
@@ -23,21 +23,47 @@ type ConnPoolEventProducer interface {
 }
 
 type Producer struct {
-	producer mq.Producer
+	producer *kafka.Producer
 }
 
-func NewProducer(producer mq.Producer) *Producer {
-	return &Producer{producer: producer}
+// NewProducer creates a new Kafka producer with the given configuration
+func NewProducer(configMap *kafka.ConfigMap) (*Producer, error) {
+	producer, err := kafka.NewProducer(configMap)
+	if err != nil {
+		return nil, fmt.Errorf("创建Kafka Producer失败: %w", err)
+	}
+	return &Producer{producer: producer}, nil
 }
 
+// Produce serializes and sends a ConnPoolEvent to Kafka
 func (p *Producer) Produce(ctx context.Context, evt ConnPoolEvent) error {
 	evtStr, err := json.Marshal(evt)
 	if err != nil {
 		return fmt.Errorf("序列化topic的消息失败 %w", err)
 	}
-	_, err = p.producer.Produce(ctx, &mq.Message{
-		Topic: FailoverTopic,
+	topic := FailoverTopic
+
+	deliveryChan := make(chan kafka.Event)
+	err = p.producer.Produce(&kafka.Message{
+		TopicPartition: kafka.TopicPartition{
+			Topic:     &topic,
+			Partition: kafka.PartitionAny,
+		},
 		Value: evtStr,
-	})
-	return err
+	}, deliveryChan)
+
+	if err != nil {
+		return fmt.Errorf("发送消息到Kafka失败: %w", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case e := <-deliveryChan:
+		m := e.(*kafka.Message)
+		if m.TopicPartition.Error != nil {
+			return fmt.Errorf("消息发送失败: %w", m.TopicPartition.Error)
+		}
+	}
+	return nil
 }
