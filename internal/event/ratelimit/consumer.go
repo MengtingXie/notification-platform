@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	mqx "gitee.com/flycash/notification-platform/internal/pkg/mqx2"
+	mqx "gitee.com/flycash/notification-platform/internal/pkg/mqx"
 	"gitee.com/flycash/notification-platform/internal/pkg/ratelimit"
 	notificationsvc "gitee.com/flycash/notification-platform/internal/service/notification"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
@@ -37,7 +37,27 @@ func NewRequestLimitedEventConsumer(
 	lookbackDuration time.Duration,
 	sleepDuration time.Duration,
 ) (*RequestRateLimitedEventConsumer, error) {
-	err := consumer.SubscribeTopics([]string{eventName}, nil)
+	return NewRequestLimitedEventConsumerWithTopic(
+		srv,
+		consumer,
+		limitedKey,
+		limiter,
+		lookbackDuration,
+		sleepDuration,
+		eventName,
+	)
+}
+
+func NewRequestLimitedEventConsumerWithTopic(
+	srv notificationsvc.SendService,
+	consumer *kafka.Consumer,
+	limitedKey string,
+	limiter ratelimit.Limiter,
+	lookbackDuration time.Duration,
+	sleepDuration time.Duration,
+	topic string,
+) (*RequestRateLimitedEventConsumer, error) {
+	err := consumer.SubscribeTopics([]string{topic}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +91,7 @@ func (c *RequestRateLimitedEventConsumer) Consume(ctx context.Context) error {
 	}
 
 	// 等待限流期结束
-	if err2 := c.waitUntilRateLimitExpires(ctx, msg); err2 != nil {
+	if err2 := c.waitUntilRateLimitExpires(ctx); err2 != nil {
 		return err2
 	}
 
@@ -103,7 +123,7 @@ func (c *RequestRateLimitedEventConsumer) Consume(ctx context.Context) error {
 	return nil
 }
 
-func (c *RequestRateLimitedEventConsumer) waitUntilRateLimitExpires(ctx context.Context, msg *kafka.Message) error {
+func (c *RequestRateLimitedEventConsumer) waitUntilRateLimitExpires(ctx context.Context) error {
 	for {
 		// 是否发送过限流
 		lastLimitTime, err1 := c.limiter.LastLimitTime(ctx, c.limitedKey)
@@ -119,26 +139,35 @@ func (c *RequestRateLimitedEventConsumer) waitUntilRateLimitExpires(ctx context.
 			return nil
 		}
 
+		// 获取分配的分区
+		partitions, err2 := c.consumer.Assignment()
+		if err2 != nil {
+			c.logger.Warn("获取消费者已分配的分区失败",
+				elog.FieldErr(err2),
+				elog.Any("partitions", partitions))
+			return err2
+		}
+
 		// 发生过限流，睡眠一段时间，醒了继续判断是否被限流
 		// 暂停分区消费
-		err2 := c.consumer.Pause([]kafka.TopicPartition{msg.TopicPartition})
-		if err2 != nil {
+		err3 := c.consumer.Pause(partitions)
+		if err3 != nil {
 			c.logger.Warn("暂停分区失败",
-				elog.FieldErr(err2),
-				elog.Any("msg", msg))
-			return err2
+				elog.FieldErr(err3),
+				elog.Any("partitions", partitions))
+			return err3
 		}
 
 		// 睡眠
 		c.sleepAndPoll(c.sleepDuration)
 
 		// 恢复分区消费
-		err3 := c.consumer.Resume([]kafka.TopicPartition{msg.TopicPartition})
-		if err3 != nil {
+		err4 := c.consumer.Resume(partitions)
+		if err4 != nil {
 			c.logger.Warn("恢复分区失败",
-				elog.FieldErr(err3),
-				elog.Any("msg", msg))
-			return err3
+				elog.FieldErr(err4),
+				elog.Any("partitions", partitions))
+			return err4
 		}
 	}
 }

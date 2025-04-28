@@ -7,6 +7,8 @@
 package ioc
 
 import (
+	"time"
+
 	"gitee.com/flycash/notification-platform/internal/api/grpc"
 	"gitee.com/flycash/notification-platform/internal/domain"
 	ioc2 "gitee.com/flycash/notification-platform/internal/ioc"
@@ -30,7 +32,9 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/sendstrategy"
 	manage2 "gitee.com/flycash/notification-platform/internal/service/template/manage"
 	"gitee.com/flycash/notification-platform/internal/test/ioc"
+	"github.com/ecodeclub/ekit/pool"
 	"github.com/google/wire"
+	"github.com/gotomicro/ego/core/econf"
 )
 
 // Injectors from wire.go:
@@ -60,7 +64,8 @@ func InitGrpcServer(clients map[string]client.Client) *ioc.App {
 	callbackLogRepository := repository.NewCallbackLogRepository(notificationRepository, callbackLogDAO)
 	callbackService := callback.NewService(businessConfigService, callbackLogRepository)
 	channel := newChannel(channelTemplateService, clients)
-	notificationSender := sender.NewSender(notificationRepository, businessConfigService, callbackService, channel)
+	taskPool := newTaskPool()
+	notificationSender := sender.NewSender(notificationRepository, businessConfigService, callbackService, channel, taskPool)
 	immediateSendStrategy := sendstrategy.NewImmediateStrategy(notificationRepository, notificationSender)
 	defaultSendStrategy := sendstrategy.NewDefaultStrategy(notificationRepository, businessConfigService)
 	sendStrategy := sendstrategy.NewDispatcher(immediateSendStrategy, defaultSendStrategy)
@@ -113,7 +118,8 @@ var (
 	notificationSvcSet   = wire.NewSet(notification.NewNotificationService, repository.NewNotificationRepository, dao.NewNotificationDAO, notification.NewSendingTimeoutTask)
 	txNotificationSvcSet = wire.NewSet(notification.NewTxNotificationService, repository.NewTxNotificationRepository, dao.NewTxNotificationDAO, notification.NewTxCheckTask)
 	senderSvcSet         = wire.NewSet(
-		newChannel, sender.NewSender,
+		newChannel,
+		newTaskPool, sender.NewSender,
 	)
 	sendNotificationSvcSet = wire.NewSet(notification.NewSendService, sendstrategy.NewDispatcher, sendstrategy.NewImmediateStrategy, sendstrategy.NewDefaultStrategy)
 	callbackSvcSet         = wire.NewSet(callback.NewService, repository.NewCallbackLogRepository, dao.NewCallbackLogDAO, callback.NewAsyncRequestResultCallbackTask)
@@ -122,6 +128,30 @@ var (
 	schedulerSet           = wire.NewSet(scheduler.NewScheduler)
 	quotaSvcSet            = wire.NewSet(quota.NewService, quota.NewQuotaMonthlyResetCron, repository.NewQuotaRepository, dao.NewQuotaDAO)
 )
+
+func newTaskPool() pool.TaskPool {
+	type Config struct {
+		InitGo           int           `yaml:"initGo"`
+		CoreGo           int32         `yaml:"coreGo"`
+		MaxGo            int32         `yaml:"maxGo"`
+		MaxIdleTime      time.Duration `yaml:"maxIdleTime"`
+		QueueSize        int           `yaml:"queueSize"`
+		QueueBacklogRate float64       `yaml:"queueBacklogRate"`
+	}
+	var cfg Config
+	if err := econf.UnmarshalKey("pool", &cfg); err != nil {
+		panic(err)
+	}
+	p, err := pool.NewOnDemandBlockTaskPool(cfg.InitGo, cfg.QueueSize, pool.WithQueueBacklogRate(cfg.QueueBacklogRate), pool.WithMaxIdleTime(cfg.MaxIdleTime), pool.WithCoreGo(cfg.CoreGo), pool.WithMaxGo(cfg.MaxGo))
+	if err != nil {
+		panic(err)
+	}
+	err = p.Start()
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
 
 func newChannel(
 	templateSvc manage2.ChannelTemplateService,

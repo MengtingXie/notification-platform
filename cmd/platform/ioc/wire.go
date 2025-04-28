@@ -8,6 +8,8 @@ import (
 
 	"gitee.com/flycash/notification-platform/internal/service/provider/metrics"
 	"gitee.com/flycash/notification-platform/internal/service/provider/tracing"
+	"github.com/ecodeclub/ekit/pool"
+	"github.com/gotomicro/ego/core/econf"
 
 	"gitee.com/flycash/notification-platform/internal/service/quota"
 	"gitee.com/flycash/notification-platform/internal/service/scheduler"
@@ -66,7 +68,8 @@ var (
 	senderSvcSet = wire.NewSet(
 		newSMSClients,
 		newChannel,
-		initSender,
+		newTaskPool,
+		newSender,
 	)
 	sendNotificationSvcSet = wire.NewSet(
 		notificationsvc.NewSendService,
@@ -161,11 +164,41 @@ func newMockSMSSelectorBuilder() *sequential.SelectorBuilder {
 	})
 }
 
-func initSender(repo repository.NotificationRepository,
+func newTaskPool() pool.TaskPool {
+	type Config struct {
+		InitGo           int           `yaml:"initGo"`
+		CoreGo           int32         `yaml:"coreGo"`
+		MaxGo            int32         `yaml:"maxGo"`
+		MaxIdleTime      time.Duration `yaml:"maxIdleTime"`
+		QueueSize        int           `yaml:"queueSize"`
+		QueueBacklogRate float64       `yaml:"queueBacklogRate"`
+	}
+	var cfg Config
+	if err := econf.UnmarshalKey("pool", &cfg); err != nil {
+		panic(err)
+	}
+	p, err := pool.NewOnDemandBlockTaskPool(cfg.InitGo, cfg.QueueSize,
+		pool.WithQueueBacklogRate(cfg.QueueBacklogRate),
+		pool.WithMaxIdleTime(cfg.MaxIdleTime),
+		pool.WithCoreGo(cfg.CoreGo),
+		pool.WithMaxGo(cfg.MaxGo))
+	if err != nil {
+		panic(err)
+	}
+	err = p.Start()
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
+
+func newSender(repo repository.NotificationRepository,
 	configSvc configsvc.BusinessConfigService,
 	callbackSvc callback.Service,
-	channel channel.Channel) sender.NotificationSender {
-	s := sender.NewSender(repo, configSvc, callbackSvc, channel)
+	channel channel.Channel,
+	taskPool pool.TaskPool,
+) sender.NotificationSender {
+	s := sender.NewSender(repo, configSvc, callbackSvc, channel, taskPool)
 	return sender.NewTracingSender(sender.NewMetricsSender(s))
 }
 

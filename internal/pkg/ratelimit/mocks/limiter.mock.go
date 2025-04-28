@@ -11,6 +11,7 @@ package limitmocks
 
 import (
 	reflect "reflect"
+	time "time"
 
 	gomock "go.uber.org/mock/gomock"
 	context "golang.org/x/net/context"
@@ -40,19 +41,19 @@ func (m *MockLimiter) EXPECT() *MockLimiterMockRecorder {
 	return m.recorder
 }
 
-// IsLimitedAfter mocks base method.
-func (m *MockLimiter) IsLimitedAfter(ctx context.Context, key string, sinceMillis int64) (bool, error) {
+// LastLimitTime mocks base method.
+func (m *MockLimiter) LastLimitTime(ctx context.Context, key string) (time.Time, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsLimitedAfter", ctx, key, sinceMillis)
-	ret0, _ := ret[0].(bool)
+	ret := m.ctrl.Call(m, "LastLimitTime", ctx, key)
+	ret0, _ := ret[0].(time.Time)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// IsLimitedAfter indicates an expected call of IsLimitedAfter.
-func (mr *MockLimiterMockRecorder) IsLimitedAfter(ctx, key, sinceMillis any) *gomock.Call {
+// LastLimitTime indicates an expected call of LastLimitTime.
+func (mr *MockLimiterMockRecorder) LastLimitTime(ctx, key any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsLimitedAfter", reflect.TypeOf((*MockLimiter)(nil).IsLimitedAfter), ctx, key, sinceMillis)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastLimitTime", reflect.TypeOf((*MockLimiter)(nil).LastLimitTime), ctx, key)
 }
 
 // Limit mocks base method.

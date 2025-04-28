@@ -3,9 +3,13 @@
 package ioc
 
 import (
+	"time"
+
 	"gitee.com/flycash/notification-platform/internal/service/quota"
 	"gitee.com/flycash/notification-platform/internal/service/scheduler"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
+	"github.com/ecodeclub/ekit/pool"
+	"github.com/gotomicro/ego/core/econf"
 
 	grpcapi "gitee.com/flycash/notification-platform/internal/api/grpc"
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -60,6 +64,7 @@ var (
 	)
 	senderSvcSet = wire.NewSet(
 		newChannel,
+		newTaskPool,
 		sender.NewSender,
 	)
 	sendNotificationSvcSet = wire.NewSet(
@@ -93,6 +98,34 @@ var (
 		repository.NewQuotaRepository,
 		dao.NewQuotaDAO)
 )
+
+func newTaskPool() pool.TaskPool {
+	type Config struct {
+		InitGo           int           `yaml:"initGo"`
+		CoreGo           int32         `yaml:"coreGo"`
+		MaxGo            int32         `yaml:"maxGo"`
+		MaxIdleTime      time.Duration `yaml:"maxIdleTime"`
+		QueueSize        int           `yaml:"queueSize"`
+		QueueBacklogRate float64       `yaml:"queueBacklogRate"`
+	}
+	var cfg Config
+	if err := econf.UnmarshalKey("pool", &cfg); err != nil {
+		panic(err)
+	}
+	p, err := pool.NewOnDemandBlockTaskPool(cfg.InitGo, cfg.QueueSize,
+		pool.WithQueueBacklogRate(cfg.QueueBacklogRate),
+		pool.WithMaxIdleTime(cfg.MaxIdleTime),
+		pool.WithCoreGo(cfg.CoreGo),
+		pool.WithMaxGo(cfg.MaxGo))
+	if err != nil {
+		panic(err)
+	}
+	err = p.Start()
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
 
 func newChannel(
 	templateSvc templatesvc.ChannelTemplateService,

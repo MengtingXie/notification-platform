@@ -7,6 +7,8 @@
 package template
 
 import (
+	"time"
+
 	audit2 "gitee.com/flycash/notification-platform/internal/event/audit"
 	"gitee.com/flycash/notification-platform/internal/event/template"
 	"gitee.com/flycash/notification-platform/internal/repository"
@@ -16,21 +18,21 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
 	manage2 "gitee.com/flycash/notification-platform/internal/service/template/manage"
 	"gitee.com/flycash/notification-platform/internal/test/ioc"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
 // Injectors from wire.go:
 
-func Init(providerSvc manage.Service, auditSvc audit.Service, clients map[string]client.Client) (*Service, error) {
+func Init(providerSvc manage.Service, auditSvc audit.Service, clients map[string]client.Client, producer *kafka.Producer, consumer *kafka.Consumer, batchSize int, batchTimeout time.Duration) (*Service, error) {
 	db := ioc.InitDBAndTables()
 	channelTemplateDAO := dao.NewChannelTemplateDAO(db)
 	channelTemplateRepository := repository.NewChannelTemplateRepository(channelTemplateDAO)
 	channelTemplateService := manage2.NewChannelTemplateService(channelTemplateRepository, providerSvc, auditSvc, clients)
-	mq := ioc.InitMQ()
-	auditResultConsumer, err := template.NewAuditResultConsumer(channelTemplateService, mq)
+	auditResultConsumer, err := template.NewAuditResultConsumer(channelTemplateService, consumer, batchSize, batchTimeout)
 	if err != nil {
 		return nil, err
 	}
-	resultCallbackEventProducer, err := audit2.NewResultCallbackEventProducer(mq)
+	resultCallbackEventProducer, err := audit2.NewResultCallbackEventProducer(producer)
 	if err != nil {
 		return nil, err
 	}

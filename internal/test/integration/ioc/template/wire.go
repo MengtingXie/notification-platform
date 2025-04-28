@@ -3,6 +3,8 @@
 package template
 
 import (
+	"time"
+
 	auditevt "gitee.com/flycash/notification-platform/internal/event/audit"
 	templateevt "gitee.com/flycash/notification-platform/internal/event/template"
 	"gitee.com/flycash/notification-platform/internal/repository"
@@ -12,6 +14,7 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/provider/sms/client"
 	templatesvc "gitee.com/flycash/notification-platform/internal/service/template/manage"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/google/wire"
 )
 
@@ -26,6 +29,10 @@ func Init(
 	providerSvc providersvc.Service,
 	auditSvc auditsvc.Service,
 	clients map[string]client.Client,
+	producer *kafka.Producer,
+	consumer *kafka.Consumer,
+	batchSize int,
+	batchTimeout time.Duration,
 ) (*Service, error) {
 	wire.Build(
 		testioc.BaseSet,

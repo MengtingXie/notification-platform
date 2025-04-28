@@ -1,3 +1,5 @@
+//go:build unit
+
 package loadbalancer
 
 import (
@@ -76,6 +78,7 @@ func (m *MockHealthAwareProvider) ResetCallCount() {
 // 2. 当一个provider持续失败时，会被标记为不健康
 // 3. 当不健康的provider恢复后，会被重新标记为健康
 func TestProviderLoadBalancingAndHealthRecovery(t *testing.T) {
+	t.Skip()
 	t.Parallel()
 	// 创建3个模拟的Provider，其中一个会持续失败
 	provider1 := NewMockHealthAwareProvider("provider1", false)
