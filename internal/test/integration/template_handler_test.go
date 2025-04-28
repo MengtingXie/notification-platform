@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -18,6 +19,7 @@ import (
 	templateioc "gitee.com/flycash/notification-platform/internal/test/integration/ioc/template"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
 	templateweb "gitee.com/flycash/notification-platform/internal/web/template"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/ecodeclub/ekit/iox"
 	"github.com/ego-component/egorm"
 	"github.com/gotomicro/ego/core/econf"
@@ -57,9 +59,59 @@ func (s *TemplateHandlerTestSuite) newService(ctrl *gomock.Controller) (template
 		"mock-provider-name-1": mockClient1,
 		"mock-provider-name-2": mockClient2,
 	}
-	svc, err := templateioc.Init(mockProviderSvc, mockAuditSvc, clients)
+	n := time.Now().UnixNano()
+	addr := "localhost:9092"
+
+	s.initTopic(addr, "audit_result_events")
+
+	producer, err := kafka.NewProducer(&kafka.ConfigMap{
+		"bootstrap.servers": addr,
+	})
+	s.NoError(err)
+
+	consumer, err := kafka.NewConsumer(&kafka.ConfigMap{
+		"bootstrap.servers":  addr,
+		"auto.offset.reset":  "earliest",
+		"group.id":           fmt.Sprintf("mock-group-%d", n),
+		"enable.auto.commit": "false",
+	})
+	s.NoError(err)
+
+	svc, err := templateioc.Init(mockProviderSvc, mockAuditSvc, clients, producer, consumer, 10, 5*time.Second)
 	s.NoError(err)
 	return svc, mockProviderSvc, mockAuditSvc, clients
+}
+
+func (s *TemplateHandlerTestSuite) initTopic(addr, topic string) {
+	// 创建 AdminClient
+	adminClient, err := kafka.NewAdminClient(&kafka.ConfigMap{
+		"bootstrap.servers": addr,
+	})
+	s.NoError(err)
+	defer adminClient.Close()
+	// 设置要创建的主题的配置信息
+	numPartitions := 1
+	replicationFactor := 1
+	// 创建主题
+	results, err := adminClient.CreateTopics(
+		context.Background(),
+		[]kafka.TopicSpecification{
+			{
+				Topic:             topic,
+				NumPartitions:     numPartitions,
+				ReplicationFactor: replicationFactor,
+			},
+		},
+	)
+	s.NoError(err)
+	// 处理创建主题的结果
+	for _, result := range results {
+		if result.Error.Code() != kafka.ErrNoError && result.Error.Code() != kafka.ErrTopicAlreadyExists {
+			fmt.Printf("创建topic失败 %s: %v\n", result.Topic, result.Error)
+		} else {
+			fmt.Printf("Topic %s 创建成功\n", result.Topic)
+		}
+	}
 }
 
 func (s *TemplateHandlerTestSuite) TearDownSuite() {

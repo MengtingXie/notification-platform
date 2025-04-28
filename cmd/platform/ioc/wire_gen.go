@@ -32,7 +32,9 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/sender"
 	"gitee.com/flycash/notification-platform/internal/service/sendstrategy"
 	manage2 "gitee.com/flycash/notification-platform/internal/service/template/manage"
+	"github.com/ecodeclub/ekit/pool"
 	"github.com/google/wire"
+	"github.com/gotomicro/ego/core/econf"
 	"time"
 )
 
@@ -64,7 +66,8 @@ func InitGrpcServer() *ioc.App {
 	callbackLogRepository := repository.NewCallbackLogRepository(notificationRepository, callbackLogDAO)
 	callbackService := callback.NewService(businessConfigService, callbackLogRepository)
 	channel := newChannel(v, channelTemplateService)
-	notificationSender := initSender(notificationRepository, businessConfigService, callbackService, channel)
+	taskPool := newTaskPool()
+	notificationSender := newSender(notificationRepository, businessConfigService, callbackService, channel, taskPool)
 	immediateSendStrategy := sendstrategy.NewImmediateStrategy(notificationRepository, notificationSender)
 	defaultSendStrategy := sendstrategy.NewDefaultStrategy(notificationRepository, businessConfigService)
 	sendStrategy := sendstrategy.NewDispatcher(immediateSendStrategy, defaultSendStrategy)
@@ -104,7 +107,8 @@ var (
 	senderSvcSet         = wire.NewSet(
 		newSMSClients,
 		newChannel,
-		initSender,
+		newTaskPool,
+		newSender,
 	)
 	sendNotificationSvcSet = wire.NewSet(notification.NewSendService, sendstrategy.NewDispatcher, sendstrategy.NewImmediateStrategy, sendstrategy.NewDefaultStrategy)
 	callbackSvcSet         = wire.NewSet(callback.NewService, repository.NewCallbackLogRepository, dao.NewCallbackLogDAO, callback.NewAsyncRequestResultCallbackTask)
@@ -171,10 +175,36 @@ func newMockSMSSelectorBuilder() *sequential.SelectorBuilder {
 	return sequential.NewSelectorBuilder([]provider.Provider{metrics.NewProvider("ali", tracing.NewProvider(provider.NewMockProvider(), "ali"))})
 }
 
-func initSender(repo repository.NotificationRepository,
+func newTaskPool() pool.TaskPool {
+	type Config struct {
+		InitGo           int           `yaml:"initGo"`
+		CoreGo           int32         `yaml:"coreGo"`
+		MaxGo            int32         `yaml:"maxGo"`
+		MaxIdleTime      time.Duration `yaml:"maxIdleTime"`
+		QueueSize        int           `yaml:"queueSize"`
+		QueueBacklogRate float64       `yaml:"queueBacklogRate"`
+	}
+	var cfg Config
+	if err := econf.UnmarshalKey("pool", &cfg); err != nil {
+		panic(err)
+	}
+	p, err := pool.NewOnDemandBlockTaskPool(cfg.InitGo, cfg.QueueSize, pool.WithQueueBacklogRate(cfg.QueueBacklogRate), pool.WithMaxIdleTime(cfg.MaxIdleTime), pool.WithCoreGo(cfg.CoreGo), pool.WithMaxGo(cfg.MaxGo))
+	if err != nil {
+		panic(err)
+	}
+	err = p.Start()
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
+
+func newSender(repo repository.NotificationRepository,
 	configSvc config.BusinessConfigService,
 	callbackSvc callback.Service, channel2 channel.Channel,
+
+	taskPool pool.TaskPool,
 ) sender.NotificationSender {
-	s := sender.NewSender(repo, configSvc, callbackSvc, channel2)
+	s := sender.NewSender(repo, configSvc, callbackSvc, channel2, taskPool)
 	return sender.NewTracingSender(sender.NewMetricsSender(s))
 }

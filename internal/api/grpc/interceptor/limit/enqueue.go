@@ -39,15 +39,11 @@ func NewEnqueueRateLimitedRequestBuilder(
 func (b *EnqueueRateLimitedRequestBuilder) Build() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		limited, err := b.limiter.Limit(ctx, b.limitedKey)
-		if err != nil {
-			// 保守策略
-			return nil, status.Errorf(codes.ResourceExhausted, "%s", errs.ErrRateLimited)
-		}
-
 		// 未限流，继续流程
-		if !limited {
+		if err == nil && !limited {
 			return handler(ctx, req)
 		}
+		// 你可以考虑记录一下 err
 
 		// 已限流，判断是否为需要转存的请求 —— 通知写请求
 		notificationCarrier, ok := req.(notificationv1.NotificationCarrier)
@@ -91,7 +87,7 @@ func (b *EnqueueRateLimitedRequestBuilder) Build() grpc.UnaryServerInterceptor {
 				elog.Any("req", req),
 				elog.Any("info", info))
 		}
-
-		return nil, status.Errorf(codes.ResourceExhausted, "%s", errs.ErrRateLimited)
+		const accepted = 101
+		return nil, status.Errorf(codes.Code(accepted), "转异步处理")
 	}
 }

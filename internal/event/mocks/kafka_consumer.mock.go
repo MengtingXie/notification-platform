@@ -41,6 +41,45 @@ func (m *MockConsumer) EXPECT() *MockConsumerMockRecorder {
 	return m.recorder
 }
 
+// Assignment mocks base method.
+func (m *MockConsumer) Assignment() ([]kafka.TopicPartition, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Assignment")
+	ret0, _ := ret[0].([]kafka.TopicPartition)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Assignment indicates an expected call of Assignment.
+func (mr *MockConsumerMockRecorder) Assignment() *MockConsumerAssignmentCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Assignment", reflect.TypeOf((*MockConsumer)(nil).Assignment))
+	return &MockConsumerAssignmentCall{Call: call}
+}
+
+// MockConsumerAssignmentCall wrap *gomock.Call
+type MockConsumerAssignmentCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockConsumerAssignmentCall) Return(partitions []kafka.TopicPartition, err error) *MockConsumerAssignmentCall {
+	c.Call = c.Call.Return(partitions, err)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockConsumerAssignmentCall) Do(f func() ([]kafka.TopicPartition, error)) *MockConsumerAssignmentCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockConsumerAssignmentCall) DoAndReturn(f func() ([]kafka.TopicPartition, error)) *MockConsumerAssignmentCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // CommitMessage mocks base method.
 func (m_2 *MockConsumer) CommitMessage(m *kafka.Message) ([]kafka.TopicPartition, error) {
 	m_2.ctrl.T.Helper()

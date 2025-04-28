@@ -1,6 +1,6 @@
 //go:build e2e
 
-package mqx2
+package mqx
 
 import (
 	"encoding/json"

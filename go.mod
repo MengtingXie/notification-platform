@@ -17,6 +17,7 @@ require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-kratos/aegis v0.2.0
 	github.com/go-sql-driver/mysql v1.7.1
+	github.com/gofrs/uuid v4.0.0+incompatible
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/wire v0.6.0
 	github.com/gotomicro/ego v1.2.3

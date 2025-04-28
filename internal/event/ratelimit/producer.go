@@ -3,7 +3,7 @@ package ratelimit
 import (
 	"context"
 
-	mqx "gitee.com/flycash/notification-platform/internal/pkg/mqx2"
+	mqx "gitee.com/flycash/notification-platform/internal/pkg/mqx"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
@@ -13,5 +13,9 @@ type RequestRateLimitedEventProducer interface {
 }
 
 func NewRequestRateLimitedEventProducer(producer *kafka.Producer) (RequestRateLimitedEventProducer, error) {
-	return mqx.NewGeneralProducer[RequestRateLimitedEvent](producer, eventName)
+	return NewRequestRateLimitedEventProducerWithTopic(producer, eventName)
+}
+
+func NewRequestRateLimitedEventProducerWithTopic(producer *kafka.Producer, topic string) (RequestRateLimitedEventProducer, error) {
+	return mqx.NewGeneralProducer[RequestRateLimitedEvent](producer, topic)
 }

@@ -3,13 +3,15 @@ package template
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	auditevt "gitee.com/flycash/notification-platform/internal/event/audit"
+	"gitee.com/flycash/notification-platform/internal/pkg/mqx"
 	templatesvc "gitee.com/flycash/notification-platform/internal/service/template/manage"
-	"github.com/ecodeclub/mq-api"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/gotomicro/ego/core/elog"
 )
 
@@ -19,20 +21,29 @@ const (
 
 type AuditResultConsumer struct {
 	svc      templatesvc.ChannelTemplateService
-	consumer mq.Consumer
-	logger   *elog.Component
+	consumer mqx.Consumer
+
+	batchSize    int
+	batchTimeout time.Duration
+
+	logger *elog.Component
 }
 
-func NewAuditResultConsumer(svc templatesvc.ChannelTemplateService, q mq.MQ) (*AuditResultConsumer, error) {
-	const groupID = "template"
-	consumer, err := q.Consumer(auditEventName, groupID)
+func NewAuditResultConsumer(svc templatesvc.ChannelTemplateService,
+	consumer *kafka.Consumer,
+	batchSize int,
+	batchTimeout time.Duration,
+) (*AuditResultConsumer, error) {
+	err := consumer.SubscribeTopics([]string{auditEventName}, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &AuditResultConsumer{
-		svc:      svc,
-		consumer: consumer,
-		logger:   elog.DefaultLogger,
+		svc:          svc,
+		consumer:     consumer,
+		batchSize:    batchSize,
+		batchTimeout: batchTimeout,
+		logger:       elog.DefaultLogger,
 	}, nil
 }
 
@@ -48,71 +59,71 @@ func (c *AuditResultConsumer) Start(ctx context.Context) {
 }
 
 func (c *AuditResultConsumer) Consume(ctx context.Context) error {
-	msgCh, err := c.consumer.ConsumeChan(ctx)
-	if err != nil {
-		return fmt.Errorf("获取消息失败: %w", err)
-	}
-
-	// 限制批次大小
-	const batchSize = 20
-
 	// 限制时间
-	const timeLimit = 3 * time.Second
-	timer := time.NewTimer(timeLimit)
-	defer timer.Stop()
+	batchTimer := time.NewTimer(c.batchTimeout)
+	defer batchTimer.Stop()
 
-	versions := make([]domain.ChannelTemplateVersion, 0, batchSize)
-	versionIDs := make([]int64, 0, batchSize)
-	var evt auditevt.CallbackResultEvent
+	var (
+		versions    = make([]domain.ChannelTemplateVersion, 0, c.batchSize)
+		versionIDs  = make([]int64, 0, c.batchSize)
+		evt         auditevt.CallbackResultEvent
+		lastMessage *kafka.Message
+	)
 
-CollectBatch:
+collectBatch:
 	for {
 		select {
-		case msg, ok := <-msgCh:
-			// 检查通道是否已关闭
-			if !ok {
-				break CollectBatch
-			}
-
-			err = json.Unmarshal(msg.Value, &evt)
-			if err != nil {
-				c.logger.Warn("解析消息失败",
-					elog.FieldErr(err),
-					elog.Any("msg", msg.Value))
-				continue
-			}
-
-			if !evt.ResourceType.IsTemplate() {
-				continue
-			}
-
-			version := domain.ChannelTemplateVersion{
-				ID:           evt.ResourceID,
-				AuditID:      evt.AuditID,
-				AuditorID:    evt.AuditorID,
-				AuditTime:    evt.AuditTime,
-				AuditStatus:  domain.AuditStatus(evt.AuditStatus),
-				RejectReason: evt.RejectReason,
-			}
-
-			if version.AuditStatus.IsApproved() {
-				versionIDs = append(versionIDs, version.ID)
-			}
-
-			versions = append(versions, version)
-
-			// 达到批量大小限制，跳出循环
-			if len(versions) == batchSize {
-				break CollectBatch
-			}
-
-		case <-timer.C:
-			// 达到时间限制，跳出循环
-			break CollectBatch
 		case <-ctx.Done():
-			// 上下文被取消，不返回err
-			break CollectBatch
+			// ctx 被取消
+			break collectBatch
+		case <-batchTimer.C:
+			// 达到时间限制，跳出循环
+			break collectBatch
+		default:
+			// 达到批量大小限制，跳出循环
+			if len(versions) == c.batchSize {
+				break collectBatch
+			}
 		}
+
+		msg, err := c.consumer.ReadMessage(c.batchTimeout)
+		if err != nil {
+			var kErr kafka.Error
+			if errors.As(err, &kErr) && kErr.Code() == kafka.ErrTimedOut {
+				// 聚合当前批次已超时
+				break
+			}
+			return fmt.Errorf("获取消息失败: %w", err)
+		}
+
+		if err = json.Unmarshal(msg.Value, &evt); err != nil {
+			c.logger.Warn("解析消息失败",
+				elog.FieldErr(err),
+				elog.Any("msg", msg))
+			// 跳过不合规的消息
+			// 解析失败，跳过本条，继续下一轮
+			continue
+		}
+
+		if !evt.ResourceType.IsTemplate() {
+			continue
+		}
+
+		version := domain.ChannelTemplateVersion{
+			ID:           evt.ResourceID,
+			AuditID:      evt.AuditID,
+			AuditorID:    evt.AuditorID,
+			AuditTime:    evt.AuditTime,
+			AuditStatus:  domain.AuditStatus(evt.AuditStatus),
+			RejectReason: evt.RejectReason,
+		}
+
+		if version.AuditStatus.IsApproved() {
+			versionIDs = append(versionIDs, version.ID)
+		}
+
+		versions = append(versions, version)
+		lastMessage = msg
 	}
 
 	// 没有可以更新的内容
@@ -120,7 +131,7 @@ CollectBatch:
 		return nil
 	}
 
-	err = c.svc.BatchUpdateVersionAuditStatus(ctx, versions)
+	err := c.svc.BatchUpdateVersionAuditStatus(ctx, versions)
 	if err != nil {
 		c.logger.Warn("更新模版版本内部审核信息失败",
 			elog.FieldErr(err),
@@ -138,5 +149,14 @@ CollectBatch:
 		return err
 	}
 
+	// 只提交每个分区的最后一条消息，这也就假定当前消费者只消费一个分区
+	_, err = c.consumer.CommitMessage(lastMessage)
+	if err != nil {
+		c.logger.Warn("提交消息失败",
+			elog.FieldErr(err),
+			elog.Any("partition", lastMessage.TopicPartition.Partition),
+			elog.Any("offset", lastMessage.TopicPartition.Offset))
+		return err
+	}
 	return nil
 }

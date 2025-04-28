@@ -3,6 +3,7 @@ package sender
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -10,6 +11,7 @@ import (
 	"gitee.com/flycash/notification-platform/internal/service/channel"
 	configsvc "gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/notification/callback"
+	"github.com/ecodeclub/ekit/pool"
 	"github.com/gotomicro/ego/core/elog"
 )
 
@@ -29,7 +31,9 @@ type sender struct {
 	configSvc   configsvc.BusinessConfigService
 	callbackSvc callback.Service
 	channel     channel.Channel
-	logger      *elog.Component
+	taskPool    pool.TaskPool
+
+	logger *elog.Component
 }
 
 // NewSender 创建通知发送器
@@ -38,12 +42,14 @@ func NewSender(
 	configSvc configsvc.BusinessConfigService,
 	callbackSvc callback.Service,
 	channel channel.Channel,
+	taskPool pool.TaskPool,
 ) NotificationSender {
 	return &sender{
 		repo:        repo,
 		configSvc:   configSvc,
 		callbackSvc: callbackSvc,
 		channel:     channel,
+		taskPool:    taskPool,
 		logger:      elog.DefaultLogger,
 	}
 }
@@ -92,13 +98,10 @@ func (d *sender) BatchSend(ctx context.Context, notifications []domain.Notificat
 	wg.Add(len(notifications))
 	for i := range notifications {
 		n := notifications[i]
-		// 用 ekit 的 pool 来改造它
-		// 最大 goroutine 数量可以很大。 2000
-		go func() {
+		err := d.taskPool.Submit(ctx, pool.TaskFunc(func(ctx context.Context) error {
 			defer wg.Done()
-
-			_, err1 := d.channel.Send(ctx, n)
-			if err1 != nil {
+			_, err := d.channel.Send(ctx, n)
+			if err != nil {
 				resp := domain.SendResponse{
 					NotificationID: n.ID,
 					Status:         domain.SendStatusFailed,
@@ -115,7 +118,16 @@ func (d *sender) BatchSend(ctx context.Context, notifications []domain.Notificat
 				succeed = append(succeed, resp)
 				succeedMu.Unlock()
 			}
-		}()
+			log.Printf("submit notification[%d] = %#v\n", i, n)
+			return nil
+		}))
+		if err != nil {
+			d.logger.Warn("提交任务到任务池失败",
+				elog.FieldErr(err),
+				elog.Any("notification", n),
+			)
+			return nil, fmt.Errorf("提交任务到任务池失败: %w", err)
+		}
 	}
 	wg.Wait()
 
@@ -131,11 +143,11 @@ func (d *sender) BatchSend(ctx context.Context, notifications []domain.Notificat
 	// 获取所有通知的详细信息，包括版本号
 	notificationsMap, err := d.repo.BatchGetByIDs(ctx, allNotificationIDs)
 	if err != nil {
-		d.logger.Warn("批量获取通知失败",
-			elog.Any("Error", err),
+		d.logger.Warn("批量获取通知详情失败",
+			elog.FieldErr(err),
 			elog.Any("allNotificationIDs", allNotificationIDs),
 		)
-		return nil, fmt.Errorf("获取通知失败: %w", err)
+		return nil, fmt.Errorf("批量获取通知详情失败: %w", err)
 	}
 
 	succeedNotifications := d.getUpdatedNotifications(succeed, notificationsMap)
