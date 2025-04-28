@@ -1,12 +1,9 @@
 package id
 
 import (
-	"fmt"
-	"testing"
-	"time"
-
 	"gitee.com/flycash/notification-platform/internal/pkg/hash"
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 func TestGenerateAndExtract(t *testing.T) {
@@ -16,17 +13,9 @@ func TestGenerateAndExtract(t *testing.T) {
 	// 测试数据
 	bizID := int64(43)
 	key := "test-key1"
-	testTime := time.Date(2024, 6, 15, 14, 30, 0, 0, time.UTC)
 
 	// 生成ID
-	id := generator.GenerateID(bizID, key, testTime)
-
-	// 提取并验证时间戳
-	extractedTime := ExtractTimestamp(id)
-	// 由于毫秒精度的转换，允许1秒误差
-	if testTime.Sub(extractedTime).Abs() > time.Second {
-		t.Errorf("时间戳提取不正确，期望: %v, 实际: %v", testTime, extractedTime)
-	}
+	id := generator.GenerateID(bizID, key)
 
 	// 提取并验证哈希值
 	hashValue := ExtractHashValue(id)
@@ -57,7 +46,7 @@ func TestIDUniqueness(t *testing.T) {
 		bizID := int64(i % 100)                // 循环使用一些bizId
 		key := "key-" + string(rune('A'+i%26)) // 循环使用一些key
 
-		id := generator.GenerateID(bizID, key, time.Time{}) // 使用当前时间
+		id := generator.GenerateID(bizID, key) // 使用当前时间
 
 		if _, exists := idSet[id]; exists {
 			t.Fatalf("发现重复ID: %d", id)
@@ -77,13 +66,12 @@ func TestSequenceIncrement(t *testing.T) {
 	// 使用相同的bizId, key和时间生成多个ID
 	bizID := int64(123)
 	key := "same-key"
-	testTime := time.Date(2024, 6, 15, 14, 30, 0, 0, time.UTC)
 
 	// 生成多个ID并验证序列号递增
 	count := 10
 	ids := make([]int64, count)
 	for i := 0; i < count; i++ {
-		ids[i] = generator.GenerateID(bizID, key, testTime)
+		ids[i] = generator.GenerateID(bizID, key)
 
 		// 验证序列号是否递增
 		sequence := ExtractSequence(ids[i])
@@ -92,11 +80,6 @@ func TestSequenceIncrement(t *testing.T) {
 
 	// 验证时间戳和哈希值部分相同
 	for i := 1; i < count; i++ {
-		// 时间戳应该相同
-		timestamp1 := ExtractTimestamp(ids[0])
-		timestamp2 := ExtractTimestamp(ids[i])
-		assert.Equal(t, timestamp1, timestamp2, "相同输入产生的不同ID的时间戳应该一致")
-
 		// 哈希值应该相同
 		hash1 := ExtractHashValue(ids[0])
 		hash2 := ExtractHashValue(ids[i])
@@ -114,24 +97,14 @@ func TestSequenceRollover(t *testing.T) {
 
 	bizID := int64(456)
 	key := "rollover-test"
-	testTime := time.Date(2024, 6, 16, 10, 0, 0, 0, time.UTC)
 
 	// 生成第一个ID，此时序列号应为最大值
-	id1 := generator.GenerateID(bizID, key, testTime)
+	id1 := generator.GenerateID(bizID, key)
 	seq1 := ExtractSequence(id1)
 	assert.Equal(t, int64(sequenceMask), seq1, "序列号应为最大值")
 
 	// 生成第二个ID，此时序列号应回环为0
-	id2 := generator.GenerateID(bizID, key, testTime)
+	id2 := generator.GenerateID(bizID, key)
 	seq2 := ExtractSequence(id2)
 	assert.Equal(t, int64(0), seq2, "序列号溢出后应回环为0")
-}
-
-func TestGenerateID(t *testing.T) {
-	generator := NewGenerator()
-	bizId := int64(20004)
-	key := "tx_update_status_test_001"
-
-	id := generator.GenerateID(bizId, key, time.Now())
-	fmt.Println(id)
 }

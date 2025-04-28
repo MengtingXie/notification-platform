@@ -4,23 +4,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/gotomicro/ego/core/elog"
 	"github.com/meoying/dlock-go"
-	"time"
 )
 
-type  CtxKey string
+type CtxKey string
 
-const  (
+const (
 	TabSuffix CtxKey = "tabSuffix"
-	DB CtxKey = "db"
-	Table CtxKey = "table"
+	DB        CtxKey = "db"
+	Table     CtxKey = "table"
 )
 
 type ShardingLoopJob struct {
 	db             string   // 库名
 	baseKey        string   // 业务标识
-	tabSuffixes    []string //表后缀
+	tabSuffixes    []string // 表后缀
 	dclient        dlock.Client
 	logger         *elog.Component
 	biz            func(ctx context.Context) error
@@ -58,6 +59,7 @@ func newShardingLoopJobLoop(
 		defaultTimeout: defaultTimeout,
 	}
 }
+
 func (l *ShardingLoopJob) generateKey(tab string) string {
 	return fmt.Sprintf("%s:%s:%s", l.baseKey, l.db, tab)
 }
@@ -67,6 +69,7 @@ func (l *ShardingLoopJob) Run(ctx context.Context) {
 		for idx := range l.tabSuffixes {
 			suffix := l.tabSuffixes[idx]
 			key := l.generateKey(suffix)
+			fmt.Println("xxxxxxx", suffix, key)
 			// 强锁
 			lock, err := l.dclient.NewLock(ctx, key, l.retryInterval)
 			if err != nil {
@@ -87,7 +90,7 @@ func (l *ShardingLoopJob) Run(ctx context.Context) {
 				time.Sleep(l.retryInterval)
 				continue
 			}
-			go l.tableLoop(l.ctxWithTabSuffixDB(ctx,suffix), lock)
+			go l.tableLoop(l.ctxWithTabSuffixDB(ctx, suffix), lock)
 		}
 	}
 }
@@ -150,8 +153,6 @@ func (l *ShardingLoopJob) ctxWithTabSuffixDB(ctx context.Context, tabSuffix stri
 	return ctx
 }
 
-
-
 func DBFromCtx(ctx context.Context) (string, bool) {
 	db := ctx.Value(DB)
 	if db == nil {
@@ -169,4 +170,3 @@ func TabSuffixFromCtx(ctx context.Context) (string, bool) {
 	tabStr, ok := tab.(string)
 	return tabStr, ok
 }
-

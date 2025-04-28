@@ -10,15 +10,13 @@ import (
 	"gitee.com/flycash/notification-platform/internal/repository/dao/sharding"
 	sharding2 "gitee.com/flycash/notification-platform/internal/sharding"
 	shardingIoc "gitee.com/flycash/notification-platform/internal/test/integration/ioc/sharding"
-	"github.com/ecodeclub/ekit/syncx"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"gorm.io/gorm"
 )
 
 type ShardingNotificationSuite struct {
-	suite.Suite
-	dbs             *syncx.Map[string, *gorm.DB]
+	BaseShardingSuite
 	shardingDAO     *sharding.NotificationShardingDAO
 	notificationStr sharding2.ShardingStrategy
 }
@@ -645,9 +643,9 @@ func TestShardingNotificationSuite(t *testing.T) {
 func (s *ShardingNotificationSuite) clearTables() {
 	s.T().Helper()
 	s.dbs.Range(func(key string, db *gorm.DB) bool {
-		err := db.Exec("truncate table `callback_log_0`").Error
+		err := db.Exec("truncate table `callback_log_0` where biz_id < 10000").Error
 		require.NoError(s.T(), err)
-		err = db.Exec("truncate table `callback_log_1`").Error
+		err = db.Exec("truncate table `callback_log_1` where biz_id < 10000").Error
 		require.NoError(s.T(), err)
 		err = db.Exec("delete from `notification_0` where biz_id < 10000").Error
 		require.NoError(s.T(), err)
@@ -655,46 +653,6 @@ func (s *ShardingNotificationSuite) clearTables() {
 		require.NoError(s.T(), err)
 		return true
 	})
-}
-
-func (s *ShardingNotificationSuite) assertNotifications(wantNotifications, actualNotifications map[[2]string][]dao.Notification) {
-	require.Equal(s.T(), len(wantNotifications), len(actualNotifications))
-	for key, wantVal := range wantNotifications {
-		actualVal, ok := actualNotifications[key]
-		require.True(s.T(), ok)
-		require.Equal(s.T(), len(wantVal), len(actualVal))
-		for idx := range actualVal {
-			wantNotification := wantVal[idx]
-			actualNotification := actualVal[idx]
-			require.True(s.T(), actualNotification.Ctime > 0)
-			require.True(s.T(), actualNotification.Utime > 0)
-			actualNotification.Ctime = 0
-			actualNotification.Utime = 0
-			require.Equal(s.T(), wantNotification, actualNotification)
-		}
-	}
-}
-
-func (s *ShardingNotificationSuite) assertCallbackLogs(wantLogs, actualLogs map[[2]string][]dao.CallbackLog) {
-	require.Equal(s.T(), len(wantLogs), len(actualLogs))
-	for key, wantVal := range wantLogs {
-		actualVal, ok := actualLogs[key]
-		require.True(s.T(), ok)
-		require.Equal(s.T(), len(wantVal), len(actualVal))
-		for idx := range actualVal {
-			wantLog := wantVal[idx]
-			actualLog := actualVal[idx]
-			require.True(s.T(), actualLog.Ctime > 0)
-			require.True(s.T(), actualLog.Utime > 0)
-			require.True(s.T(), actualLog.NextRetryTime > 0)
-			actualLog.Ctime = 0
-			actualLog.Utime = 0
-			actualLog.NextRetryTime = 0
-			actualLog.ID = 0
-			require.Equal(s.T(), wantLog, actualLog)
-
-		}
-	}
 }
 
 func (s *ShardingNotificationSuite) getAllNotifications() map[[2]string][]dao.Notification {
@@ -716,6 +674,7 @@ func (s *ShardingNotificationSuite) getNotifications(table string, db *gorm.DB) 
 	t := s.T()
 	var notifications []dao.Notification
 	err := db.WithContext(t.Context()).Table(table).
+		Where("biz_id < 10000").
 		Order("id asc").
 		Find(&notifications).Error
 	require.NoError(t, err)
@@ -741,6 +700,7 @@ func (s *ShardingNotificationSuite) getCallbackLogs(table string, db *gorm.DB) [
 	t := s.T()
 	var logs []dao.CallbackLog
 	err := db.WithContext(t.Context()).Table(table).
+		Where("biz_id < 10000").
 		Order("notification_id asc").
 		Find(&logs).Error
 	require.NoError(t, err)

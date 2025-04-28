@@ -83,10 +83,10 @@ func (s *ShardingStrategy) TablePrefix() string {
 	return s.tablePrefix
 }
 
-func (s *ShardingStrategy) TableSuffix()[]string{
+func (s *ShardingStrategy) TableSuffix() []string {
 	ans := make([]string, 0, s.tableSharding)
 	for i := 0; i < int(s.tableSharding); i++ {
-		ans = append(ans, fmt.Sprintf("%d",  i))
+		ans = append(ans, fmt.Sprintf("%d", i))
 	}
 	return ans
 }

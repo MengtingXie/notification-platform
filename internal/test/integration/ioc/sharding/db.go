@@ -18,7 +18,7 @@ func InitNotificationSharding() (notificationStrategy, callbacklogStrategy shard
 	return sharding.NewShardingStrategy("notification", "notification", testTableNum, testDBNum), sharding.NewShardingStrategy("notification", "callback_log", testTableNum, testDBNum)
 }
 
-func InitTxnSharding() (notificationStrategy,txnStrategy sharding.ShardingStrategy) {
+func InitTxnSharding() (notificationStrategy, txnStrategy sharding.ShardingStrategy) {
 	return sharding.NewShardingStrategy("notification", "notification", testTableNum, testDBNum), sharding.NewShardingStrategy("notification", "tx_notification", testTableNum, testDBNum)
 }
 

@@ -3,8 +3,9 @@ package sharding
 import (
 	"context"
 	"fmt"
-	"github.com/pkg/errors"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	idgen "gitee.com/flycash/notification-platform/internal/pkg/id_generator"
@@ -35,34 +36,33 @@ func NewTxNShardingDAO(
 	}
 }
 
-
-func (t *TxNShardingDAO) FindCheckBack(ctx context.Context, offset, limit int) ([]dao.TxNotification, error) {
-	//TODO implement me
+func (t *TxNShardingDAO) FindCheckBack(_ context.Context, _, _ int) ([]dao.TxNotification, error) {
+	// TODO implement me
 	panic("implement me")
 }
 
-func (t *TxNShardingDAO) UpdateCheckStatus(ctx context.Context, txNotifications []dao.TxNotification, status domain.SendStatus) error {
-	//TODO implement me
+func (t *TxNShardingDAO) UpdateCheckStatus(_ context.Context, _ []dao.TxNotification, _ domain.SendStatus) error {
+	// TODO implement me
 	panic("implement me")
 }
 
-func (t *TxNShardingDAO) First(ctx context.Context, txID int64) (dao.TxNotification, error) {
-	//TODO implement me
+func (t *TxNShardingDAO) First(_ context.Context, _ int64) (dao.TxNotification, error) {
+	// TODO implement me
 	panic("implement me")
 }
 
-func (t *TxNShardingDAO) BatchGetTxNotification(ctx context.Context, txIDs []int64) (map[int64]dao.TxNotification, error) {
-	//TODO implement me
+func (t *TxNShardingDAO) BatchGetTxNotification(_ context.Context, _ []int64) (map[int64]dao.TxNotification, error) {
+	// TODO implement me
 	panic("implement me")
 }
 
-func (t *TxNShardingDAO) GetByBizIDKey(ctx context.Context, bizID int64, key string) (dao.TxNotification, error) {
-	//TODO implement me
+func (t *TxNShardingDAO) GetByBizIDKey(_ context.Context, _ int64, _ string) (dao.TxNotification, error) {
+	// TODO implement me
 	panic("implement me")
 }
 
-func (t *TxNShardingDAO) UpdateNotificationID(ctx context.Context, bizID int64, key string, notificationID uint64) error {
-	//TODO implement me
+func (t *TxNShardingDAO) UpdateNotificationID(_ context.Context, _ int64, _ string, _ uint64) error {
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -83,7 +83,7 @@ func (t *TxNShardingDAO) Prepare(ctx context.Context, txn dao.TxNotification, no
 
 	err := gormDB.Transaction(func(tx *gorm.DB) error {
 		for {
-			notification.ID = uint64(t.idGen.GenerateID(notification.BizID, notification.Key, nowTime))
+			notification.ID = uint64(t.idGen.GenerateID(notification.BizID, notification.Key))
 			res := tx.WithContext(ctx).
 				Table(notificationDst.Table).
 				Create(&notification)
@@ -110,7 +110,6 @@ func (t *TxNShardingDAO) Prepare(ctx context.Context, txn dao.TxNotification, no
 		}
 	})
 	return notification.ID, err
-
 }
 
 func (t *TxNShardingDAO) UpdateStatus(ctx context.Context, bizID int64, key string, status domain.TxNotificationStatus, notificationStatus domain.SendStatus) error {

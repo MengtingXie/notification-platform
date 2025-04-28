@@ -71,13 +71,12 @@ type Notification struct {
 	Ctime             int64
 	Utime             int64
 }
+
 // 判断是否是主键冲突
-func  CheckErrIsIDDuplicate(id uint64,err error) bool {
-	if strings.Contains(err.Error(), fmt.Sprintf("%d",id)) {
-		return true
-	}
-	return false
+func CheckErrIsIDDuplicate(id uint64, err error) bool {
+	return strings.Contains(err.Error(), fmt.Sprintf("%d", id))
 }
+
 type notificationDAO struct {
 	db *egorm.Component
 

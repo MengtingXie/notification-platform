@@ -39,9 +39,8 @@ func (s *ConsumerTestSuite) SetupSuite() {
 	s.mockMonitor = monMocks.NewMockDBMonitor(s.mockCtrl)
 
 	// 初始化生产者
-	testMq := ioc.InitKafkaMq()
-	pro, err := testMq.Producer(failover.FailoverTopic)
-	require.NoError(s.T(), err)
+	ioc.InitTopic()
+	pro := ioc.InitProducer("failover")
 	s.producer = failover.NewProducer(pro)
 
 	// 初始化

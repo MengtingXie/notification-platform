@@ -3,6 +3,8 @@ package notification
 import (
 	"context"
 	"fmt"
+	"time"
+
 	clientv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/pkg/grpc"
@@ -13,12 +15,10 @@ import (
 	"github.com/ecodeclub/ekit/list"
 	"github.com/ecodeclub/ekit/slice"
 	"github.com/gotomicro/ego/client/egrpc"
-	"github.com/gotomicro/ego/core/elog"
 	"github.com/hashicorp/go-multierror"
 	"github.com/meoying/dlock-go"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
-	"time"
 )
 
 const (
@@ -32,14 +32,14 @@ type TxCheckTaskV2 struct {
 
 	nStr      sharding.ShardingStrategy
 	configSvc config.BusinessConfigService
-	logger    *elog.Component
 	lock      dlock.Client
 	batchSize int
 	clients   *grpc.Clients[clientv1.TransactionCheckServiceClient]
 }
 
 func NewTxCheckTaskV2(repo repository.TxNotificationRepository, configSvc config.BusinessConfigService,
-	lock dlock.Client, txnStr, nStr sharding.ShardingStrategy) *TxCheckTaskV2 {
+	lock dlock.Client, txnStr, nStr sharding.ShardingStrategy,
+) *TxCheckTaskV2 {
 	return &TxCheckTaskV2{
 		repo:      repo,
 		configSvc: configSvc,
@@ -58,7 +58,7 @@ func (task *TxCheckTaskV2) Start(ctx context.Context) {
 	for idx := range dbs {
 		// 每个db开一个job
 		db := dbs[idx]
-		go loopjob.NewShardingLoopJob(task.lock, task.oneLoop, db, task.txnStr.TableSuffix())
+		go loopjob.NewShardingLoopJob(task.lock, task.oneLoop, db, task.txnStr.TableSuffix()).Run(ctx)
 	}
 }
 
@@ -67,7 +67,7 @@ func (task *TxCheckTaskV2) oneLoop(ctx context.Context) error {
 	loopCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 	// 添加表名
-	ctx = task.ctxWithTabs(ctx)
+	loopCtx = task.ctxWithTabs(loopCtx)
 	txNotifications, err := task.repo.FindCheckBack(loopCtx, 0, task.batchSize)
 	if err != nil {
 		return err
@@ -82,7 +82,7 @@ func (task *TxCheckTaskV2) oneLoop(ctx context.Context) error {
 	bizIDs := slice.Map(txNotifications, func(_ int, src domain.TxNotification) int64 {
 		return src.BizID
 	})
-	configMap, err := task.configSvc.GetByIDs(ctx, bizIDs)
+	configMap, err := task.configSvc.GetByIDs(loopCtx, bizIDs)
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func (task *TxCheckTaskV2) oneLoop(ctx context.Context) error {
 			// 并发去回查
 			txNotification := txNotifications[idx]
 			// 我在这里发起了回查，而后拿到了结果
-			txn := task.oneBackCheck(ctx, configMap, txNotification)
+			txn := task.oneBackCheck(loopCtx, configMap, txNotification)
 			switch txn.Status {
 			case domain.TxNotificationStatusPrepare:
 				// 查到还是 Prepare 状态
@@ -129,10 +129,10 @@ func (task *TxCheckTaskV2) oneLoop(ctx context.Context) error {
 	}
 	// 挨个处理，更新数据库状态
 	// 数据库就可以一次性执行完，规避频繁更新数据库
-	err = task.updateStatus(ctx, retryTxns, domain.SendStatusPrepare)
-	err = multierror.Append(err, task.updateStatus(ctx, failTxns, domain.SendStatusFailed))
+	err = task.updateStatus(loopCtx, retryTxns, domain.SendStatusPrepare)
+	err = multierror.Append(err, task.updateStatus(loopCtx, failTxns, domain.SendStatusFailed))
 	// 转 PENDING，后续 Scheduler 会调度执行
-	err = multierror.Append(err, task.updateStatus(ctx, commitTxns, domain.SendStatusPending))
+	err = multierror.Append(err, task.updateStatus(loopCtx, commitTxns, domain.SendStatusPending))
 	return err
 }
 

@@ -1,8 +1,9 @@
 package integration
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
@@ -96,8 +97,10 @@ func (s *ShardingTxNotificationSuite) TestPrepare() {
 			"notification_1",
 			"notification_0",
 		}: {},
-		{"notification_1",
-			"notification_1"}: {notification},
+		{
+			"notification_1",
+			"notification_1",
+		}: {notification},
 	}
 
 	// Use the helper method to assert notifications
@@ -121,8 +124,10 @@ func (s *ShardingTxNotificationSuite) TestPrepare() {
 			"notification_1",
 			"tx_notification_0",
 		}: {},
-		{"notification_1",
-			"tx_notification_1"}: {txn},
+		{
+			"notification_1",
+			"tx_notification_1",
+		}: {txn},
 	}
 	actualTxNotifications := s.getAllTxNotifications()
 	// Use the helper method to assert tx notifications
@@ -239,19 +244,20 @@ func (s *ShardingTxNotificationSuite) TestUpdateStatus_InvalidStatus() {
 }
 
 func TestShardingTxNotificationSuite(t *testing.T) {
+	t.Parallel()
 	suite.Run(t, new(ShardingTxNotificationSuite))
 }
 
 func (s *ShardingTxNotificationSuite) clearTables() {
 	s.T().Helper()
-	s.dbs.Range(func(key string, db *gorm.DB) bool {
-		err := db.Exec("delete from `notification_0` where biz_id > 20000").Error
+	s.dbs.Range(func(_ string, db *gorm.DB) bool {
+		err := db.Exec("delete from `notification_0` where biz_id > 20000 AND biz_id < 30000").Error
 		require.NoError(s.T(), err)
-		err = db.Exec("delete from `notification_1` where biz_id > 20000").Error
+		err = db.Exec("delete from `notification_1` where biz_id > 20000 AND biz_id < 30000").Error
 		require.NoError(s.T(), err)
-		err = db.Exec("delete from `tx_notification_0` where biz_id > 20000").Error
+		err = db.Exec("delete from `tx_notification_0` where biz_id > 20000 AND biz_id < 30000").Error
 		require.NoError(s.T(), err)
-		err = db.Exec("delete from `tx_notification_1` where biz_id > 20000").Error
+		err = db.Exec("delete from `tx_notification_1` where biz_id > 20000 AND biz_id < 30000").Error
 		require.NoError(s.T(), err)
 		return true
 	})
@@ -331,6 +337,7 @@ func (s *ShardingTxNotificationSuite) getNotifications(table string, db *gorm.DB
 	t := s.T()
 	var notifications []dao.Notification
 	err := db.WithContext(t.Context()).Table(table).
+		Where(`biz_id > 20000 AND biz_id < 30000`).
 		Order("id asc").
 		Find(&notifications).Error
 	require.NoError(t, err)
@@ -356,6 +363,7 @@ func (s *ShardingTxNotificationSuite) getTxNotifications(table string, db *gorm.
 	t := s.T()
 	var txns []dao.TxNotification
 	err := db.WithContext(t.Context()).Table(table).
+		Where(`biz_id > 20000 AND biz_id < 30000`).
 		Order("notification_id asc").
 		Find(&txns).Error
 	require.NoError(t, err)

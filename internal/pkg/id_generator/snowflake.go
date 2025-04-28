@@ -49,17 +49,10 @@ func NewGenerator() *Generator {
 // GenerateID 根据雪花算法变种生成ID
 // bizId: 业务ID
 // key: 业务关键字
-// stime: 发送时间，如果为0则使用当前时间
-func (g *Generator) GenerateID(bizID int64, key string, stime time.Time) int64 {
+func (g *Generator) GenerateID(bizID int64, key string) int64 {
 	var timestamp int64
-
 	// 获取当前时间戳（毫秒）
-	if stime.IsZero() {
-		timestamp = time.Now().UnixMilli() - epochMillis
-	} else {
-		timestamp = stime.UnixMilli() - epochMillis
-	}
-
+	timestamp = time.Now().UnixMilli() - epochMillis
 	// 计算hash值并取余
 	hashValue := hash.Hash(bizID, key) % number
 	if hashValue < 0 {
