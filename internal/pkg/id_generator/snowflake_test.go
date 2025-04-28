@@ -1,9 +1,10 @@
 package id
 
 import (
+	"testing"
+
 	"gitee.com/flycash/notification-platform/internal/pkg/hash"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestGenerateAndExtract(t *testing.T) {

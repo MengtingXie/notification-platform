@@ -2,12 +2,14 @@ package integration
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 
+	"github.com/ecodeclub/ekit/syncx"
+
+	"github.com/stretchr/testify/assert"
+
 	clientv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
-	txnotificationv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/pkg/retry"
 	"gitee.com/flycash/notification-platform/internal/repository"
@@ -29,17 +31,13 @@ import (
 	"gorm.io/gorm"
 )
 
-const unknownStatus = 0
-const committedStatus = 1
-const cancelStatus = 2
-
 // MockGrpcServer implements the TransactionCheckServiceServer interface.
 type MockShardingGrpcServer struct {
 	clientv1.UnimplementedTransactionCheckServiceServer
 }
 
 // Check simulates checking the transaction status based on the transaction key.
-func (s *MockShardingGrpcServer) Check(ctx context.Context, req *clientv1.TransactionCheckServiceCheckRequest) (*clientv1.TransactionCheckServiceCheckResponse, error) {
+func (s *MockShardingGrpcServer) Check(_ context.Context, req *clientv1.TransactionCheckServiceCheckRequest) (*clientv1.TransactionCheckServiceCheckResponse, error) {
 	// Simulate different responses based on the key
 	switch req.Key {
 	case "tx_1", "tx_11":
@@ -70,7 +68,8 @@ func (s *MockShardingGrpcServer) Check(ctx context.Context, req *clientv1.Transa
 }
 
 type ShardingTxNotificationTask struct {
-	BaseShardingSuite
+	suite.Suite
+	dbs                 *syncx.Map[string, *gorm.DB]
 	txnRepo             repository.TxNotificationRepository
 	txnDAO              *sharding.TxNShardingDAO
 	notificationStr     sharding2.ShardingStrategy
@@ -163,12 +162,12 @@ func (s *ShardingTxNotificationTask) TestCheckBackTaskV2() {
 
 	// Start the mock gRPC server
 	go func() {
-		server := testgrpc.NewServer[txnotificationv1.TransactionCheckServiceServer](
+		server := testgrpc.NewServer[clientv1.TransactionCheckServiceServer](
 			"order.notification.callback.service",
 			reg,
 			&MockShardingGrpcServer{},
 			func(s grpc.ServiceRegistrar, srv clientv1.TransactionCheckServiceServer) {
-				txnotificationv1.RegisterTransactionCheckServiceServer(s, srv)
+				clientv1.RegisterTransactionCheckServiceServer(s, srv)
 			},
 		)
 		err := server.Start("127.0.0.1:30002")
@@ -271,6 +270,7 @@ func (s *ShardingTxNotificationTask) TestCheckBackTaskV2() {
 	s.assertTxNotifications(expectedTxNotifications, actualTxNotifications)
 	s.assertNotifications(expectedNotifications, actualNotifications)
 }
+
 func (s *ShardingTxNotificationTask) assertTxNotifications(wantTxNotifications, actualTxNotifications map[[2]string][]dao.TxNotification) {
 	require.Equal(s.T(), len(wantTxNotifications), len(actualTxNotifications))
 	for key, wantVal := range wantTxNotifications {
@@ -357,7 +357,8 @@ func (s *ShardingTxNotificationTask) createShardedTxNotifications(txnsData []str
 	status     string
 	nextCheck  int64
 	checkCount int64
-}) {
+},
+) {
 	t := s.T()
 
 	// Group transactions by shard to batch insert them
@@ -392,6 +393,7 @@ func (s *ShardingTxNotificationTask) createShardedTxNotifications(txnsData []str
 		require.NoError(t, err)
 	}
 }
+
 func getStatus(txStatus string) string {
 	switch txStatus {
 	case "PREPARE":
@@ -407,6 +409,7 @@ func getStatus(txStatus string) string {
 }
 
 func TestShardingTxNotificationTask(t *testing.T) {
+	t.Parallel()
 	suite.Run(t, new(ShardingTxNotificationTask))
 }
 

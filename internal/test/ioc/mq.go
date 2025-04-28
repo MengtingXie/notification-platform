@@ -3,23 +3,29 @@ package ioc
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
+
 	"gitee.com/flycash/notification-platform/internal/event/failover"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/ecodeclub/ekit/retry"
 	"github.com/ecodeclub/mq-api"
 	"github.com/ecodeclub/mq-api/memory"
-	"sync"
-	"time"
 )
+
 var (
 	q          mq.MQ
 	mqInitOnce sync.Once
 )
 
+const (
+	maxInterval = 10 * time.Second
+	maxRetries  = 10
+	number1     = 1
+)
+
 func InitMQ() mq.MQ {
 	mqInitOnce.Do(func() {
-		const maxInterval = 10 * time.Second
-		const maxRetries = 10
 		strategy, err := retry.NewExponentialBackoffRetryStrategy(time.Second, maxInterval, maxRetries)
 		if err != nil {
 			panic(err)
@@ -48,11 +54,11 @@ func initMQ() (mq.MQ, error) {
 	topics := []Topic{
 		{
 			Name:       "test",
-			Partitions: 1,
+			Partitions: number1,
 		},
 		{
 			Name:       "audit_result_events",
-			Partitions: 1,
+			Partitions: number1,
 		},
 	}
 	// 替换用内存实现，方便测试
@@ -70,7 +76,7 @@ func InitTopic() {
 	topics := []kafka.TopicSpecification{
 		{
 			Topic:         failover.FailoverTopic,
-			NumPartitions: 2,
+			NumPartitions: number1,
 		},
 	}
 	initTopic(topics...)
@@ -93,15 +99,17 @@ func InitProducer(id string) *kafka.Producer {
 
 func initTopic(topics ...kafka.TopicSpecification) {
 	// 创建 AdminClient
+	const kafkaAddr = "localhost:9092"
+	const serverName = "bootstrap.servers"
 	adminClient, err := kafka.NewAdminClient(&kafka.ConfigMap{
-		"bootstrap.servers": "127.0.0.1:9092",
+		serverName: kafkaAddr,
 	})
 	if err != nil {
 		panic(fmt.Sprintf("创建kafka连接失败: %v", err))
 	}
 	defer adminClient.Close()
 	// 设置要创建的主题的配置信息
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), maxInterval)
 	defer cancel()
 	// 创建主题
 	results, err := adminClient.CreateTopics(

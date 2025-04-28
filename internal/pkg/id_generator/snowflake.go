@@ -50,9 +50,7 @@ func NewGenerator() *Generator {
 // bizId: 业务ID
 // key: 业务关键字
 func (g *Generator) GenerateID(bizID int64, key string) int64 {
-	var timestamp int64
-	// 获取当前时间戳（毫秒）
-	timestamp = time.Now().UnixMilli() - epochMillis
+	timestamp := time.Now().UnixMilli() - epochMillis
 	// 计算hash值并取余
 	hashValue := hash.Hash(bizID, key) % number
 	if hashValue < 0 {
