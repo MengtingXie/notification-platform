@@ -67,9 +67,9 @@ func (l *ShardingLoopJob) generateKey(tab string) string {
 func (l *ShardingLoopJob) Run(ctx context.Context) {
 	for {
 		for idx := range l.tabSuffixes {
+			// todo 避免一个节点 抢占过多的表 对这个节点造成压力
 			suffix := l.tabSuffixes[idx]
 			key := l.generateKey(suffix)
-			fmt.Println("xxxxxxx", suffix, key)
 			// 强锁
 			lock, err := l.dclient.NewLock(ctx, key, l.retryInterval)
 			if err != nil {
