@@ -6,7 +6,6 @@ import (
 	"github.com/ecodeclub/ekit/syncx"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 const (
@@ -25,18 +24,14 @@ func InitTxnSharding() (notificationStrategy, txnStrategy sharding.ShardingStrat
 func InitDbs() *syncx.Map[string, *gorm.DB] {
 	dsn0 := "root:root@tcp(localhost:13316)/notification_0?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true"
 	ioc.WaitForDBSetup(dsn0)
-	db0, err := gorm.Open(mysql.Open(dsn0), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
-	})
+	db0, err := gorm.Open(mysql.Open(dsn0), &gorm.Config{})
 	if err != nil {
 		panic(err)
 	}
 
 	dsn1 := "root:root@tcp(localhost:13316)/notification_1?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true"
 	ioc.WaitForDBSetup(dsn1)
-	db1, err := gorm.Open(mysql.Open(dsn1), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
-	})
+	db1, err := gorm.Open(mysql.Open(dsn1), &gorm.Config{})
 	if err != nil {
 		panic(err)
 	}

@@ -646,9 +646,9 @@ func TestShardingNotificationSuite(t *testing.T) {
 func (s *ShardingNotificationSuite) clearTables() {
 	s.T().Helper()
 	s.dbs.Range(func(key string, db *gorm.DB) bool {
-		err := db.Exec("truncate table `callback_log_0` where biz_id < 10000").Error
+		err := db.Exec("truncate table `callback_log_0` ").Error
 		require.NoError(s.T(), err)
-		err = db.Exec("truncate table `callback_log_1` where biz_id < 10000").Error
+		err = db.Exec("truncate table `callback_log_1`").Error
 		require.NoError(s.T(), err)
 		err = db.Exec("delete from `notification_0` where biz_id < 10000").Error
 		require.NoError(s.T(), err)
@@ -703,7 +703,6 @@ func (s *ShardingNotificationSuite) getCallbackLogs(table string, db *gorm.DB) [
 	t := s.T()
 	var logs []dao.CallbackLog
 	err := db.WithContext(t.Context()).Table(table).
-		Where("biz_id < 10000").
 		Order("notification_id asc").
 		Find(&logs).Error
 	require.NoError(t, err)

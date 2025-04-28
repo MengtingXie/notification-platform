@@ -80,7 +80,6 @@ func (m *MockHealthAwareProvider) ResetCallCount() {
 func TestProviderLoadBalancingAndHealthRecovery(t *testing.T) {
 	t.Skip()
 	t.Parallel()
-	t.Skip()
 	// 创建3个模拟的Provider，其中一个会持续失败
 	provider1 := NewMockHealthAwareProvider("provider1", false)
 	provider2 := NewMockHealthAwareProvider("provider2", true) // 这个会一直失败
