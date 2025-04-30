@@ -26,6 +26,7 @@ const (
 type SayHelloRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Keys          []string               `protobuf:"bytes,2,rep,name=keys,proto3" json:"keys,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -65,6 +66,13 @@ func (x *SayHelloRequest) GetName() string {
 		return x.Name
 	}
 	return ""
+}
+
+func (x *SayHelloRequest) GetKeys() []string {
+	if x != nil {
+		return x.Keys
+	}
+	return nil
 }
 
 // 定义一个 SayHelloResponse 消息，用于服务器向客户端发送响应
@@ -116,9 +124,10 @@ var File_helloworld_v1_helloworld_proto protoreflect.FileDescriptor
 
 const file_helloworld_v1_helloworld_proto_rawDesc = "" +
 	"\n" +
-	"\x1ehelloworld/v1/helloworld.proto\x12\rhelloworld.v1\"%\n" +
+	"\x1ehelloworld/v1/helloworld.proto\x12\rhelloworld.v1\"9\n" +
 	"\x0fSayHelloRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\",\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
+	"\x04keys\x18\x02 \x03(\tR\x04keys\",\n" +
 	"\x10SayHelloResponse\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage2]\n" +
 	"\x0eGreeterService\x12K\n" +

@@ -8,6 +8,7 @@ option go_package = "helloworld/v1;helloworldv1";
 // 定义一个 HelloRequest 消息，用于客户端向服务器发送请求
 message SayHelloRequest {
   string name = 1;
+  repeated string keys = 2;
 }
 
 // 定义一个 SayHelloResponse 消息，用于服务器向客户端发送响应

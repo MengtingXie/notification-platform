@@ -2,41 +2,57 @@ package idempotent
 
 import (
 	"context"
+	"fmt"
+	"time"
 
-	"github.com/ecodeclub/ekit/slice"
-	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
 )
 
-type BloomIdempotencyService struct {
-	client     redis.Cmdable
-	filterName string
-	capacity   uint64  // 预期容量
-	errorRate  float64 // 误判率
+type RedisIdempotencyService struct {
+	client redis.Cmdable
+	expiry time.Duration // 添加过期时间配置
 }
 
-func NewBloomService(client redis.Cmdable, filterName string,
-	capacity uint64, errorRate float64,
-) *BloomIdempotencyService {
-	return &BloomIdempotencyService{
-		client:     client,
-		filterName: filterName,
-		capacity:   capacity,
-		errorRate:  errorRate,
+// NewRedisIdempotencyService 创建一个新的Redis幂等性服务
+func NewRedisIdempotencyService(client redis.Cmdable, expiry time.Duration) *RedisIdempotencyService {
+	return &RedisIdempotencyService{
+		client: client,
+		expiry: expiry,
 	}
 }
 
-func (s *BloomIdempotencyService) Exists(ctx context.Context, key string) (bool, error) {
-	return s.client.BFAdd(ctx, s.filterName, key).Result()
+func (r *RedisIdempotencyService) getKey(key string) string {
+	return fmt.Sprintf("idempotency:%s", key)
 }
 
-func (s *BloomIdempotencyService) MExists(ctx context.Context, keys ...string) ([]bool, error) {
-	if len(keys) == 0 {
-		return nil, errors.New("empty keys")
+func (r *RedisIdempotencyService) Exists(ctx context.Context, key string) (bool, error) {
+	result, err := r.client.SetNX(ctx, r.getKey(key), "1", r.expiry).Result()
+	if err != nil {
+		return false, err
 	}
-	// 执行批量查询
-	res := s.client.BFMAdd(ctx, s.filterName, slice.Map(keys, func(_ int, src string) any {
-		return src
-	})...)
-	return res.Result()
+	return !result, nil
+}
+
+func (r *RedisIdempotencyService) MExists(ctx context.Context, keys ...string) ([]bool, error) {
+	// 使用管道批量执行SetNX命令
+	pipe := r.client.Pipeline()
+	cmds := make([]*redis.BoolCmd, len(keys))
+
+	for i, key := range keys {
+		cmds[i] = pipe.SetNX(ctx, r.getKey(key), "1", r.expiry)
+	}
+
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]bool, len(keys))
+	for i, cmd := range cmds {
+		exists, err := cmd.Result()
+		if err != nil {
+			return nil, err
+		}
+		results[i] = !exists
+	}
+	return results, nil
 }

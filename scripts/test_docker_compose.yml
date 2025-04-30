@@ -18,8 +18,8 @@ services:
     networks:
       default:
   redis:
-    image: 'redis:7.2.4-alpine'
-    command: redis-server --notify-keyspace-events AKE
+    image: 'redislabs/rebloom:latest'
+    command: redis-server --notify-keyspace-events AKE --loadmodule /usr/lib/redis/modules/redisbloom.so
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
     ports:

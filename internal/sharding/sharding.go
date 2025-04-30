@@ -28,7 +28,7 @@ func NewShardingStrategy(dbPrefix, tablePrefix string, tableSharding, dbSharding
 	}
 }
 
-func (s *ShardingStrategy) Shard(bizID int64, key string) Dst {
+func (s ShardingStrategy) Shard(bizID int64, key string) Dst {
 	hashValue := hash.Hash(bizID, key)
 	dbHash := hashValue % s.dbSharding
 	tabHash := (hashValue / s.dbSharding) % s.tableSharding
@@ -38,7 +38,7 @@ func (s *ShardingStrategy) Shard(bizID int64, key string) Dst {
 	}
 }
 
-func (s *ShardingStrategy) ShardWithID(id int64) Dst {
+func (s ShardingStrategy) ShardWithID(id int64) Dst {
 	hashValue := idgen.ExtractHashValue(id)
 	dbHash := hashValue % s.dbSharding
 	tabHash := (hashValue / s.dbSharding) % s.tableSharding
@@ -48,7 +48,7 @@ func (s *ShardingStrategy) ShardWithID(id int64) Dst {
 	}
 }
 
-func (s *ShardingStrategy) Broadcast() []Dst {
+func (s ShardingStrategy) Broadcast() []Dst {
 	ans := make([]Dst, 0, s.tableSharding*s.dbSharding)
 	for i := 0; i < int(s.dbSharding); i++ {
 		for j := 0; j < int(s.tableSharding); j++ {
@@ -62,7 +62,7 @@ func (s *ShardingStrategy) Broadcast() []Dst {
 }
 
 // 获取所有库名
-func (s *ShardingStrategy) DBs() []string {
+func (s ShardingStrategy) DBs() []string {
 	ans := make([]string, 0, s.dbSharding)
 	for i := 0; i < int(s.dbSharding); i++ {
 		ans = append(ans, fmt.Sprintf("%s_%d", s.dbPrefix, i))
@@ -71,19 +71,19 @@ func (s *ShardingStrategy) DBs() []string {
 }
 
 // 获取一个库中所有的表名
-func (s *ShardingStrategy) Tables() []string {
-	ans := make([]string, 0, s.dbSharding)
+func (s ShardingStrategy) Tables() []string {
+	ans := make([]string, 0, s.tableSharding)
 	for i := 0; i < int(s.tableSharding); i++ {
 		ans = append(ans, fmt.Sprintf("%s_%d", s.tablePrefix, i))
 	}
 	return ans
 }
 
-func (s *ShardingStrategy) TablePrefix() string {
+func (s ShardingStrategy) TablePrefix() string {
 	return s.tablePrefix
 }
 
-func (s *ShardingStrategy) TableSuffix() []string {
+func (s ShardingStrategy) TableSuffix() []string {
 	ans := make([]string, 0, s.tableSharding)
 	for i := 0; i < int(s.tableSharding); i++ {
 		ans = append(ans, fmt.Sprintf("%d", i))

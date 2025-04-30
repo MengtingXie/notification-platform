@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+
+	"github.com/ecodeclub/ekit/slice"
 )
 
 func (x *Notification) FindReceivers() []string {
@@ -57,6 +59,46 @@ func (x *SendNotificationAsyncRequest) GetNotifications() []*Notification {
 	n := x.GetNotification()
 	if n != nil {
 		return []*Notification{n}
+	}
+	return nil
+}
+
+type IdempotencyCarrier interface {
+	GetIdempotencyKeys() []string
+}
+
+func (x *SendNotificationRequest) GetIdempotencyKeys() []string {
+	n := x.GetNotification()
+	if n != nil {
+		return []string{n.Key}
+	}
+	return nil
+}
+
+func (x *SendNotificationAsyncRequest) GetIdempotencyKeys() []string {
+	n := x.GetNotification()
+	if n != nil {
+		return []string{n.Key}
+	}
+	return nil
+}
+
+func (x *BatchSendNotificationsAsyncRequest) GetIdempotencyKeys() []string {
+	if x != nil {
+		notifications := x.GetNotifications()
+		return slice.Map(notifications, func(idx int, src *Notification) string {
+			return src.Key
+		})
+	}
+	return nil
+}
+
+func (x *BatchSendNotificationsRequest) GetIdempotencyKeys() []string {
+	if x != nil {
+		notifications := x.GetNotifications()
+		return slice.Map(notifications, func(idx int, src *Notification) string {
+			return src.Key
+		})
 	}
 	return nil
 }
