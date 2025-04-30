@@ -54,11 +54,12 @@ func NewTxCheckTaskV2(repo repository.TxNotificationRepository, configSvc config
 }
 
 func (task *TxCheckTaskV2) Start(ctx context.Context) {
+	const key = "notification_check_task_v2"
 	dbs := task.txnStr.DBs()
 	for idx := range dbs {
 		// 每个db开一个job
 		db := dbs[idx]
-		go loopjob.NewShardingLoopJob(task.lock, task.oneLoop, db, task.txnStr.TableSuffix()).Run(ctx)
+		go loopjob.NewShardingLoopJob(task.lock, key, task.oneLoop, db, task.txnStr.TableSuffix()).Run(ctx)
 	}
 }
 

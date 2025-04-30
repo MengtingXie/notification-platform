@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ego-component/egorm"
+
 	"github.com/pkg/errors"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -17,7 +19,7 @@ import (
 )
 
 type TxNShardingDAO struct {
-	dbs                 *syncx.Map[string, *gorm.DB]
+	dbs                 *syncx.Map[string, *egorm.Component]
 	nShardingStrategy   sharding.ShardingStrategy
 	txnShardingStrategy sharding.ShardingStrategy
 	idGen               idgen.Generator
@@ -25,7 +27,7 @@ type TxNShardingDAO struct {
 
 // NewTxNShardingDAO creates a new TxNShardingDAO with the provided dependencies
 func NewTxNShardingDAO(
-	dbs *syncx.Map[string, *gorm.DB],
+	dbs *syncx.Map[string, *egorm.Component],
 	nStrategy sharding.ShardingStrategy,
 	txnStrategy sharding.ShardingStrategy,
 ) *TxNShardingDAO {

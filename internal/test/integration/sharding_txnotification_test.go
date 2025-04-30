@@ -3,6 +3,8 @@ package integration
 import (
 	"testing"
 
+	idgen "gitee.com/flycash/notification-platform/internal/pkg/id_generator"
+
 	"github.com/stretchr/testify/assert"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -31,7 +33,7 @@ func (s *ShardingTxNotificationSuite) SetupSuite() {
 	notiForTxn, txnStrategy := shardingIoc.InitTxnSharding()
 
 	s.dbs = dbs
-	s.notificationDAO = sharding.NewNotificationSvc(dbs, notiStrategy, callbacklogStrategy)
+	s.notificationDAO = sharding.NewNotificationSvc(dbs, notiStrategy, callbacklogStrategy, idgen.NewGenerator())
 
 	// Use the constructor instead of direct initialization
 	s.txnShardingDAO = sharding.NewTxNShardingDAO(dbs, notiForTxn, txnStrategy)

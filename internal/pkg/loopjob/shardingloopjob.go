@@ -31,18 +31,20 @@ type ShardingLoopJob struct {
 
 func NewShardingLoopJob(
 	dclient dlock.Client,
+	baseKey string,
 	// 你要执行的业务。注意当 ctx 被取消的时候，就会退出全部循环
 	biz func(ctx context.Context) error,
 	db string,
 	tabSuffixes []string,
 ) *ShardingLoopJob {
 	const defaultTimeout = 3 * time.Second
-	return newShardingLoopJobLoop(dclient, biz, db, tabSuffixes, time.Minute, defaultTimeout)
+	return newShardingLoopJobLoop(dclient, baseKey, biz, db, tabSuffixes, time.Minute, defaultTimeout)
 }
 
 // ShardingLoopJobLoop 用于创建一个ShardingLoopJobLoop实例，允许指定重试间隔，便于测试
 func newShardingLoopJobLoop(
 	dclient dlock.Client,
+	baseKey string,
 	biz func(ctx context.Context) error,
 	db string,
 	tabSuffixes []string,
@@ -52,6 +54,7 @@ func newShardingLoopJobLoop(
 	return &ShardingLoopJob{
 		dclient:        dclient,
 		db:             db,
+		baseKey:        baseKey,
 		tabSuffixes:    tabSuffixes,
 		logger:         elog.DefaultLogger,
 		biz:            biz,

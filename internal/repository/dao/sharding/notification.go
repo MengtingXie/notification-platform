@@ -3,8 +3,15 @@ package sharding
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/ecodeclub/ekit/slice"
+
+	idgen "gitee.com/flycash/notification-platform/internal/pkg/id_generator"
+
+	"github.com/ego-component/egorm"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/errs"
@@ -18,24 +25,23 @@ import (
 	"gorm.io/gorm"
 )
 
-const (
-	maxBatchSize = 20
-)
-
 type NotificationShardingDAO struct {
-	dbs                     *syncx.Map[string, *gorm.DB]
+	dbs                     *syncx.Map[string, *egorm.Component]
 	notificationShardingSvc sharding.ShardingStrategy
 	callbackLogShardingSvc  sharding.ShardingStrategy
+	idGenerator             *idgen.Generator
 }
 
-func NewNotificationSvc(dbs *syncx.Map[string, *gorm.DB],
+func NewNotificationSvc(dbs *syncx.Map[string, *egorm.Component],
 	notificationShardingSvc sharding.ShardingStrategy,
 	callbackLogShardingSvc sharding.ShardingStrategy,
+	idGenerator *idgen.Generator,
 ) *NotificationShardingDAO {
 	return &NotificationShardingDAO{
 		dbs:                     dbs,
 		notificationShardingSvc: notificationShardingSvc,
 		callbackLogShardingSvc:  callbackLogShardingSvc,
+		idGenerator:             idGenerator,
 	}
 }
 
@@ -58,6 +64,7 @@ func (s *NotificationShardingDAO) Create(ctx context.Context, data dao.Notificat
 
 func (s *NotificationShardingDAO) create(ctx context.Context, data dao.Notification, createCallbackLog bool) (dao.Notification, error) {
 	now := time.Now().UnixMilli()
+
 	data.Ctime, data.Utime = now, now
 	data.Version = 1
 	// 获取分库分表规则
@@ -69,24 +76,35 @@ func (s *NotificationShardingDAO) create(ctx context.Context, data dao.Notificat
 	}
 	// notification 和callbacklog 是在同一个库的但是 表不同
 	err := notiDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Table(notificationDst.Table).Create(&data).Error; err != nil {
-			if s.isUniqueConstraintError(err) {
-				return fmt.Errorf("%w", errs.ErrNotificationDuplicate)
+		for {
+			data.ID = uint64(s.idGenerator.GenerateID(data.BizID, data.Key))
+			if err := tx.Table(notificationDst.Table).Create(&data).Error; err != nil {
+				if s.isUniqueConstraintError(err) {
+					return fmt.Errorf("%w", errs.ErrNotificationDuplicate)
+				}
+				if errors.Is(err, gorm.ErrDuplicatedKey) {
+					// 唯一键冲突直接返回
+					if !dao.CheckErrIsIDDuplicate(data.ID, err) {
+						return nil
+					}
+					// 主键冲突 重试再找个主键
+					continue
+				}
+				return err
 			}
-			return err
-		}
-		if createCallbackLog {
-			if err := tx.Table(callBackLogDst.Table).Create(&dao.CallbackLog{
-				NotificationID: data.ID,
-				Status:         domain.CallbackLogStatusInit.String(),
-				NextRetryTime:  now,
-				Ctime:          now,
-				Utime:          now,
-			}).Error; err != nil {
-				return fmt.Errorf("%w", errs.ErrCreateCallbackLogFailed)
+			if createCallbackLog {
+				if err := tx.Table(callBackLogDst.Table).Create(&dao.CallbackLog{
+					NotificationID: data.ID,
+					Status:         domain.CallbackLogStatusInit.String(),
+					NextRetryTime:  now,
+					Ctime:          now,
+					Utime:          now,
+				}).Error; err != nil {
+					return fmt.Errorf("%w", errs.ErrCreateCallbackLogFailed)
+				}
 			}
+			return nil
 		}
-		return nil
 	})
 	return data, err
 }
@@ -285,78 +303,72 @@ func (s *NotificationShardingDAO) BatchUpdateStatusSucceededOrFailed(ctx context
 	if len(successNotifications) == 0 && len(failedNotifications) == 0 {
 		return nil
 	}
-	type modifyIds struct {
-		callBackTab string
-		successIds  []uint64
-		failedIds   []uint64
-	}
 
-	tabdbMap := make(map[[2]string]modifyIds)
+	dbMap := make(map[string]map[string]*modifyIds)
 
 	for idx := range successNotifications {
-		no := successNotifications[idx]
-		dst := s.notificationShardingSvc.ShardWithID(int64(no.ID))
-		callbackLogDst := s.callbackLogShardingSvc.ShardWithID(int64(no.ID))
-		v, ok := tabdbMap[[2]string{dst.DB, dst.Table}]
-		if !ok {
-			v = modifyIds{
-				callBackTab: callbackLogDst.Table,
-				successIds:  []uint64{no.ID},
-			}
-		} else {
-			v.successIds = append(v.successIds, no.ID)
+		notification := successNotifications[idx]
+		notificationDst := s.notificationShardingSvc.ShardWithID(int64(notification.ID))
+		callbackDst := s.callbackLogShardingSvc.ShardWithID(int64(notification.ID))
+
+		tableMap, exists := dbMap[notificationDst.DB]
+		if !exists {
+			tableMap = make(map[string]*modifyIds)
+			dbMap[notificationDst.DB] = tableMap
 		}
-		tabdbMap[[2]string{dst.DB, dst.Table}] = v
+
+		modifyID, exists := tableMap[notificationDst.Table]
+		if !exists {
+			modifyID = &modifyIds{
+				callbackTab: callbackDst.Table,
+				successIds:  []uint64{notification.ID},
+				failedIds:   []uint64{},
+			}
+			tableMap[notificationDst.Table] = modifyID
+		} else {
+			modifyID.successIds = append(modifyID.successIds, notification.ID)
+			if modifyID.callbackTab == "" {
+				modifyID.callbackTab = callbackDst.Table
+			}
+		}
 	}
 
 	for idx := range failedNotifications {
-		no := failedNotifications[idx]
-		dst := s.notificationShardingSvc.ShardWithID(int64(no.ID))
-		v, ok := tabdbMap[[2]string{dst.DB, dst.Table}]
-		if !ok {
-			v = modifyIds{
-				failedIds: []uint64{no.ID},
-			}
-		} else {
-			v.failedIds = append(v.failedIds, no.ID)
+		notification := failedNotifications[idx]
+		notificationDst := s.notificationShardingSvc.ShardWithID(int64(notification.ID))
+		tableMap, exists := dbMap[notificationDst.DB]
+		if !exists {
+			tableMap = make(map[string]*modifyIds)
+			dbMap[notificationDst.DB] = tableMap
 		}
-		tabdbMap[[2]string{dst.DB, dst.Table}] = v
+		modifyID, exists := tableMap[notificationDst.Table]
+		if !exists {
+			modifyID = &modifyIds{
+				successIds: []uint64{},
+				failedIds:  []uint64{notification.ID},
+			}
+			tableMap[notificationDst.Table] = modifyID
+		} else {
+			modifyID.failedIds = append(modifyID.failedIds, notification.ID)
+		}
 	}
 
+	// Process each database in parallel
 	var eg errgroup.Group
-	for tabDBKey := range tabdbMap {
-		idItem := tabdbMap[tabDBKey]
+	for dbName, tableMap := range dbMap {
+		db := dbName
+		tables := tableMap
 		eg.Go(func() error {
-			dbName := tabDBKey[0]
-			tabName := tabDBKey[1]
-			gormDB, ok := s.dbs.Load(dbName)
+			gormDB, ok := s.dbs.Load(db)
 			if !ok {
-				return fmt.Errorf("未知库名 %s", dbName)
+				return fmt.Errorf("未知库名 %s", db)
 			}
 			return gormDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-				if len(idItem.successIds) != 0 {
-					err := s.batchMarkSuccess(tx, tabName, idItem.callBackTab, idItem.successIds)
-					if err != nil {
-						return err
-					}
-				}
-
-				if len(idItem.failedIds) != 0 {
-					now := time.Now().Unix()
-					return tx.Model(&dao.Notification{}).
-						Table(tabName).
-						Where("id IN ?", idItem.failedIds).
-						Updates(map[string]any{
-							"version": gorm.Expr("version + 1"),
-							"utime":   now,
-							"status":  domain.SendStatusFailed.String(),
-						}).Error
-				}
-				return nil
+				return s.batchMark(tx, tables)
 			})
 		})
-
 	}
+
 	return eg.Wait()
 }
 
@@ -428,90 +440,219 @@ func (s *NotificationShardingDAO) batchCreate(ctx context.Context, datas []dao.N
 	if len(datas) == 0 {
 		return []dao.Notification{}, nil
 	}
-	if len(datas) > maxBatchSize {
-		return nil, fmt.Errorf("一批最多%d个消息", maxBatchSize)
-	}
+
 	now := time.Now().UnixMilli()
 	for i := range datas {
 		datas[i].Ctime, datas[i].Utime = now, now
 		datas[i].Version = 1
 	}
-	// 前一个是库名，后一个是表名
-	notiMap := make(map[[2]string][]dao.Notification)
-	callbackLogMap := make(map[[2]string][]dao.CallbackLog)
-	for idx := range datas {
-		data := datas[idx]
-		dst := s.notificationShardingSvc.ShardWithID(int64(data.ID))
-		v, ok := notiMap[[2]string{dst.DB, dst.Table}]
-		if ok {
-			v = append(v, data)
-		} else {
-			v = []dao.Notification{data}
-		}
-		notiMap[[2]string{dst.DB, dst.Table}] = v
-		callBackDst := s.callbackLogShardingSvc.ShardWithID(int64(data.ID))
-		vv, ok := callbackLogMap[[2]string{callBackDst.DB, callBackDst.Table}]
-		callbackLog := dao.CallbackLog{
-			NotificationID: data.ID,
-			NextRetryTime:  now,
-			Ctime:          now,
-			Utime:          now,
-		}
-		if ok {
-			vv = append(vv, callbackLog)
-		} else {
-			vv = []dao.CallbackLog{callbackLog}
-		}
-		callbackLogMap[[2]string{callBackDst.DB, callBackDst.Table}] = vv
-	}
-	var eg errgroup.Group
-	for key := range notiMap {
-		dbTab := key
-		data := notiMap[key]
-		eg.Go(func() error {
-			gromDB, ok := s.dbs.Load(dbTab[0])
-			if !ok {
-				return fmt.Errorf("库名%s没找到", dbTab[0])
-			}
-			return gromDB.WithContext(ctx).Table(dbTab[1]).Create(&data).Error
-		})
-	}
-	if createCallbackLog {
-		for key := range callbackLogMap {
-			dbTab := key
-			callbackLog := callbackLogMap[key]
-			eg.Go(func() error {
-				gromDB, ok := s.dbs.Load(dbTab[0])
-				if !ok {
-					return fmt.Errorf("库名%s没找到", dbTab[0])
-				}
-				return gromDB.WithContext(ctx).Table(dbTab[1]).Create(&callbackLog).Error
-			})
-		}
-	}
-	return datas, eg.Wait()
+	notificationList := slice.Map(datas, func(_ int, src dao.Notification) *dao.Notification {
+		return &src
+	})
+	return s.tryBatchInsert(ctx, notificationList, createCallbackLog)
 }
 
-func (s *NotificationShardingDAO) batchMarkSuccess(tx *gorm.DB, notiTab, callbackLogTab string, successIDs []uint64) error {
+// tryBatchInsert attempts to insert all notifications in batch mode
+func (s *NotificationShardingDAO) tryBatchInsert(ctx context.Context, datas []*dao.Notification, createCallbackLog bool) ([]dao.Notification, error) {
+	now := time.Now().UnixMilli()
+	notiMap := s.getNotificationMap(datas)
+	var eg errgroup.Group
+	for dbName, tablesMap := range notiMap {
+		db := dbName
+		tables := tablesMap
+		eg.Go(func() error {
+			for {
+				gormDB, ok := s.dbs.Load(db)
+				if !ok {
+					return fmt.Errorf("库名%s没找到", db)
+				}
+				sqls, ids := s.getSqlsAndIds(tables, createCallbackLog, now)
+				if len(sqls) > 0 {
+					combinedSQL := strings.Join(sqls, "; ")
+					err := gormDB.WithContext(ctx).Exec(combinedSQL).Error
+					if err != nil {
+						if errors.Is(err, gorm.ErrDuplicatedKey) && checkNotificationIds(ids, err) {
+							continue
+						}
+						return err
+					}
+				}
+				return nil
+			}
+		})
+	}
+	err := eg.Wait()
+	return slice.Map(datas, func(_ int, src *dao.Notification) dao.Notification {
+		if src != nil {
+			return *src
+		}
+		return dao.Notification{}
+	}), err
+}
+
+func (s *NotificationShardingDAO) getSqlsAndIds(tables map[string][]*dao.Notification, createCallbackLog bool, now int64) (sqls []string, ids []uint64) {
+	sqls = make([]string, 0)
+	ids = make([]uint64, 0)
+	for tab, data := range tables {
+		for _, v := range data {
+			ids = append(ids, v.ID)
+		}
+		sqls = append(sqls, s.genNotificationSQL(tab, data, createCallbackLog, now)...)
+	}
+	return sqls, ids
+}
+
+func (s *NotificationShardingDAO) getNotificationMap(datas []*dao.Notification) map[string]map[string][]*dao.Notification {
+	notiMap := make(map[string]map[string][]*dao.Notification)
+
+	for idx := range datas {
+		data := datas[idx]
+		dst := s.notificationShardingSvc.Shard(data.BizID, data.Key)
+
+		tableMap, dbExists := notiMap[dst.DB]
+		if !dbExists {
+			tableMap = make(map[string][]*dao.Notification)
+			notiMap[dst.DB] = tableMap
+		}
+		notis, tableExists := tableMap[dst.Table]
+		if !tableExists {
+			notis = []*dao.Notification{data}
+		} else {
+			notis = append(notis, data)
+		}
+		tableMap[dst.Table] = notis
+	}
+	return notiMap
+}
+
+func (s *NotificationShardingDAO) batchMark(tx *gorm.DB, ids map[string]*modifyIds) error {
 	now := time.Now().Unix()
-	err := tx.Model(&dao.Notification{}).
-		Table(notiTab).
-		Where("id IN ?", successIDs).
-		Updates(map[string]any{
-			"version": gorm.Expr("version + 1"),
-			"utime":   now,
-			"status":  domain.SendStatusSucceeded.String(),
-		}).Error
-	if err != nil {
-		return err
+	sqls := make([]string, 0, len(ids))
+	for notificationTab := range ids {
+		modifyID := ids[notificationTab]
+		if len(modifyID.successIds) > 0 {
+			notificationSQL := fmt.Sprintf("UPDATE %s SET `version` = `version` + 1,`utime` = %d,`status` = '%s' WHERE id IN (%s) ",
+				notificationTab, now, domain.SendStatusSucceeded.String(), modifyID.successToStr(),
+			)
+			callbackSQL := fmt.Sprintf("UPDATE %s SET `status` = '%s',utime = %d  WHERE notification_id IN (%s)", modifyID.callbackTab, domain.CallbackLogStatusPending.String(), now, modifyID.successToStr())
+			sqls = append(sqls, notificationSQL, callbackSQL)
+		}
+		if len(modifyID.failedIds) > 0 {
+			notificationSQL := fmt.Sprintf("UPDATE %s SET `version` = `version` + 1,`utime` = %d,`status` = '%s' WHERE id IN (%s) ",
+				notificationTab, now, domain.SendStatusFailed.String(), modifyID.failToStr(),
+			)
+			sqls = append(sqls, notificationSQL)
+		}
 	}
 
-	// 要更新 callback log 了
-	return tx.Model(&dao.CallbackLog{}).
-		Table(callbackLogTab).
-		Where("notification_id IN ? ", successIDs).
-		Updates(map[string]any{
-			"status": domain.CallbackLogStatusPending.String(),
-			"utime":  now,
-		}).Error
+	if len(sqls) > 0 {
+		combinedSQL := strings.Join(sqls, "; ")
+		err := tx.Exec(combinedSQL).Error
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type modifyIds struct {
+	callbackTab string
+	successIds  []uint64
+	failedIds   []uint64
+}
+
+func (m *modifyIds) failToStr() string {
+	return m.listToStr(m.failedIds)
+}
+
+func (m *modifyIds) successToStr() string {
+	return m.listToStr(m.successIds)
+}
+
+func (m *modifyIds) listToStr(list []uint64) string {
+	strSlice := make([]string, len(list))
+	for i, num := range list {
+		strSlice[i] = fmt.Sprintf("%d", num)
+	}
+	return strings.Join(strSlice, ",")
+}
+
+// escapeString safely escapes single quotes in SQL strings
+func escapeString(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
+}
+
+// genSql generates SQL INSERT statements for a slice of notifications
+// It returns a slice of SQL strings ready for execution
+func (s *NotificationShardingDAO) genNotificationSQL(table string, notis []*dao.Notification, createCallbackLog bool, now int64) []string {
+	if len(notis) == 0 {
+		return nil
+	}
+
+	// Column definitions
+	columns := []string{
+		"id", "biz_id", "key", "receivers", "channel",
+		"template_id", "template_version_id", "template_params",
+		"status", "scheduled_stime", "scheduled_etime",
+		"version", "ctime", "utime",
+	}
+
+	logsColumns := []string{
+		"notification_id", "next_retry_time",
+		"ctime", "utime",
+	}
+
+	// Join columns into a single string
+	columnStr := "`" + strings.Join(columns, "`, `") + "`"
+	logColumnStr := "`" + strings.Join(logsColumns, "`, `") + "`"
+
+	sqlStatements := make([]string, 0, len(notis))
+	for _, noti := range notis {
+		id := s.idGenerator.GenerateID(noti.BizID, noti.Key)
+		noti.ID = uint64(id)
+		values := fmt.Sprintf(
+			"(%d, %d, '%s', '%s', '%s', %d, %d, '%s', '%s', %d, %d, %d, %d, %d)",
+			id,
+			noti.BizID,
+			escapeString(noti.Key),
+			escapeString(noti.Receivers),
+			noti.Channel,
+			noti.TemplateID,
+			noti.TemplateVersionID,
+			escapeString(noti.TemplateParams),
+			noti.Status,
+			noti.ScheduledSTime,
+			noti.ScheduledETime,
+			noti.Version,
+			noti.Ctime,
+			noti.Utime,
+		)
+
+		sql := fmt.Sprintf("INSERT INTO `%s` (%s) VALUES %s", table, columnStr, values)
+		sqlStatements = append(sqlStatements, sql)
+		if createCallbackLog {
+			dst := s.callbackLogShardingSvc.ShardWithID(id)
+			vals := fmt.Sprintf(
+				"(%d,  %d, %d, %d)",
+				id,
+				now,
+				now,
+				now,
+			)
+			// Construct the full SQL statement
+			sql = fmt.Sprintf("INSERT INTO `%s` (%s) VALUES %s", dst.Table, logColumnStr, vals)
+			sqlStatements = append(sqlStatements, sql)
+		}
+	}
+
+	return sqlStatements
+}
+
+func checkNotificationIds(ids []uint64, err error) bool {
+	for _, id := range ids {
+		if !dao.CheckErrIsIDDuplicate(id, err) {
+			return true
+		}
+	}
+	return false
 }

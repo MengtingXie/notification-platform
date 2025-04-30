@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ego-component/egorm"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
@@ -21,10 +23,10 @@ const (
 
 // 专门为task
 type TxnTaskDAO struct {
-	dbs *syncx.Map[string, *gorm.DB]
+	dbs *syncx.Map[string, *egorm.Component]
 }
 
-func NewTxnTaskDAO(dbs *syncx.Map[string, *gorm.DB]) *TxnTaskDAO {
+func NewTxnTaskDAO(dbs *syncx.Map[string, *egorm.Component]) *TxnTaskDAO {
 	return &TxnTaskDAO{
 		dbs: dbs,
 	}

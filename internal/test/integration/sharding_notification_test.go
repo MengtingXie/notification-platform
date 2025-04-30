@@ -5,6 +5,11 @@ package integration
 import (
 	"testing"
 
+	idgen "gitee.com/flycash/notification-platform/internal/pkg/id_generator"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/ego-component/egorm"
+
 	"github.com/ecodeclub/ekit/syncx"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -19,17 +24,20 @@ import (
 
 type ShardingNotificationSuite struct {
 	suite.Suite
-	dbs             *syncx.Map[string, *gorm.DB]
+	dbs             *syncx.Map[string, *egorm.Component]
 	shardingDAO     *sharding.NotificationShardingDAO
 	notificationStr sharding2.ShardingStrategy
+	callBackStr     sharding2.ShardingStrategy
 }
 
 func (s *ShardingNotificationSuite) SetupSuite() {
 	dbs := shardingIoc.InitDbs()
 	notiStrategy, callbacklogStrategy := shardingIoc.InitNotificationSharding()
 	s.dbs = dbs
-	s.shardingDAO = sharding.NewNotificationSvc(dbs, notiStrategy, callbacklogStrategy)
+
+	s.shardingDAO = sharding.NewNotificationSvc(dbs, notiStrategy, callbacklogStrategy, idgen.NewGenerator())
 	s.notificationStr = notiStrategy
+	s.callBackStr = callbacklogStrategy
 }
 
 func (s *ShardingNotificationSuite) TearDownTest() {
@@ -40,7 +48,7 @@ func (s *ShardingNotificationSuite) TestCreate() {
 	t := s.T()
 	// 00
 	noti := dao.Notification{
-		ID:                173998800141926400,
+		ID:                0,
 		BizID:             1001,
 		Key:               "order_paid_20230425_001",
 		Receivers:         `["+8613812345678", "+8613912345678"]`,
@@ -57,7 +65,7 @@ func (s *ShardingNotificationSuite) TestCreate() {
 	}
 	// 11
 	noti1 := dao.Notification{
-		ID:                173999767527813120,
+		ID:                0,
 		BizID:             1002,
 		Key:               "order_paid_20230425_002",
 		Receivers:         `["+8613812345678", "+8613912345678"]`,
@@ -74,7 +82,7 @@ func (s *ShardingNotificationSuite) TestCreate() {
 	}
 	// 10
 	noti2 := dao.Notification{
-		ID:                174001505717391360,
+		ID:                0,
 		BizID:             109,
 		Key:               "payxxxxd_20230425_003",
 		Receivers:         `["+8613812345678", "+8613912345678"]`,
@@ -139,6 +147,203 @@ func (s *ShardingNotificationSuite) TestCreate() {
 			"callback_log_1",
 		}: {},
 	}, actualCallbackLogs)
+}
+
+func (s *ShardingNotificationSuite) TestBatchCreate() {
+	t := s.T()
+
+	// Create test notifications across different shards
+	noti1 := dao.Notification{
+		ID:                0,
+		BizID:             5001,
+		Key:               "batch_create_test_001",
+		Receivers:         `["+8613812345678", "+8613912345678"]`,
+		Channel:           "SMS",
+		TemplateID:        5001,
+		TemplateVersionID: 2,
+		TemplateParams:    `{"order_id":"20230425001","amount":"299.00"}`,
+		Status:            "PENDING",
+		ScheduledSTime:    1735660800,
+		ScheduledETime:    1735747200,
+		Version:           1,
+		Ctime:             0,
+		Utime:             0,
+	}
+
+	noti2 := dao.Notification{
+		ID:                0,
+		BizID:             5002,
+		Key:               "batch_create_test_002",
+		Receivers:         `["+8613812345678", "+8613912345678"]`,
+		Channel:           "SMS",
+		TemplateID:        5001,
+		TemplateVersionID: 2,
+		TemplateParams:    `{"order_id":"20230425002","amount":"199.00"}`,
+		Status:            "PENDING",
+		ScheduledSTime:    1735660800,
+		ScheduledETime:    1735747200,
+		Version:           1,
+		Ctime:             0,
+		Utime:             0,
+	}
+
+	noti3 := dao.Notification{
+		ID:                0,
+		BizID:             5003,
+		Key:               "batch_create_test_003",
+		Receivers:         `["+8613812345678", "+8613912345678"]`,
+		Channel:           "SMS",
+		TemplateID:        5001,
+		TemplateVersionID: 2,
+		TemplateParams:    `{"order_id":"20230425003","amount":"399.00"}`,
+		Status:            "PENDING",
+		ScheduledSTime:    1735660800,
+		ScheduledETime:    1735747200,
+		Version:           1,
+		Ctime:             0,
+		Utime:             0,
+	}
+
+	// Put notifications in a slice
+	notifications := []dao.Notification{noti1, noti2, noti3}
+
+	// Call BatchCreate
+	createdNotifications, err := s.shardingDAO.BatchCreate(t.Context(), notifications)
+	require.NoError(t, err)
+	require.Equal(t, len(notifications), len(createdNotifications))
+
+	// Verify created notifications
+	actualNotifications := s.getAllNotifications()
+
+	// Determine expected notification distribution based on sharding
+	expectedNotifications := map[[2]string][]dao.Notification{
+		{"notification_0", "notification_0"}: {},
+		{"notification_0", "notification_1"}: {},
+		{"notification_1", "notification_0"}: {},
+		{"notification_1", "notification_1"}: {},
+	}
+
+	// Add notifications to expected map based on their sharding
+	for _, notification := range notifications {
+		dst := s.notificationStr.Shard(notification.BizID, notification.Key)
+		dstKey := [2]string{dst.DB, dst.Table}
+		expectedNotifications[dstKey] = append(expectedNotifications[dstKey], notification)
+	}
+
+	s.assertNotifications(expectedNotifications, actualNotifications)
+
+	// Verify no callback logs were created
+	actualCallbackLogs := s.getAllCallbackLogs()
+	s.assertCallbackLogs(map[[2]string][]dao.CallbackLog{
+		{"notification_0", "callback_log_0"}: {},
+		{"notification_0", "callback_log_1"}: {},
+		{"notification_1", "callback_log_0"}: {},
+		{"notification_1", "callback_log_1"}: {},
+	}, actualCallbackLogs)
+}
+
+func (s *ShardingNotificationSuite) TestBatchCreateWithCallbackLog() {
+	t := s.T()
+
+	// Create test notifications across different shards
+	noti1 := dao.Notification{
+		ID:                0,
+		BizID:             6001,
+		Key:               "batch_create_with_callback_001",
+		Receivers:         `["+8613812345678", "+8613912345678"]`,
+		Channel:           "SMS",
+		TemplateID:        5001,
+		TemplateVersionID: 2,
+		TemplateParams:    `{"order_id":"20230425001","amount":"299.00"}`,
+		Status:            "PENDING",
+		ScheduledSTime:    1735660800,
+		ScheduledETime:    1735747200,
+		Version:           1,
+		Ctime:             0,
+		Utime:             0,
+	}
+
+	noti2 := dao.Notification{
+		ID:                0,
+		BizID:             6002,
+		Key:               "batch_create_with_callback_002",
+		Receivers:         `["+8613812345678", "+8613912345678"]`,
+		Channel:           "SMS",
+		TemplateID:        5001,
+		TemplateVersionID: 2,
+		TemplateParams:    `{"order_id":"20230425002","amount":"199.00"}`,
+		Status:            "PENDING",
+		ScheduledSTime:    1735660800,
+		ScheduledETime:    1735747200,
+		Version:           1,
+		Ctime:             0,
+		Utime:             0,
+	}
+
+	noti3 := dao.Notification{
+		ID:                0,
+		BizID:             6003,
+		Key:               "batch_create_with_callback_003",
+		Receivers:         `["+8613812345678", "+8613912345678"]`,
+		Channel:           "SMS",
+		TemplateID:        5001,
+		TemplateVersionID: 2,
+		TemplateParams:    `{"order_id":"20230425003","amount":"399.00"}`,
+		Status:            "PENDING",
+		ScheduledSTime:    1735660800,
+		ScheduledETime:    1735747200,
+		Version:           1,
+		Ctime:             0,
+		Utime:             0,
+	}
+
+	// Put notifications in a slice
+	notifications := []dao.Notification{noti1, noti2, noti3}
+
+	// Call BatchCreateWithCallbackLog
+	createdNotifications, err := s.shardingDAO.BatchCreateWithCallbackLog(t.Context(), notifications)
+	require.NoError(t, err)
+	require.Equal(t, len(notifications), len(createdNotifications))
+
+	// Verify created notifications
+	actualNotifications := s.getAllNotifications()
+
+	// Determine expected notification distribution based on sharding
+	expectedNotifications := map[[2]string][]dao.Notification{
+		{"notification_0", "notification_0"}: {},
+		{"notification_0", "notification_1"}: {},
+		{"notification_1", "notification_0"}: {},
+		{"notification_1", "notification_1"}: {},
+	}
+
+	// Add notifications to expected map based on their sharding
+	for _, notification := range notifications {
+		dst := s.notificationStr.Shard(notification.BizID, notification.Key)
+		dstKey := [2]string{dst.DB, dst.Table}
+		expectedNotifications[dstKey] = append(expectedNotifications[dstKey], notification)
+	}
+
+	s.assertNotifications(expectedNotifications, actualNotifications)
+
+	// Verify callback logs were created
+	actualCallbackLogs := s.getAllCallbackLogs()
+
+	// Verify that callback logs exist for each notification
+	notificationMap := make(map[uint64][2]string)
+	for _, notification := range createdNotifications {
+		dst := s.callBackStr.ShardWithID(int64(notification.ID))
+		notificationMap[notification.ID] = [2]string{dst.DB, dst.Table}
+	}
+
+	// Check that each notification has a callback log
+	for key, logsByTables := range actualCallbackLogs {
+		for idx := range logsByTables {
+			log := logsByTables[idx]
+			vv, ok := notificationMap[log.NotificationID]
+			require.True(t, ok)
+			assert.Equal(t, vv, key)
+		}
+	}
 }
 
 func (s *ShardingNotificationSuite) TestGetByID() {
@@ -717,14 +922,16 @@ func (s *ShardingNotificationSuite) assertNotifications(wantNotifications, actua
 		require.True(s.T(), ok)
 		require.Equal(s.T(), len(wantVal), len(actualVal))
 		for idx := range actualVal {
-			wantNotification := wantVal[idx]
 			actualNotification := actualVal[idx]
 			require.True(s.T(), actualNotification.Ctime > 0)
 			require.True(s.T(), actualNotification.Utime > 0)
-			actualNotification.Ctime = 0
-			actualNotification.Utime = 0
-			require.Equal(s.T(), wantNotification, actualNotification)
+			actualVal[idx].ID = 0
+			wantVal[idx].Ctime = 0
+			wantVal[idx].Utime = 0
+			actualVal[idx].Ctime = 0
+			actualVal[idx].Utime = 0
 		}
+		assert.ElementsMatch(s.T(), wantVal, actualVal)
 	}
 }
 
@@ -735,7 +942,6 @@ func (s *ShardingNotificationSuite) assertCallbackLogs(wantLogs, actualLogs map[
 		require.True(s.T(), ok)
 		require.Equal(s.T(), len(wantVal), len(actualVal))
 		for idx := range actualVal {
-			wantLog := wantVal[idx]
 			actualLog := actualVal[idx]
 			require.True(s.T(), actualLog.Ctime > 0)
 			require.True(s.T(), actualLog.Utime > 0)
@@ -744,9 +950,9 @@ func (s *ShardingNotificationSuite) assertCallbackLogs(wantLogs, actualLogs map[
 			actualLog.Utime = 0
 			actualLog.NextRetryTime = 0
 			actualLog.ID = 0
-			require.Equal(s.T(), wantLog, actualLog)
 
 		}
+		require.ElementsMatch(s.T(), wantVal, actualVal)
 	}
 }
 

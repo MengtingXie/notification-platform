@@ -54,7 +54,6 @@ func (g *timeoutServer) f1(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	fmt.Println("f1xxxxxxx")
 	g.cache.LPush(ctx, "timeout:test", "f1")
 	return nil
 }
@@ -64,7 +63,6 @@ func (g *timeoutServer) f2(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	fmt.Println("f2xxxxxxx")
 	g.cache.LPush(ctx, "timeout:test", "f2")
 	return nil
 }

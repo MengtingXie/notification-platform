@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ego-component/egorm"
+
 	"github.com/ecodeclub/ekit/syncx"
 
 	"github.com/stretchr/testify/assert"
@@ -69,7 +71,7 @@ func (s *MockShardingGrpcServer) Check(_ context.Context, req *clientv1.Transact
 
 type ShardingTxNotificationTask struct {
 	suite.Suite
-	dbs                 *syncx.Map[string, *gorm.DB]
+	dbs                 *syncx.Map[string, *egorm.Component]
 	txnRepo             repository.TxNotificationRepository
 	txnDAO              *sharding.TxNShardingDAO
 	notificationStr     sharding2.ShardingStrategy
