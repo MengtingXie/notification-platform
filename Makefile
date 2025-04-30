@@ -61,3 +61,10 @@ grpc:
 .PHONY: gen
 gen:
 	@go generate ./...
+
+.PHONY: run_platform
+run_platform:
+	@$(MAKE) e2e_down
+	@$(MAKE) e2e_up
+	@sleep 15
+	@cd cmd/platform && export EGO_DEBUG=true && go run main.go --config=../../config/config.yaml

@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"log"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
@@ -32,7 +31,6 @@ func NewCallbackLogRepository(
 }
 
 func (c *callbackLogRepository) Find(ctx context.Context, startTime, batchSize, startID int64) (logs []domain.CallbackLog, nextStartID int64, err error) {
-	log.Printf("startTime = %#v, batchsize = %#v\n", startTime, batchSize)
 	entities, nextStartID, err := c.dao.Find(ctx, startTime, batchSize, startID)
 	if err != nil {
 		return nil, 0, err

@@ -174,7 +174,6 @@ collectBatch:
 	}
 
 	// 限流检测
-	// 有一个坑，就是当前请求99 < 100,确实没被限流，但是就差一个请求，而batchSize=100，那么就超过阈值99个
 	if err := c.waitUntilRateLimitExpires(ctx); err != nil {
 		return err
 	}
@@ -196,7 +195,6 @@ collectBatch:
 				elog.FieldErr(err),
 				elog.Any("partition", lastMsg.TopicPartition.Partition),
 				elog.Any("offset", lastMsg.TopicPartition.Offset))
-			// ？？？这里是不是该继续提交剩余消息记录，尽最大可能成功？
 			return err
 		}
 	}
@@ -222,7 +220,6 @@ func (c *EventConsumer) batchSendNotificationsAsync(ctx context.Context, grouped
 				elog.Int64("bizID", bizID),
 				elog.Int("notifications_count", len(groupedBatchNotifications[bizID])))
 
-			// 是否继续落库？还是中断？
 			return err
 		}
 	}
