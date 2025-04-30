@@ -23,15 +23,15 @@ type BitRing struct {
 	size        int          // 窗口长度
 	pos         int          // 下一写入位置
 	filled      bool         // 标记环形缓冲区是否已满（完成一轮循环）
-	eventCount  int          // 当前窗口内事件数
-	threshold   float64      // 事件率阈值
+	eventCount  int          // 当前窗口内事件发生数
+	threshold   float64      // 事件发生率阈值
 	consecutive int          // 连续事件触发次数
 	mu          sync.RWMutex // 保证并发安全
 }
 
 // NewBitRing 创建一个新的BitRing
 // size: 滑动窗口大小
-// threshold: 事件率阈值(0.0-1.0)，超过此阈值将触发IsConditionMet返回true
+// threshold: 事件发生率阈值(0.0-1.0)，超过此阈值将触发IsConditionMet返回true
 // consecutive: 连续出现多少次事件将触发IsConditionMet返回true
 func NewBitRing(size int, threshold float64, consecutive int) *BitRing {
 	if size <= 0 {
@@ -58,8 +58,8 @@ func NewBitRing(size int, threshold float64, consecutive int) *BitRing {
 	}
 }
 
-// Add 记录一次结果；isEvent=true 表示事件发生
-func (br *BitRing) Add(isEvent bool) {
+// Add 记录一次结果；eventHappened=true 表示事件发生
+func (br *BitRing) Add(eventHappened bool) {
 	br.mu.Lock()
 	defer br.mu.Unlock()
 
@@ -69,8 +69,8 @@ func (br *BitRing) Add(isEvent bool) {
 	if br.filled && oldBit {
 		br.eventCount--
 	}
-	br.setBit(br.pos, isEvent)
-	if isEvent {
+	br.setBit(br.pos, eventHappened)
+	if eventHappened {
 		br.eventCount++
 	}
 
@@ -83,7 +83,7 @@ func (br *BitRing) Add(isEvent bool) {
 }
 
 // IsConditionMet 判断是否满足触发条件
-// 当连续事件次数达到阈值或事件率超过设定值时返回true
+// 当连续事件次数达到阈值或事件发生率超过阈值时返回true
 func (br *BitRing) IsConditionMet() bool {
 	br.mu.RLock()
 	defer br.mu.RUnlock()
@@ -93,7 +93,7 @@ func (br *BitRing) IsConditionMet() bool {
 		return false
 	}
 
-	// 1. 最近 consecutive 个全为事件
+	// 1. 连续发生事件 consecutive 次
 	if window >= br.consecutive {
 		allEvents := true
 		for i := 1; i <= br.consecutive; i++ {
@@ -108,7 +108,7 @@ func (br *BitRing) IsConditionMet() bool {
 		}
 	}
 
-	// 2. 事件率超过阈值
+	// 2. 事件发生率超过阈值
 	if float64(br.eventCount)/float64(window) > br.threshold {
 		return true
 	}
