@@ -41,40 +41,78 @@ func (m *MockChannelTemplateService) EXPECT() *MockChannelTemplateServiceMockRec
 	return m.recorder
 }
 
-// BatchUpdateProviderAuditStatusInfo mocks base method.
-func (m *MockChannelTemplateService) BatchUpdateProviderAuditStatusInfo(ctx context.Context, providers []domain.ChannelTemplateProvider) error {
+// BatchQueryAndUpdateProviderAuditInfo mocks base method.
+func (m *MockChannelTemplateService) BatchQueryAndUpdateProviderAuditInfo(ctx context.Context, providers []domain.ChannelTemplateProvider) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BatchUpdateProviderAuditStatusInfo", ctx, providers)
+	ret := m.ctrl.Call(m, "BatchQueryAndUpdateProviderAuditInfo", ctx, providers)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// BatchUpdateProviderAuditStatusInfo indicates an expected call of BatchUpdateProviderAuditStatusInfo.
-func (mr *MockChannelTemplateServiceMockRecorder) BatchUpdateProviderAuditStatusInfo(ctx, providers any) *MockChannelTemplateServiceBatchUpdateProviderAuditStatusInfoCall {
+// BatchQueryAndUpdateProviderAuditInfo indicates an expected call of BatchQueryAndUpdateProviderAuditInfo.
+func (mr *MockChannelTemplateServiceMockRecorder) BatchQueryAndUpdateProviderAuditInfo(ctx, providers any) *MockChannelTemplateServiceBatchQueryAndUpdateProviderAuditInfoCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchUpdateProviderAuditStatusInfo", reflect.TypeOf((*MockChannelTemplateService)(nil).BatchUpdateProviderAuditStatusInfo), ctx, providers)
-	return &MockChannelTemplateServiceBatchUpdateProviderAuditStatusInfoCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchQueryAndUpdateProviderAuditInfo", reflect.TypeOf((*MockChannelTemplateService)(nil).BatchQueryAndUpdateProviderAuditInfo), ctx, providers)
+	return &MockChannelTemplateServiceBatchQueryAndUpdateProviderAuditInfoCall{Call: call}
 }
 
-// MockChannelTemplateServiceBatchUpdateProviderAuditStatusInfoCall wrap *gomock.Call
-type MockChannelTemplateServiceBatchUpdateProviderAuditStatusInfoCall struct {
+// MockChannelTemplateServiceBatchQueryAndUpdateProviderAuditInfoCall wrap *gomock.Call
+type MockChannelTemplateServiceBatchQueryAndUpdateProviderAuditInfoCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockChannelTemplateServiceBatchUpdateProviderAuditStatusInfoCall) Return(arg0 error) *MockChannelTemplateServiceBatchUpdateProviderAuditStatusInfoCall {
+func (c *MockChannelTemplateServiceBatchQueryAndUpdateProviderAuditInfoCall) Return(arg0 error) *MockChannelTemplateServiceBatchQueryAndUpdateProviderAuditInfoCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockChannelTemplateServiceBatchUpdateProviderAuditStatusInfoCall) Do(f func(context.Context, []domain.ChannelTemplateProvider) error) *MockChannelTemplateServiceBatchUpdateProviderAuditStatusInfoCall {
+func (c *MockChannelTemplateServiceBatchQueryAndUpdateProviderAuditInfoCall) Do(f func(context.Context, []domain.ChannelTemplateProvider) error) *MockChannelTemplateServiceBatchQueryAndUpdateProviderAuditInfoCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockChannelTemplateServiceBatchUpdateProviderAuditStatusInfoCall) DoAndReturn(f func(context.Context, []domain.ChannelTemplateProvider) error) *MockChannelTemplateServiceBatchUpdateProviderAuditStatusInfoCall {
+func (c *MockChannelTemplateServiceBatchQueryAndUpdateProviderAuditInfoCall) DoAndReturn(f func(context.Context, []domain.ChannelTemplateProvider) error) *MockChannelTemplateServiceBatchQueryAndUpdateProviderAuditInfoCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// BatchSubmitForProviderReview mocks base method.
+func (m *MockChannelTemplateService) BatchSubmitForProviderReview(ctx context.Context, versionID []int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BatchSubmitForProviderReview", ctx, versionID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BatchSubmitForProviderReview indicates an expected call of BatchSubmitForProviderReview.
+func (mr *MockChannelTemplateServiceMockRecorder) BatchSubmitForProviderReview(ctx, versionID any) *MockChannelTemplateServiceBatchSubmitForProviderReviewCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchSubmitForProviderReview", reflect.TypeOf((*MockChannelTemplateService)(nil).BatchSubmitForProviderReview), ctx, versionID)
+	return &MockChannelTemplateServiceBatchSubmitForProviderReviewCall{Call: call}
+}
+
+// MockChannelTemplateServiceBatchSubmitForProviderReviewCall wrap *gomock.Call
+type MockChannelTemplateServiceBatchSubmitForProviderReviewCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockChannelTemplateServiceBatchSubmitForProviderReviewCall) Return(arg0 error) *MockChannelTemplateServiceBatchSubmitForProviderReviewCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockChannelTemplateServiceBatchSubmitForProviderReviewCall) Do(f func(context.Context, []int64) error) *MockChannelTemplateServiceBatchSubmitForProviderReviewCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockChannelTemplateServiceBatchSubmitForProviderReviewCall) DoAndReturn(f func(context.Context, []int64) error) *MockChannelTemplateServiceBatchSubmitForProviderReviewCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -191,6 +229,46 @@ func (c *MockChannelTemplateServiceForkVersionCall) Do(f func(context.Context, i
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockChannelTemplateServiceForkVersionCall) DoAndReturn(f func(context.Context, int64) (domain.ChannelTemplateVersion, error)) *MockChannelTemplateServiceForkVersionCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// GetPendingOrInReviewProviders mocks base method.
+func (m *MockChannelTemplateService) GetPendingOrInReviewProviders(ctx context.Context, offset, limit int, utime int64) ([]domain.ChannelTemplateProvider, int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPendingOrInReviewProviders", ctx, offset, limit, utime)
+	ret0, _ := ret[0].([]domain.ChannelTemplateProvider)
+	ret1, _ := ret[1].(int64)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// GetPendingOrInReviewProviders indicates an expected call of GetPendingOrInReviewProviders.
+func (mr *MockChannelTemplateServiceMockRecorder) GetPendingOrInReviewProviders(ctx, offset, limit, utime any) *MockChannelTemplateServiceGetPendingOrInReviewProvidersCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPendingOrInReviewProviders", reflect.TypeOf((*MockChannelTemplateService)(nil).GetPendingOrInReviewProviders), ctx, offset, limit, utime)
+	return &MockChannelTemplateServiceGetPendingOrInReviewProvidersCall{Call: call}
+}
+
+// MockChannelTemplateServiceGetPendingOrInReviewProvidersCall wrap *gomock.Call
+type MockChannelTemplateServiceGetPendingOrInReviewProvidersCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockChannelTemplateServiceGetPendingOrInReviewProvidersCall) Return(providers []domain.ChannelTemplateProvider, total int64, err error) *MockChannelTemplateServiceGetPendingOrInReviewProvidersCall {
+	c.Call = c.Call.Return(providers, total, err)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockChannelTemplateServiceGetPendingOrInReviewProvidersCall) Do(f func(context.Context, int, int, int64) ([]domain.ChannelTemplateProvider, int64, error)) *MockChannelTemplateServiceGetPendingOrInReviewProvidersCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockChannelTemplateServiceGetPendingOrInReviewProvidersCall) DoAndReturn(f func(context.Context, int, int, int64) ([]domain.ChannelTemplateProvider, int64, error)) *MockChannelTemplateServiceGetPendingOrInReviewProvidersCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -384,44 +462,6 @@ func (c *MockChannelTemplateServiceSubmitForInternalReviewCall) Do(f func(contex
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockChannelTemplateServiceSubmitForInternalReviewCall) DoAndReturn(f func(context.Context, int64) error) *MockChannelTemplateServiceSubmitForInternalReviewCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// SubmitForProviderReview mocks base method.
-func (m *MockChannelTemplateService) SubmitForProviderReview(ctx context.Context, templateID, versionID int64) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "submitForProviderReview", ctx, templateID, versionID)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SubmitForProviderReview indicates an expected call of SubmitForProviderReview.
-func (mr *MockChannelTemplateServiceMockRecorder) SubmitForProviderReview(ctx, templateID, versionID any) *MockChannelTemplateServiceSubmitForProviderReviewCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "submitForProviderReview", reflect.TypeOf((*MockChannelTemplateService)(nil).SubmitForProviderReview), ctx, templateID, versionID)
-	return &MockChannelTemplateServiceSubmitForProviderReviewCall{Call: call}
-}
-
-// MockChannelTemplateServiceSubmitForProviderReviewCall wrap *gomock.Call
-type MockChannelTemplateServiceSubmitForProviderReviewCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockChannelTemplateServiceSubmitForProviderReviewCall) Return(arg0 error) *MockChannelTemplateServiceSubmitForProviderReviewCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockChannelTemplateServiceSubmitForProviderReviewCall) Do(f func(context.Context, int64, int64) error) *MockChannelTemplateServiceSubmitForProviderReviewCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockChannelTemplateServiceSubmitForProviderReviewCall) DoAndReturn(f func(context.Context, int64, int64) error) *MockChannelTemplateServiceSubmitForProviderReviewCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

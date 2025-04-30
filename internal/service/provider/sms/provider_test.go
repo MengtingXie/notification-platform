@@ -80,7 +80,7 @@ func TestSmsProvider_Send(t *testing.T) {
 
 				// 模拟获取模板失败
 				mockTemplateSvc.EXPECT().
-					GetTemplate(gomock.Any(), testNotification.Template.ID, "aliyun", domain.ChannelSMS).
+					GetTemplateByIDAndProviderInfo(gomock.Any(), testNotification.Template.ID, "aliyun", domain.ChannelSMS).
 					Return(domain.ChannelTemplate{}, fmt.Errorf("%w: 供应商%d", ErrGetTemplateFailed, 1))
 			},
 			wantErr: errs.ErrSendNotificationFailed,
@@ -92,7 +92,7 @@ func TestSmsProvider_Send(t *testing.T) {
 
 				// 模拟返回没有活跃版本的模板
 				mockTemplateSvc.EXPECT().
-					GetTemplate(gomock.Any(), testNotification.Template.ID, "aliyun", domain.ChannelSMS).
+					GetTemplateByIDAndProviderInfo(gomock.Any(), testNotification.Template.ID, "aliyun", domain.ChannelSMS).
 					Return(domain.ChannelTemplate{
 						ID:       testNotification.Template.ID,
 						Channel:  domain.ChannelSMS,
@@ -128,7 +128,7 @@ func TestSmsProvider_Send(t *testing.T) {
 				}
 
 				mockTemplateSvc.EXPECT().
-					GetTemplate(gomock.Any(), testNotification.Template.ID, "aliyun", domain.ChannelSMS).
+					GetTemplateByIDAndProviderInfo(gomock.Any(), testNotification.Template.ID, "aliyun", domain.ChannelSMS).
 					Return(domain.ChannelTemplate{
 						ID:              testNotification.Template.ID,
 						Channel:         domain.ChannelSMS,
@@ -175,7 +175,7 @@ func TestSmsProvider_Send(t *testing.T) {
 				}
 
 				mockTemplateSvc.EXPECT().
-					GetTemplate(gomock.Any(), testNotification.Template.ID, "aliyun", domain.ChannelSMS).
+					GetTemplateByIDAndProviderInfo(gomock.Any(), testNotification.Template.ID, "aliyun", domain.ChannelSMS).
 					Return(domain.ChannelTemplate{
 						ID:              testNotification.Template.ID,
 						Channel:         domain.ChannelSMS,
@@ -229,7 +229,7 @@ func TestSmsProvider_Send(t *testing.T) {
 				}
 
 				mockTemplateSvc.EXPECT().
-					GetTemplate(gomock.Any(), testNotification.Template.ID, "aliyun", domain.ChannelSMS).
+					GetTemplateByIDAndProviderInfo(gomock.Any(), testNotification.Template.ID, "aliyun", domain.ChannelSMS).
 					Return(domain.ChannelTemplate{
 						ID:              testNotification.Template.ID,
 						Channel:         domain.ChannelSMS,
