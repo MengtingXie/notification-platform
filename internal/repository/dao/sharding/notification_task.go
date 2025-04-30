@@ -18,72 +18,86 @@ type NotificationTask struct {
 	dbs *syncx.Map[string, *egorm.Component]
 }
 
-func (*NotificationTask) Create(_ context.Context, _ dao.Notification) (dao.Notification, error) {
+func (n *NotificationTask) Create(_ context.Context, _ dao.Notification) (dao.Notification, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (*NotificationTask) CreateWithCallbackLog(_ context.Context, _ dao.Notification) (dao.Notification, error) {
+func (n *NotificationTask) CreateWithCallbackLog(_ context.Context, _ dao.Notification) (dao.Notification, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (*NotificationTask) BatchCreate(_ context.Context, _ []dao.Notification) ([]dao.Notification, error) {
+func (n *NotificationTask) BatchCreate(_ context.Context, _ []dao.Notification) ([]dao.Notification, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (*NotificationTask) BatchCreateWithCallbackLog(_ context.Context, _ []dao.Notification) ([]dao.Notification, error) {
+func (n *NotificationTask) BatchCreateWithCallbackLog(_ context.Context, _ []dao.Notification) ([]dao.Notification, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (*NotificationTask) GetByID(_ context.Context, _ uint64) (dao.Notification, error) {
+func (n *NotificationTask) GetByID(_ context.Context, _ uint64) (dao.Notification, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (*NotificationTask) BatchGetByIDs(_ context.Context, _ []uint64) (map[uint64]dao.Notification, error) {
+func (n *NotificationTask) BatchGetByIDs(_ context.Context, _ []uint64) (map[uint64]dao.Notification, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (*NotificationTask) GetByKey(_ context.Context, _ int64, _ string) (dao.Notification, error) {
+func (n *NotificationTask) GetByKey(_ context.Context, _ int64, _ string) (dao.Notification, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (*NotificationTask) GetByKeys(_ context.Context, _ int64, _ ...string) ([]dao.Notification, error) {
+func (n *NotificationTask) GetByKeys(_ context.Context, _ int64, _ ...string) ([]dao.Notification, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (*NotificationTask) CASStatus(_ context.Context, _ dao.Notification) error {
+func (n *NotificationTask) CASStatus(_ context.Context, _ dao.Notification) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (*NotificationTask) UpdateStatus(_ context.Context, _ dao.Notification) error {
+func (n *NotificationTask) UpdateStatus(_ context.Context, _ dao.Notification) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (*NotificationTask) BatchUpdateStatusSucceededOrFailed(_ context.Context, _, _ []dao.Notification) error {
+func (n *NotificationTask) BatchUpdateStatusSucceededOrFailed(_ context.Context, _, _ []dao.Notification) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (*NotificationTask) FindReadyNotifications(_ context.Context, _, _ int) ([]dao.Notification, error) {
+func (n *NotificationTask) FindReadyNotifications(ctx context.Context, offset, limit int) ([]dao.Notification, error) {
+	dbName, tableName, err := n.getDBTabFromCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	gormDB, ok := n.dbs.Load(dbName)
+	if !ok {
+		return nil, fmt.Errorf("未知库名 %s", dbName)
+	}
+	var res []dao.Notification
+	now := time.Now().UnixMilli()
+	err = gormDB.WithContext(ctx).
+		Table(tableName).
+		Where("scheduled_stime <=? AND scheduled_etime >= ? AND status=?", now, now, domain.SendStatusPending.String()).
+		Limit(limit).Offset(offset).
+		Find(&res).Error
+	return res, err
+}
+
+func (n *NotificationTask) MarkSuccess(_ context.Context, _ dao.Notification) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (*NotificationTask) MarkSuccess(_ context.Context, _ dao.Notification) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (*NotificationTask) MarkFailed(_ context.Context, _ dao.Notification) error {
+func (n *NotificationTask) MarkFailed(_ context.Context, _ dao.Notification) error {
 	// TODO implement me
 	panic("implement me")
 }
@@ -138,7 +152,7 @@ func (n *NotificationTask) MarkTimeoutSendingAsFailed(ctx context.Context, batch
 	return rowsAffected, err
 }
 
-func (*NotificationTask) getDBTabFromCtx(ctx context.Context) (db, ntab string, err error) {
+func (n *NotificationTask) getDBTabFromCtx(ctx context.Context) (db, ntab string, err error) {
 	dbName, ok := loopjob.DBFromCtx(ctx)
 	if !ok {
 		return "", "", errors.New("db在ctx中没找到")

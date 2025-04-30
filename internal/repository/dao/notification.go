@@ -366,7 +366,7 @@ func (d *notificationDAO) FindReadyNotifications(ctx context.Context, offset, li
 	var res []Notification
 	now := time.Now().UnixMilli()
 	err := d.db.WithContext(ctx).
-		Where("scheduled_stime <=? AND scheduled_etime >= ? AND status=?", now, now, string(domain.SendStatusPending)).
+		Where("scheduled_stime <=? AND scheduled_etime >= ? AND status=?", now, now, domain.SendStatusPending.String()).
 		Limit(limit).Offset(offset).
 		Find(&res).Error
 	return res, err
