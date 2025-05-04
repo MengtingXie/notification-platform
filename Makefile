@@ -62,6 +62,10 @@ grpc:
 gen:
 	@go generate ./...
 
+.PHONY: run_platform_only
+run_platform_only:
+	@cd cmd/platform && export EGO_DEBUG=true && go run main.go --config=../../config/config.yaml
+
 .PHONY: run_platform
 run_platform:
 	@$(MAKE) e2e_down
