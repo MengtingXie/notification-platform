@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
+
+	"github.com/ecodeclub/ekit/mapx"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/errs"
@@ -96,6 +97,11 @@ func NewEventConsumerWithTopic(
 func (c *EventConsumer) Start(ctx context.Context) {
 	go func() {
 		for {
+			// 限流检测
+			if err := c.waitUntilRateLimitExpires(ctx); err != nil {
+				c.logger.Error("消费者限流", elog.FieldErr(err))
+			}
+
 			er := c.Consume(ctx)
 			if er != nil {
 				c.logger.Error("消费通知事件失败", elog.FieldErr(er))
@@ -105,77 +111,32 @@ func (c *EventConsumer) Start(ctx context.Context) {
 }
 
 func (c *EventConsumer) Consume(ctx context.Context) error {
-	var (
-		groupedBatchNotifications = make(map[int64][]domain.Notification)
-		curBatchSize              = 0
-		processedMessages         []*kafka.Message
-	)
-
 	batchTimer := time.NewTimer(c.batchTimeout)
 	defer batchTimer.Stop()
-	var evt Event
 
-collectBatch:
-	for {
-		select {
-		case <-ctx.Done():
-			// ctx 被取消
-			break collectBatch
-		case <-batchTimer.C:
-			// 达到时间限制，跳出循环
-			break collectBatch
-		default:
-			// 达到批量大小
-			if curBatchSize >= c.batchSize {
-				break collectBatch
-			}
-		}
+	processedMessages := c.collectOneBatch(ctx)
+	groupedBatchNotifications := mapx.NewMultiBuiltinMap[int64, domain.Notification](c.batchSize)
+	// 按分区ID将消息分组，存储每个分区的最后一条消息
+	lastMessages := make(map[int32]*kafka.Message)
 
-		msg, err := c.consumer.ReadMessage(c.batchTimeout)
-		if err != nil {
-			var kErr kafka.Error
-			if errors.As(err, &kErr) && kErr.Code() == kafka.ErrTimedOut {
-				// 聚合当前批次已超时
-				break
-			}
-			return fmt.Errorf("获取消息失败: %w", err)
-		}
+	for _, msg := range processedMessages {
+		var evt Event
 
-		if err = json.Unmarshal(msg.Value, &evt); err != nil {
+		if err := json.Unmarshal(msg.Value, &evt); err != nil {
 			c.logger.Warn("解析消息失败",
 				elog.FieldErr(err),
 				elog.Any("msg", msg))
-
-			// 解析失败，直接提交这条消息，跳过通知
-			// if _, cmErr := c.consumer.CommitMessage(msg); cmErr != nil {
-			// 	c.logger.Warn("提交消息失败",
-			// 		elog.FieldErr(cmErr),
-			// 		elog.Any("msg", msg))
-			// 	return cmErr
-			// }
-
 			// 解析失败，跳过本条，继续下一轮
 			continue
 		}
-
 		const first = 0
 		notification := evt.Notifications[first]
-		if _, ok := groupedBatchNotifications[notification.BizID]; !ok {
-			groupedBatchNotifications[notification.BizID] = make([]domain.Notification, 0)
-		}
-		groupedBatchNotifications[notification.BizID] = append(groupedBatchNotifications[notification.BizID], evt.Notifications...)
-		curBatchSize += len(evt.Notifications)
-		processedMessages = append(processedMessages, msg)
+		_ = groupedBatchNotifications.PutMany(notification.BizID, evt.Notifications...)
 	}
 
 	// 若本批次没有任何数据直接返回
-	if len(groupedBatchNotifications) == 0 {
+	if groupedBatchNotifications.Len() == 0 {
 		return nil
-	}
-
-	// 限流检测
-	if err := c.waitUntilRateLimitExpires(ctx); err != nil {
-		return err
 	}
 
 	// 执行落库操作
@@ -183,11 +144,6 @@ collectBatch:
 		return err
 	}
 
-	// 按分区ID将消息分组，存储每个分区的最后一条消息
-	lastMessages := make(map[int32]*kafka.Message)
-	for _, msg := range processedMessages {
-		lastMessages[msg.TopicPartition.Partition] = msg
-	}
 	// 只提交每个分区的最后一条消息
 	for _, lastMsg := range lastMessages {
 		if _, err := c.consumer.CommitMessage(lastMsg); err != nil {
@@ -198,16 +154,50 @@ collectBatch:
 			return err
 		}
 	}
-
 	return nil
 }
 
-func (c *EventConsumer) batchSendNotificationsAsync(ctx context.Context, groupedBatchNotifications map[int64][]domain.Notification) error {
+func (c *EventConsumer) collectOneBatch(ctx context.Context) []*kafka.Message {
+	ctx, cancel := context.WithTimeout(ctx, c.batchTimeout)
+	defer cancel()
+	// 我们认为大部分都是只有一条通知的
+	processedMessages := make([]*kafka.Message, 0, c.batchSize)
+	curBatchSize := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return processedMessages
+		default:
+			// 达到批量大小
+			if curBatchSize >= c.batchSize {
+				return processedMessages
+			}
+		}
+		// 剩余的超时时间，严格计算就是用剩余超时时间
+		ddl, _ := ctx.Deadline()
+		timeout := time.Until(ddl)
+		msg, err := c.consumer.ReadMessage(timeout)
+		if err != nil {
+			var kErr kafka.Error
+			if errors.As(err, &kErr) && kErr.Code() == kafka.ErrTimedOut {
+				// 聚合当前批次已超时
+				return processedMessages
+			}
+			c.logger.Error("从 consumer 中读取消息失败", elog.FieldErr(err))
+			return processedMessages
+		}
+		curBatchSize++
+		processedMessages = append(processedMessages, msg)
+	}
+}
+
+func (c *EventConsumer) batchSendNotificationsAsync(ctx context.Context, groupedBatchNotifications *mapx.MultiMap[int64, domain.Notification]) error {
 	// 走异步批量发送逻辑落库
 	start := time.Now()
-	for bizID := range groupedBatchNotifications {
+	for _, bizID := range groupedBatchNotifications.Keys() {
 		// 同一个 BizID 通知在一个批次
-		if _, err := c.srv.BatchSendNotificationsAsync(ctx, groupedBatchNotifications[bizID]...); err != nil {
+		ns, _ := groupedBatchNotifications.Get(bizID)
+		if _, err := c.srv.BatchSendNotificationsAsync(ctx, ns...); err != nil {
 
 			if errors.Is(err, errs.ErrNotificationDuplicate) {
 				// 上次落库成功，但后续提交消费进度失败，此次重复消费导致的数据库层面的唯一索引冲突
@@ -218,7 +208,7 @@ func (c *EventConsumer) batchSendNotificationsAsync(ctx context.Context, grouped
 			c.logger.Warn("走异步批量发送逻辑落库失败",
 				elog.FieldErr(err),
 				elog.Int64("bizID", bizID),
-				elog.Int("notifications_count", len(groupedBatchNotifications[bizID])))
+				elog.Int("notifications_count", len(ns)))
 
 			return err
 		}
