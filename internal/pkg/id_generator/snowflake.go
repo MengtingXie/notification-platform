@@ -52,22 +52,14 @@ func NewGenerator() *Generator {
 func (g *Generator) GenerateID(bizID int64, key string) int64 {
 	timestamp := time.Now().UnixMilli() - epochMillis
 	// 计算hash值并取余
-	hashValue := hash.Hash(bizID, key) % number
-	if hashValue < 0 {
-		hashValue += number // 处理负数hash值
-	}
-
+	hashValue := hash.Hash(bizID, key)
 	// 使用原子操作安全地递增序列号
 	sequence := atomic.AddInt64(&g.sequence, 1) - 1 // 减1是因为AddInt64返回递增后的值
-
-	// 确保序列号在允许范围内循环
-	sequence = sequence & sequenceMask
 
 	// 组装最终ID
 	id := (timestamp&timestampMask)<<timestampShift | // 时间戳部分
 		(hashValue&hashMask)<<hashShift | // hash值部分
 		(sequence & sequenceMask) // 序列号部分
-
 	return id
 }
 
