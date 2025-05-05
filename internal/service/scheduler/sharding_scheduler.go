@@ -8,12 +8,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/pkg/sharding"
+
 	"gitee.com/flycash/notification-platform/internal/pkg/batchsize"
 	"gitee.com/flycash/notification-platform/internal/pkg/bitring"
 	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
-	"gitee.com/flycash/notification-platform/internal/sharding"
 	"github.com/meoying/dlock-go"
 )
 

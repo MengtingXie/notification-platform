@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/pkg/sharding"
+
 	"github.com/ecodeclub/ekit/slice"
 
 	idgen "gitee.com/flycash/notification-platform/internal/pkg/id_generator"
@@ -16,7 +18,6 @@ import (
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
-	"gitee.com/flycash/notification-platform/internal/sharding"
 	"github.com/ecodeclub/ekit/list"
 	"github.com/ecodeclub/ekit/syncx"
 	"github.com/go-sql-driver/mysql"
@@ -32,7 +33,7 @@ type NotificationShardingDAO struct {
 	idGenerator             *idgen.Generator
 }
 
-func NewNotificationSvc(dbs *syncx.Map[string, *egorm.Component],
+func NewNotificationDAO(dbs *syncx.Map[string, *egorm.Component],
 	notificationShardingSvc sharding.ShardingStrategy,
 	callbackLogShardingSvc sharding.ShardingStrategy,
 	idGenerator *idgen.Generator,
@@ -74,7 +75,7 @@ func (s *NotificationShardingDAO) create(ctx context.Context, data dao.Notificat
 	if !ok {
 		return dao.Notification{}, fmt.Errorf("未知库名 %s", notificationDst.DB)
 	}
-	// notification 和callbacklog 是在同一个库的但是 表不同
+	// notification 和 callback log 是在同一个库的但是 表不同
 	err := notiDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for {
 			data.ID = uint64(s.idGenerator.GenerateID(data.BizID, data.Key))

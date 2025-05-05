@@ -3,7 +3,8 @@ package sharding
 import (
 	"sync"
 
-	"gitee.com/flycash/notification-platform/internal/sharding"
+	"gitee.com/flycash/notification-platform/internal/pkg/sharding"
+
 	"gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/ecodeclub/ekit/syncx"
 	"github.com/ego-component/egorm"

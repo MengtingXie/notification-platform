@@ -70,15 +70,6 @@ func (s ShardingStrategy) DBs() []string {
 	return ans
 }
 
-// 获取一个库中所有的表名
-func (s ShardingStrategy) Tables() []string {
-	ans := make([]string, 0, s.tableSharding)
-	for i := 0; i < int(s.tableSharding); i++ {
-		ans = append(ans, fmt.Sprintf("%s_%d", s.tablePrefix, i))
-	}
-	return ans
-}
-
 func (s ShardingStrategy) TablePrefix() string {
 	return s.tablePrefix
 }

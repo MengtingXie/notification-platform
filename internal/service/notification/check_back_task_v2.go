@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/pkg/sharding"
+
 	clientv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/pkg/grpc"
 	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/config"
-	"gitee.com/flycash/notification-platform/internal/sharding"
 	"github.com/ecodeclub/ekit/list"
 	"github.com/ecodeclub/ekit/slice"
 	"github.com/gotomicro/ego/client/egrpc"

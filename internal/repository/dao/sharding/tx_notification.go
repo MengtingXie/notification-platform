@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/pkg/sharding"
+
 	"github.com/ego-component/egorm"
 
 	"github.com/pkg/errors"
@@ -12,7 +14,6 @@ import (
 	"gitee.com/flycash/notification-platform/internal/domain"
 	idgen "gitee.com/flycash/notification-platform/internal/pkg/id_generator"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
-	"gitee.com/flycash/notification-platform/internal/sharding"
 	"github.com/ecodeclub/ekit/syncx"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

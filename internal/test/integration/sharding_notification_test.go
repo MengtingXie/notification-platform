@@ -5,6 +5,8 @@ package integration
 import (
 	"testing"
 
+	sharding2 "gitee.com/flycash/notification-platform/internal/pkg/sharding"
+
 	idgen "gitee.com/flycash/notification-platform/internal/pkg/id_generator"
 	"github.com/stretchr/testify/assert"
 
@@ -15,7 +17,6 @@ import (
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/repository/dao/sharding"
-	sharding2 "gitee.com/flycash/notification-platform/internal/sharding"
 	shardingIoc "gitee.com/flycash/notification-platform/internal/test/integration/ioc/sharding"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -35,7 +36,7 @@ func (s *ShardingNotificationSuite) SetupSuite() {
 	notiStrategy, callbacklogStrategy := shardingIoc.InitNotificationSharding()
 	s.dbs = dbs
 
-	s.shardingDAO = sharding.NewNotificationSvc(dbs, notiStrategy, callbacklogStrategy, idgen.NewGenerator())
+	s.shardingDAO = sharding.NewNotificationDAO(dbs, notiStrategy, callbacklogStrategy, idgen.NewGenerator())
 	s.notificationStr = notiStrategy
 	s.callBackStr = callbacklogStrategy
 }

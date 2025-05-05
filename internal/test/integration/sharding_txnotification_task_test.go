@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	sharding2 "gitee.com/flycash/notification-platform/internal/pkg/sharding"
+
 	"github.com/ego-component/egorm"
 
 	"github.com/ecodeclub/ekit/syncx"
@@ -21,7 +23,6 @@ import (
 	"gitee.com/flycash/notification-platform/internal/repository/dao/sharding"
 	configmocks "gitee.com/flycash/notification-platform/internal/service/config/mocks"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
-	sharding2 "gitee.com/flycash/notification-platform/internal/sharding"
 	shardingIoc "gitee.com/flycash/notification-platform/internal/test/integration/ioc/sharding"
 	"gitee.com/flycash/notification-platform/internal/test/integration/testgrpc"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"

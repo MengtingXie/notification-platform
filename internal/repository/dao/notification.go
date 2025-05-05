@@ -72,7 +72,7 @@ type Notification struct {
 	Utime             int64
 }
 
-// 判断是否是主键冲突
+// CheckErrIsIDDuplicate 判断是否是主键冲突
 func CheckErrIsIDDuplicate(id uint64, err error) bool {
 	return strings.Contains(err.Error(), fmt.Sprintf("%d", id))
 }
