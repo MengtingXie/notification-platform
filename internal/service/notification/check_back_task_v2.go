@@ -22,16 +22,11 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const (
-	txnTabName loopjob.CtxKey = "txnTab"
-	ntabName   loopjob.CtxKey = "nTab"
-)
-
 type TxCheckTaskV2 struct {
-	repo   repository.TxNotificationRepository
-	txnStr sharding.ShardingStrategy
+	repo repository.TxNotificationRepository
 
-	nStr      sharding.ShardingStrategy
+	job *loopjob.ShardingLoopJob
+
 	configSvc config.BusinessConfigService
 	lock      dlock.Client
 	batchSize int
@@ -39,37 +34,34 @@ type TxCheckTaskV2 struct {
 }
 
 func NewTxCheckTaskV2(repo repository.TxNotificationRepository, configSvc config.BusinessConfigService,
-	lock dlock.Client, txnStr, nStr sharding.ShardingStrategy,
+	lock dlock.Client,
+	txnStr sharding.ShardingStrategy,
+	maxLockedTables int32,
 ) *TxCheckTaskV2 {
-	return &TxCheckTaskV2{
+	res := &TxCheckTaskV2{
 		repo:      repo,
 		configSvc: configSvc,
 		clients: grpc.NewClients[clientv1.TransactionCheckServiceClient](func(conn *egrpc.Component) clientv1.TransactionCheckServiceClient {
 			return clientv1.NewTransactionCheckServiceClient(conn)
 		}),
 		lock:      lock,
-		txnStr:    txnStr,
-		nStr:      nStr,
 		batchSize: defaultBatchSize,
 	}
+	const key = "notification_check_task_v2"
+	res.job = loopjob.NewShardingLoopJob(res.lock, key, txnStr, res.oneLoop, maxLockedTables)
+	return res
 }
 
 func (task *TxCheckTaskV2) Start(ctx context.Context) {
-	const key = "notification_check_task_v2"
-	dbs := task.txnStr.DBs()
-	for idx := range dbs {
-		// 每个db开一个job
-		db := dbs[idx]
-		go loopjob.NewShardingLoopJob(task.lock, key, task.oneLoop, db, task.txnStr.TableSuffix()).Run(ctx)
-	}
+	go task.job.Run(ctx)
 }
 
 // 为了性能，使用了批量操作，针对的是数据库的批量操作
+//
+//nolint:dupl // 这是为了演示而复制的
 func (task *TxCheckTaskV2) oneLoop(ctx context.Context) error {
 	loopCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
-	// 添加表名
-	loopCtx = task.ctxWithTabs(loopCtx)
 	txNotifications, err := task.repo.FindCheckBack(loopCtx, 0, task.batchSize)
 	if err != nil {
 		return err
@@ -136,15 +128,6 @@ func (task *TxCheckTaskV2) oneLoop(ctx context.Context) error {
 	// 转 PENDING，后续 Scheduler 会调度执行
 	err = multierror.Append(err, task.updateStatus(loopCtx, commitTxns, domain.SendStatusPending))
 	return err
-}
-
-func (task *TxCheckTaskV2) ctxWithTabs(ctx context.Context) context.Context {
-	suffix, _ := loopjob.TabSuffixFromCtx(ctx)
-	txnTable := fmt.Sprintf("%s_%s", task.txnStr.TablePrefix(), suffix)
-	nTable := fmt.Sprintf("%s_%s", task.nStr.TablePrefix(), suffix)
-	ctx = context.WithValue(ctx, txnTabName, txnTable)
-	ctx = context.WithValue(ctx, ntabName, nTable)
-	return ctx
 }
 
 // 校验完了

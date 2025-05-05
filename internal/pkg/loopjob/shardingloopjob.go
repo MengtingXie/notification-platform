@@ -4,75 +4,69 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/pkg/sharding"
 
 	"github.com/gotomicro/ego/core/elog"
 	"github.com/meoying/dlock-go"
 )
 
-type CtxKey string
-
-const (
-	TabSuffix CtxKey = "tabSuffix"
-	DB        CtxKey = "db"
-	Table     CtxKey = "table"
-)
-
 type ShardingLoopJob struct {
-	db             string   // 库名
-	baseKey        string   // 业务标识
-	tabSuffixes    []string // 表后缀
-	dclient        dlock.Client
-	logger         *elog.Component
-	biz            func(ctx context.Context) error
-	retryInterval  time.Duration
-	defaultTimeout time.Duration
+	baseKey         string // 业务标识
+	dclient         dlock.Client
+	logger          *elog.Component
+	biz             func(ctx context.Context) error
+	retryInterval   time.Duration
+	defaultTimeout  time.Duration
+	strategy        sharding.ShardingStrategy
+	maxLockedTables *atomic.Int32
+	cnt             *atomic.Int32
 }
 
 func NewShardingLoopJob(
 	dclient dlock.Client,
+	// 用来拼接分布式锁的 key
 	baseKey string,
+	strategy sharding.ShardingStrategy,
 	// 你要执行的业务。注意当 ctx 被取消的时候，就会退出全部循环
+	// 你可以从 ctx 中拿到 Dst
 	biz func(ctx context.Context) error,
-	db string,
-	tabSuffixes []string,
+	maxLockedTables int32,
 ) *ShardingLoopJob {
 	const defaultTimeout = 3 * time.Second
-	return newShardingLoopJobLoop(dclient, baseKey, biz, db, tabSuffixes, time.Minute, defaultTimeout)
-}
-
-// ShardingLoopJobLoop 用于创建一个ShardingLoopJobLoop实例，允许指定重试间隔，便于测试
-func newShardingLoopJobLoop(
-	dclient dlock.Client,
-	baseKey string,
-	biz func(ctx context.Context) error,
-	db string,
-	tabSuffixes []string,
-	retryInterval time.Duration,
-	defaultTimeout time.Duration,
-) *ShardingLoopJob {
+	const defaultRetryInterval = time.Minute
+	atomicMaxCnt := &atomic.Int32{}
+	atomicMaxCnt.Store(maxLockedTables)
 	return &ShardingLoopJob{
-		dclient:        dclient,
-		db:             db,
-		baseKey:        baseKey,
-		tabSuffixes:    tabSuffixes,
-		logger:         elog.DefaultLogger,
-		biz:            biz,
-		retryInterval:  retryInterval,
-		defaultTimeout: defaultTimeout,
+		dclient:         dclient,
+		baseKey:         baseKey,
+		logger:          elog.DefaultLogger,
+		strategy:        strategy,
+		biz:             biz,
+		cnt:             &atomic.Int32{},
+		maxLockedTables: atomicMaxCnt,
+		retryInterval:   defaultRetryInterval,
+		defaultTimeout:  defaultTimeout,
 	}
 }
 
-func (l *ShardingLoopJob) generateKey(tab string) string {
-	return fmt.Sprintf("%s:%s:%s", l.baseKey, l.db, tab)
+func (l *ShardingLoopJob) generateKey(db, tab string) string {
+	return fmt.Sprintf("%s:%s:%s", l.baseKey, db, tab)
 }
 
 func (l *ShardingLoopJob) Run(ctx context.Context) {
 	for {
-		for idx := range l.tabSuffixes {
-			// todo 避免一个节点 抢占过多的表 对这个节点造成压力
-			suffix := l.tabSuffixes[idx]
-			key := l.generateKey(suffix)
+		for _, dst := range l.strategy.Broadcast() {
+
+			// 超过允许抢占的上限了
+			if l.cnt.Load() > l.maxLockedTables.Load() {
+				time.Sleep(l.retryInterval)
+				continue
+			}
+
+			key := l.generateKey(dst.DB, dst.Table)
 			// 强锁
 			lock, err := l.dclient.NewLock(ctx, key, l.retryInterval)
 			if err != nil {
@@ -93,12 +87,16 @@ func (l *ShardingLoopJob) Run(ctx context.Context) {
 				time.Sleep(l.retryInterval)
 				continue
 			}
-			go l.tableLoop(l.ctxWithTabSuffixDB(ctx, suffix), lock)
+			// 抢占成功了
+			l.cnt.Add(1)
+			go l.tableLoop(sharding.CtxWithDst(ctx, dst), lock)
 		}
 	}
 }
 
 func (l *ShardingLoopJob) tableLoop(ctx context.Context, lock dlock.Lock) {
+	// 占有的少了一个
+	defer l.cnt.Add(-1)
 	// 在这里执行业务
 	err := l.bizLoop(ctx, lock)
 	// 要么是续约失败，要么是 ctx 本身已经过期了
@@ -150,26 +148,6 @@ func (l *ShardingLoopJob) bizLoop(ctx context.Context, lock dlock.Lock) error {
 	}
 }
 
-func (l *ShardingLoopJob) ctxWithTabSuffixDB(ctx context.Context, tabSuffix string) context.Context {
-	ctx = context.WithValue(ctx, TabSuffix, tabSuffix)
-	ctx = context.WithValue(ctx, DB, l.db)
-	return ctx
-}
-
-func DBFromCtx(ctx context.Context) (string, bool) {
-	db := ctx.Value(DB)
-	if db == nil {
-		return "", false
-	}
-	dbStr, ok := db.(string)
-	return dbStr, ok
-}
-
-func TabSuffixFromCtx(ctx context.Context) (string, bool) {
-	tab := ctx.Value(TabSuffix)
-	if tab == nil {
-		return "", false
-	}
-	tabStr, ok := tab.(string)
-	return tabStr, ok
+func (l *ShardingLoopJob) UpdateMaxLockedTables(maxCnt int32) {
+	l.maxLockedTables.Store(maxCnt)
 }

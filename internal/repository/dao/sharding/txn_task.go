@@ -6,29 +6,33 @@ import (
 	"strings"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/pkg/sharding"
+
 	"github.com/ego-component/egorm"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"github.com/ecodeclub/ekit/syncx"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
 )
 
-const (
-	txnTabName loopjob.CtxKey = "txnTab"
-	ntabName   loopjob.CtxKey = "nTab"
-)
-
+// TxnTaskDAO 本身可以合并过去 TxNShardingDAO 中，但是这里方便你学习，所以拆出来了
 // 专门为task
 type TxnTaskDAO struct {
-	dbs *syncx.Map[string, *egorm.Component]
+	dbs                 *syncx.Map[string, *egorm.Component]
+	nShardingStrategy   sharding.ShardingStrategy
+	txnShardingStrategy sharding.ShardingStrategy
 }
 
-func NewTxnTaskDAO(dbs *syncx.Map[string, *egorm.Component]) *TxnTaskDAO {
+func NewTxnTaskDAO(dbs *syncx.Map[string, *egorm.Component],
+	nStrategy sharding.ShardingStrategy,
+	txnStrategy sharding.ShardingStrategy,
+) *TxnTaskDAO {
 	return &TxnTaskDAO{
-		dbs: dbs,
+		dbs:                 dbs,
+		nShardingStrategy:   nStrategy,
+		txnShardingStrategy: txnStrategy,
 	}
 }
 
@@ -123,26 +127,11 @@ func (t *TxnTaskDAO) UpdateStatus(_ context.Context, _ int64, _ string, _ domain
 }
 
 func (t *TxnTaskDAO) getDBTabFromCtx(ctx context.Context) (db, txnTab, ntab string, err error) {
-	dbName, ok := loopjob.DBFromCtx(ctx)
+	dst, ok := sharding.DstFromCtx(ctx)
 	if !ok {
-		return "", "", "", errors.New("db在ctx中没找到")
+		return "", "", "", errors.New("DST 在ctx中没找到")
 	}
-	txnVal := ctx.Value(txnTabName)
-	if txnVal == nil {
-		return "", "", "", errors.New("txnTab表在ctx中没找到")
-	}
-	txnTab, ok = txnVal.(string)
-	if !ok {
-		return "", "", "", errors.New("txnTab不是字符串")
-	}
+	ntab = fmt.Sprintf("%s_%d", t.nShardingStrategy.TablePrefix(), dst.TableSuffix)
 
-	nVal := ctx.Value(ntabName)
-	if nVal == nil {
-		return "", "", "", errors.New("nTab表在ctx中没找到")
-	}
-	ntab, ok = nVal.(string)
-	if !ok {
-		return "", "", "", errors.New("nTab表不是字符串")
-	}
-	return dbName, txnTab, ntab, nil
+	return dst.DB, dst.Table, ntab, nil
 }

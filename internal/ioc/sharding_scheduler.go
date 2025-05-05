@@ -42,7 +42,7 @@ func InitShardingScheduler(
 
 	type ShardingSchedulerConfig struct {
 		MaxLockedTablesKey string                  `yaml:"maxLockedTablesKey"`
-		MaxLockedTables    int                     `yaml:"maxLockedTables"`
+		MaxLockedTables    int32                   `yaml:"maxLockedTables"`
 		MinLoopDuration    time.Duration           `yaml:"minLoopDuration"`
 		BatchSize          int                     `yaml:"batchSize"`
 		BatchSizeAdjuster  BatchSizeAdjusterConfig `yaml:"batchSizeAdjuster"`
@@ -59,8 +59,8 @@ func InitShardingScheduler(
 		notificationSender,
 		dclient,
 		shardingStrategy,
-		cfg.MinLoopDuration,
 		cfg.MaxLockedTables,
+		cfg.MinLoopDuration,
 		cfg.BatchSize,
 		batchsize.NewRingBufferAdjuster(
 			cfg.BatchSizeAdjuster.InitBatchSize,
@@ -82,8 +82,8 @@ func InitShardingScheduler(
 		for watchResp := range watchChan {
 			for _, event := range watchResp.Events {
 				if event.Type == clientv3.EventTypePut {
-					maxLockedTables, _ := strconv.ParseUint(string(event.Kv.Value), 10, 64)
-					s.UpdateMaxLockedTables(maxLockedTables)
+					maxLockedTables, _ := strconv.ParseInt(string(event.Kv.Value), 10, 64)
+					s.UpdateMaxLockedTables(int32(maxLockedTables))
 				}
 			}
 		}

@@ -89,7 +89,7 @@ func (s *ShardingTxNotificationTask) SetupSuite() {
 	s.txnDAO = sharding.NewTxNShardingDAO(dbs, notiStrategy, txnStrategy)
 
 	// 使用真实的 TxnTaskDAO 作为 DAO 层实现
-	txnTaskDAO := sharding.NewTxnTaskDAO(dbs)
+	txnTaskDAO := sharding.NewTxnTaskDAO(dbs, notiStrategy, txnStrategy)
 
 	s.txnRepo = repository.NewTxNotificationRepository(txnTaskDAO)
 
@@ -124,7 +124,8 @@ func (s *ShardingTxNotificationTask) TestCheckBackTaskV2() {
 		return res, nil
 	}).AnyTimes()
 
-	task := notification.NewTxCheckTaskV2(s.txnRepo, configSvc, s.lock, s.txnShardingStrategy, s.notificationStr)
+	const maxLockedTables = 10
+	task := notification.NewTxCheckTaskV2(s.txnRepo, configSvc, s.lock, s.txnShardingStrategy, maxLockedTables)
 
 	// Setup test data across shards
 	now := time.Now().UnixMilli()
