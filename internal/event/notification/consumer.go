@@ -132,6 +132,7 @@ func (c *EventConsumer) Consume(ctx context.Context) error {
 		const first = 0
 		notification := evt.Notifications[first]
 		_ = groupedBatchNotifications.PutMany(notification.BizID, evt.Notifications...)
+		lastMessages[msg.TopicPartition.Partition] = msg
 	}
 
 	// 若本批次没有任何数据直接返回
