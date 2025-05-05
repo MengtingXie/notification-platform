@@ -462,11 +462,11 @@ func (s *NotificationShardingDAO) tryBatchInsert(ctx context.Context, datas []*d
 		db := dbName
 		tables := tablesMap
 		eg.Go(func() error {
+			gormDB, ok := s.dbs.Load(db)
+			if !ok {
+				return fmt.Errorf("库名%s没找到", db)
+			}
 			for {
-				gormDB, ok := s.dbs.Load(db)
-				if !ok {
-					return fmt.Errorf("库名%s没找到", db)
-				}
 				sqls, ids := s.getSqlsAndIds(tables, createCallbackLog, now)
 				if len(sqls) > 0 {
 					combinedSQL := strings.Join(sqls, "; ")
@@ -496,6 +496,7 @@ func (s *NotificationShardingDAO) getSqlsAndIds(tables map[string][]*dao.Notific
 	ids = make([]uint64, 0)
 	for tab, data := range tables {
 		for _, v := range data {
+			v.ID = uint64(s.idGenerator.GenerateID(v.BizID, v.Key))
 			ids = append(ids, v.ID)
 		}
 		sqls = append(sqls, s.genNotificationSQL(tab, data, createCallbackLog, now)...)
