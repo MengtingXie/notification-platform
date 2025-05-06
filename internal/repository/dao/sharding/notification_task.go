@@ -3,7 +3,10 @@ package sharding
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
+
+	"gitee.com/flycash/notification-platform/internal/pkg/sharding"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
@@ -79,18 +82,18 @@ func (n *NotificationTask) BatchUpdateStatusSucceededOrFailed(_ context.Context,
 }
 
 func (n *NotificationTask) FindReadyNotifications(ctx context.Context, offset, limit int) ([]dao.Notification, error) {
-	dbName, tableName, err := n.getDBTabFromCtx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	gormDB, ok := n.dbs.Load(dbName)
+	dst, ok := sharding.DstFromCtx(ctx)
 	if !ok {
-		return nil, fmt.Errorf("未知库名 %s", dbName)
+		return nil, errors.New("Dst 未找到，无法确定应该查询哪个表")
+	}
+	gormDB, ok := n.dbs.Load(dst.DB)
+	if !ok {
+		return nil, fmt.Errorf("未知库名 %s", dst.DB)
 	}
 	var res []dao.Notification
 	now := time.Now().UnixMilli()
-	err = gormDB.WithContext(ctx).
-		Table(tableName).
+	err := gormDB.WithContext(ctx).
+		Table(dst.Table).
 		Where("scheduled_stime <=? AND scheduled_etime >= ? AND status=?", now, now, domain.SendStatusPending.String()).
 		Limit(limit).Offset(offset).
 		Find(&res).Error
@@ -111,21 +114,22 @@ func (n *NotificationTask) MarkTimeoutSendingAsFailed(ctx context.Context, batch
 	now := time.Now()
 	ddl := now.Add(-time.Minute).UnixMilli()
 	var rowsAffected int64
-	db, tab, err := n.getDBTabFromCtx(ctx)
-	if err != nil {
-		return rowsAffected, err
-	}
-	gormDB, ok := n.dbs.Load(db)
+	dst, ok := sharding.DstFromCtx(ctx)
+	log.Println("xxxxxxxxxxxxxxxxxx", dst)
 	if !ok {
-		return rowsAffected, fmt.Errorf("未知库名 %s", db)
+		return 0, errors.New("Dst 未找到，无法确定应该查询哪个表")
+	}
+	gormDB, ok := n.dbs.Load(dst.DB)
+	if !ok {
+		return rowsAffected, fmt.Errorf("未知库名 %s", dst.DB)
 	}
 
-	err = gormDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := gormDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var idsToUpdate []uint64
 
 		// 查询需要更新的 ID
 		err := tx.Model(&dao.Notification{}).
-			Table(tab).
+			Table(dst.Table).
 			Select("id").
 			Where("status = ? AND utime <= ?", domain.SendStatusSending.String(), ddl).
 			Limit(batchSize).
@@ -143,7 +147,7 @@ func (n *NotificationTask) MarkTimeoutSendingAsFailed(ctx context.Context, batch
 
 		// 根据查询到的 ID 集合更新记录
 		res := tx.Model(&dao.Notification{}).
-			Table(tab).
+			Table(dst.Table).
 			Where("id IN ?", idsToUpdate).
 			Updates(map[string]any{
 				"status":  domain.SendStatusFailed.String(),
@@ -156,16 +160,4 @@ func (n *NotificationTask) MarkTimeoutSendingAsFailed(ctx context.Context, batch
 	})
 
 	return rowsAffected, err
-}
-
-func (n *NotificationTask) getDBTabFromCtx(ctx context.Context) (db, ntab string, err error) {
-	db, ok := ctx.Value(dbName).(string)
-	if !ok {
-		return "", "", errors.New("db在ctx中没找到")
-	}
-	ntab, ok = ctx.Value(ntabName).(string)
-	if !ok {
-		return "", "", errors.New("nTab表不是字符串")
-	}
-	return db, ntab, nil
 }

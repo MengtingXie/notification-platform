@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	idgen "gitee.com/flycash/notification-platform/internal/pkg/id_generator"
+
 	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/service/template/manage"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/service/sendstrategy"
-	"github.com/sony/sonyflake"
 )
 
 // SendService 负责处理发送
@@ -30,16 +31,16 @@ type SendService interface {
 type sendService struct {
 	notificationSvc Service
 	templateSvc     manage.ChannelTemplateService
-	idGenerator     *sonyflake.Sonyflake
+	idGenerator     *idgen.Generator
 	sendStrategy    sendstrategy.SendStrategy
 }
 
 // NewSendService 创建执行器实例
-func NewSendService(templateSvc manage.ChannelTemplateService, notificationSvc Service, idGenerator *sonyflake.Sonyflake, sendStrategy sendstrategy.SendStrategy) SendService {
+func NewSendService(templateSvc manage.ChannelTemplateService, notificationSvc Service, sendStrategy sendstrategy.SendStrategy) SendService {
 	return &sendService{
 		notificationSvc: notificationSvc,
 		templateSvc:     templateSvc,
-		idGenerator:     idGenerator,
+		idGenerator:     idgen.NewGenerator(),
 		sendStrategy:    sendStrategy,
 	}
 }
@@ -56,11 +57,8 @@ func (e *sendService) SendNotification(ctx context.Context, n domain.Notificatio
 	}
 
 	// 生成通知ID，后续考虑分库分表
-	id, err := e.idGenerator.NextID()
-	if err != nil {
-		return resp, fmt.Errorf("%w 生成 ID 失败，原因: %w", errs.ErrSendNotificationFailed, err)
-	}
-	n.ID = id
+	id := e.idGenerator.GenerateID(n.BizID, n.Key)
+	n.ID = uint64(id)
 	// 发送通知
 	response, err := e.sendStrategy.Send(ctx, n)
 	// 处理策略错误
@@ -78,11 +76,8 @@ func (e *sendService) SendNotificationAsync(ctx context.Context, n domain.Notifi
 		return domain.SendResponse{}, err
 	}
 	// 生成通知ID
-	id, err := e.idGenerator.NextID()
-	if err != nil {
-		return domain.SendResponse{}, fmt.Errorf("%w", errs.ErrSendNotificationFailed)
-	}
-	n.ID = id
+	id := e.idGenerator.GenerateID(n.BizID, n.Key)
+	n.ID = uint64(id)
 
 	// 使用异步接口但要立即发送，修改为延时发送
 	// 本质上这是一个不怎好的用法，但是业务方可能不清楚，所以我们兼容一下
@@ -101,15 +96,13 @@ func (e *sendService) BatchSendNotifications(ctx context.Context, notifications 
 
 	// 校验并且生成 ID
 	for i := range notifications {
+		n := notifications[i]
 		if err := notifications[i].Validate(); err != nil {
 			return domain.BatchSendResponse{}, fmt.Errorf("参数非法 %w", err)
 		}
 		// 生成通知ID
-		id, err := e.idGenerator.NextID()
-		if err != nil {
-			return domain.BatchSendResponse{}, fmt.Errorf("生成 ID 失败: %w", err)
-		}
-		notifications[i].ID = id
+		id := e.idGenerator.GenerateID(n.BizID, n.Key)
+		notifications[i].ID = uint64(id)
 	}
 
 	// 发送通知，这里有一个隐含的假设，就是发送策略必须是相同的。
@@ -136,12 +129,9 @@ func (e *sendService) BatchSendNotificationsAsync(ctx context.Context, notificat
 			return domain.BatchSendAsyncResponse{}, fmt.Errorf("参数非法 %w", err)
 		}
 		// 生成通知ID
-		id, err := e.idGenerator.NextID()
-		if err != nil {
-			return domain.BatchSendAsyncResponse{}, fmt.Errorf("生成 ID 失败: %w", err)
-		}
-		notifications[i].ID = id
-		ids = append(ids, id)
+		id := e.idGenerator.GenerateID(notifications[i].BizID, notifications[i].Key)
+		notifications[i].ID = uint64(id)
+		ids = append(ids, uint64(id))
 		notifications[i].ReplaceAsyncImmediate()
 	}
 

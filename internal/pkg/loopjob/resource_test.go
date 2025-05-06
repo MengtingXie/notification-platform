@@ -1,7 +1,6 @@
 package loopjob
 
 import (
-	"context"
 	"sync"
 	"testing"
 
@@ -12,7 +11,7 @@ func TestResourceSemaphore_AcquireRelease(t *testing.T) {
 	t.Parallel()
 	r := NewResourceSemaphore(2)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	err := r.Acquire(ctx)
 	assert.NoError(t, err)
 
@@ -30,7 +29,7 @@ func TestResourceSemaphore_ConcurrentOverLimit(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			errCh <- r.Acquire(context.Background())
+			errCh <- r.Acquire(t.Context())
 		}()
 	}
 
@@ -56,7 +55,7 @@ func TestResourceSemaphore_CounterCorrectness(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			assert.NoError(t, r.Acquire(context.Background()))
+			assert.NoError(t, r.Acquire(t.Context()))
 		}()
 	}
 	wg.Wait()
@@ -66,11 +65,11 @@ func TestResourceSemaphore_CounterCorrectness(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			assert.NoError(t, r.Release(context.Background()))
+			assert.NoError(t, r.Release(t.Context()))
 		}()
 	}
 	wg.Wait()
 
 	// 再次获取1次应该成功
-	assert.NoError(t, r.Acquire(context.Background()))
+	assert.NoError(t, r.Acquire(t.Context()))
 }

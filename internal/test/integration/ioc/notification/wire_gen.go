@@ -8,6 +8,7 @@ package notification
 
 import (
 	"gitee.com/flycash/notification-platform/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/repository/cache"
 	"gitee.com/flycash/notification-platform/internal/repository/cache/redis"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
@@ -22,14 +23,13 @@ func Init() *Service {
 	cmdable := ioc.InitRedis()
 	quotaCache := redis.NewQuotaCache(cmdable)
 	notificationRepository := repository.NewNotificationRepository(notificationDAO, quotaCache)
-	sonyflake := ioc.InitIDGenerator()
-	service := notification.NewNotificationService(notificationRepository, sonyflake)
-	quotaDAO := dao.NewQuotaDAO(v)
-	quotaRepository := repository.NewQuotaRepository(quotaDAO)
+	service := notification.NewNotificationService(notificationRepository)
+	quotaRepository := repository.NewQuotaRepositoryV2(quotaCache)
 	callbackLogDAO := dao.NewCallbackLogDAO(v)
 	callbackLogRepository := repository.NewCallbackLogRepository(notificationRepository, callbackLogDAO)
 	notificationService := &Service{
 		Svc:             service,
+		QuotaCache:      quotaCache,
 		Repo:            notificationRepository,
 		QuotaRepo:       quotaRepository,
 		CallbackLogRepo: callbackLogRepository,
@@ -41,6 +41,7 @@ func Init() *Service {
 
 type Service struct {
 	Svc             notification.Service
+	QuotaCache      cache.QuotaCache
 	Repo            repository.NotificationRepository
 	QuotaRepo       repository.QuotaRepository
 	CallbackLogRepo repository.CallbackLogRepository

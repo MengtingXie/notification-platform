@@ -7,11 +7,11 @@ import (
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
+	shardingStr "gitee.com/flycash/notification-platform/internal/pkg/sharding"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/repository/dao/sharding"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
-	shardingStr "gitee.com/flycash/notification-platform/internal/sharding"
 	shardingIoc "gitee.com/flycash/notification-platform/internal/test/integration/ioc/sharding"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
 	"github.com/ecodeclub/ekit/syncx"

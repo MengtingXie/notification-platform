@@ -328,7 +328,11 @@ func (r *notificationRepository) MarkSuccess(ctx context.Context, notification d
 }
 
 func (r *notificationRepository) MarkFailed(ctx context.Context, notification domain.Notification) error {
-	return r.dao.MarkFailed(ctx, r.toEntity(notification))
+	err := r.dao.MarkFailed(ctx, r.toEntity(notification))
+	if err != nil {
+		return err
+	}
+	return r.quotaCache.Incr(ctx, notification.BizID, notification.Channel, defaultQuotaNumber)
 }
 
 func (r *notificationRepository) MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error) {

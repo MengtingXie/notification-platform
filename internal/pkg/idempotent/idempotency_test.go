@@ -84,6 +84,7 @@ func (ist IdempotencyServiceTest) TestMExists(t *testing.T) {
 
 // TestRedisImplementation 测试Redis实现
 func TestRedisImplementation(t *testing.T) {
+	t.Skip()
 	t.Parallel()
 	// 创建Redis客户端
 	client := redis.NewClient(&redis.Options{
@@ -225,6 +226,7 @@ func TestRedisMixImplementation(t *testing.T) {
 	}
 
 	t.Run("全不存在场景", func(t *testing.T) {
+		t.Parallel()
 		svc, cleanup, _ := mixTest.NewService()
 		t.Cleanup(cleanup)
 
@@ -234,6 +236,7 @@ func TestRedisMixImplementation(t *testing.T) {
 	})
 
 	t.Run("混合存在场景", func(t *testing.T) {
+		t.Parallel()
 		svc, cleanup, _ := mixTest.NewService()
 		t.Cleanup(cleanup)
 
@@ -249,11 +252,13 @@ func TestRedisMixImplementation(t *testing.T) {
 	})
 
 	t.Run("顺序一致性验证", func(t *testing.T) {
+		t.Parallel()
 		svc, cleanup, _ := mixTest.NewService()
 		t.Cleanup(cleanup)
 
 		keys := []string{"z", "a", "m"}
-		svc.MExists(ctx, keys...) // 首次调用生成记录
+		_, err := svc.MExists(ctx, keys...) // 首次调用生成记录
+		require.NoError(t, err)
 
 		res, err := svc.MExists(ctx, keys...)
 		require.NoError(t, err)

@@ -3,41 +3,28 @@ package scheduler
 import (
 	"context"
 	"errors"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/pkg/batchsize"
 	"gitee.com/flycash/notification-platform/internal/pkg/bitring"
 	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
+	"gitee.com/flycash/notification-platform/internal/pkg/sharding"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/sender"
-	"gitee.com/flycash/notification-platform/internal/sharding"
 	"github.com/meoying/dlock-go"
-)
-
-const (
-	ntabName loopjob.CtxKey = "nTab"
-	dbName   loopjob.CtxKey = "db"
 )
 
 // ShardingScheduler 通知调度服务实现
 type ShardingScheduler struct {
-	repo             repository.NotificationRepository
-	sender           sender.NotificationSender
-	dclient          dlock.Client
-	shardingStrategy sharding.ShardingStrategy
-	minLoopDuration  time.Duration
-
-	mu              sync.Mutex
-	maxLockedTables uint64
-	curLockedTables uint64
-
+	repo              repository.NotificationRepository
+	sender            sender.NotificationSender
+	minLoopDuration   time.Duration
 	batchSize         atomic.Uint64
 	batchSizeAdjuster batchsize.Adjuster
 
 	errorEvents *bitring.BitRing
-	sem         loopjob.ResourceSemaphore
+	job         *loopjob.ShardingLoopJob
 }
 
 // NewShardingScheduler 创建通知调度服务
@@ -46,24 +33,21 @@ func NewShardingScheduler(
 	notificationSender sender.NotificationSender,
 	dclient dlock.Client,
 	shardingStrategy sharding.ShardingStrategy,
+	sem loopjob.ResourceSemaphore,
 	minLoopDuration time.Duration,
-	maxLockedTables int,
 	batchSize int,
 	batchSizeAdjuster batchsize.Adjuster,
 	errorEvents *bitring.BitRing,
-	sem loopjob.ResourceSemaphore,
 ) *ShardingScheduler {
+	const key = "notification_platform_async_sharding_scheduler"
 	s := &ShardingScheduler{
 		repo:              repo,
 		sender:            notificationSender,
-		dclient:           dclient,
-		shardingStrategy:  shardingStrategy,
 		minLoopDuration:   minLoopDuration,
-		maxLockedTables:   uint64(maxLockedTables),
 		batchSizeAdjuster: batchSizeAdjuster,
 		errorEvents:       errorEvents,
-		sem:               sem,
 	}
+	s.job = loopjob.NewShardingLoopJob(dclient, key, s.loop, shardingStrategy, sem)
 	s.batchSize.Store(uint64(batchSize))
 	return s
 }
@@ -71,23 +55,16 @@ func NewShardingScheduler(
 // Start 启动调度服务
 // 当 ctx 被取消的或者关闭的时候，就会结束循环
 func (s *ShardingScheduler) Start(ctx context.Context) {
-	const key = "notification_platform_async_sharding_scheduler"
-	go loopjob.NewShardingLoopJob(s.dclient, key, s.loop, s.shardingStrategy, s.sem).Run(ctx)
+	go s.job.Run(ctx)
 }
 
-func (task *ShardingScheduler) ctxWithTabs(ctx context.Context, dst sharding.Dst) context.Context {
-	ctx = context.WithValue(ctx, ntabName, dst.Table)
-	ctx = context.WithValue(ctx, dbName, dst.DB)
-	return ctx
-}
-
-func (s *ShardingScheduler) loop(ctx context.Context, dst sharding.Dst) error {
+func (s *ShardingScheduler) loop(ctx context.Context) error {
 	for {
 		// 记录开始执行时间
 		start := time.Now()
 
 		// 批量发送已就绪的通知
-		err := s.batchSendReadyNotifications(ctx, dst)
+		err := s.batchSendReadyNotifications(ctx)
 
 		// 记录响应时间
 		responseTime := time.Since(start)
@@ -114,13 +91,12 @@ func (s *ShardingScheduler) loop(ctx context.Context, dst sharding.Dst) error {
 }
 
 // batchSendReadyNotifications 批量发送已就绪的通知
-func (s *ShardingScheduler) batchSendReadyNotifications(ctx context.Context, dst sharding.Dst) error {
+func (s *ShardingScheduler) batchSendReadyNotifications(ctx context.Context) error {
 	const defaultTimeout = 3 * time.Second
 
 	loopCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 
-	loopCtx = s.ctxWithTabs(loopCtx, dst)
 	const offset = 0
 	notifications, err := s.repo.FindReadyNotifications(loopCtx, offset, int(s.batchSize.Load()))
 	if err != nil {
@@ -133,10 +109,4 @@ func (s *ShardingScheduler) batchSendReadyNotifications(ctx context.Context, dst
 
 	_, err = s.sender.BatchSend(ctx, notifications)
 	return err
-}
-
-func (s *ShardingScheduler) UpdateMaxLockedTables(maxLockedTables uint64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.maxLockedTables = maxLockedTables
 }

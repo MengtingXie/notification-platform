@@ -21,7 +21,7 @@ type resourceSemaphore struct {
 	mu       *sync.RWMutex
 }
 
-func (r *resourceSemaphore) Acquire(ctx context.Context) error {
+func (r *resourceSemaphore) Acquire(context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.curCount >= r.maxCount {
@@ -31,14 +31,14 @@ func (r *resourceSemaphore) Acquire(ctx context.Context) error {
 	return nil
 }
 
-func (r *resourceSemaphore) Release(ctx context.Context) error {
+func (r *resourceSemaphore) Release(context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.curCount--
 	return nil
 }
 
-func NewResourceSemaphore(maxCount int) *resourceSemaphore {
+func NewResourceSemaphore(maxCount int) ResourceSemaphore {
 	return &resourceSemaphore{
 		maxCount: maxCount,
 		mu:       &sync.RWMutex{},

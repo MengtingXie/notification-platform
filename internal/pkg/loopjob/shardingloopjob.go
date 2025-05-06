@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"gitee.com/flycash/notification-platform/internal/sharding"
+	"gitee.com/flycash/notification-platform/internal/pkg/sharding"
 
 	"github.com/gotomicro/ego/core/elog"
 	"github.com/meoying/dlock-go"
@@ -16,11 +16,10 @@ type CtxKey string
 
 type ShardingLoopJob struct {
 	shardingStrategy  sharding.ShardingStrategy
-	baseKey           string   // 业务标识
-	tabSuffixes       []string // 表后缀
+	baseKey           string // 业务标识
 	dclient           dlock.Client
 	logger            *elog.Component
-	biz               func(ctx context.Context, dst sharding.Dst) error
+	biz               func(ctx context.Context) error
 	retryInterval     time.Duration
 	defaultTimeout    time.Duration
 	resourceSemaphore ResourceSemaphore
@@ -32,7 +31,7 @@ func NewShardingLoopJob(
 	dclient dlock.Client,
 	baseKey string,
 	// 你要执行的业务。注意当 ctx 被取消的时候，就会退出全部循环
-	biz func(ctx context.Context, dst sharding.Dst) error,
+	biz func(ctx context.Context) error,
 	shardingStrategy sharding.ShardingStrategy,
 	resourceSemaphore ResourceSemaphore,
 ) *ShardingLoopJob {
@@ -44,7 +43,7 @@ func NewShardingLoopJob(
 func newShardingLoopJobLoop(
 	dclient dlock.Client,
 	baseKey string,
-	biz func(ctx context.Context, dst sharding.Dst) error,
+	biz func(ctx context.Context) error,
 	shardingStrategy sharding.ShardingStrategy,
 	retryInterval time.Duration,
 	defaultTimeout time.Duration,
@@ -67,19 +66,17 @@ func (l *ShardingLoopJob) generateKey(db, tab string) string {
 }
 
 func (l *ShardingLoopJob) Run(ctx context.Context) {
-	dbs := l.shardingStrategy.DBs()
-	tabs := l.shardingStrategy.Tables()
-	for idx := range dbs {
-		db := dbs[idx]
-		for jdx := range tabs {
-			tab := tabs[jdx]
-			key := l.generateKey(db, tab)
+	for {
+		for _, dst := range l.shardingStrategy.Broadcast() {
+			// 超过允许抢占的上限了
 			err := l.resourceSemaphore.Acquire(ctx)
 			if err != nil {
 				time.Sleep(l.retryInterval)
 				continue
 			}
-			// 抢锁
+
+			key := l.generateKey(dst.DB, dst.Table)
+			// 强锁
 			lock, err := l.dclient.NewLock(ctx, key, l.retryInterval)
 			if err != nil {
 				l.logger.Error("初始化分布式锁失败，重试",
@@ -100,24 +97,21 @@ func (l *ShardingLoopJob) Run(ctx context.Context) {
 			cancel()
 			if err != nil {
 				l.logger.Error("没有抢到分布式锁，系统出现问题", elog.Any("err", err))
-				time.Sleep(l.retryInterval)
 				err = l.resourceSemaphore.Release(ctx)
 				if err != nil {
 					l.logger.Error("释放表的信号量失败", elog.FieldErr(err))
 				}
 				continue
 			}
-			go l.tableLoop(ctx, lock, sharding.Dst{
-				DB:    db,
-				Table: tab,
-			})
+			// 抢占成功了
+			go l.tableLoop(sharding.CtxWithDst(ctx, dst), lock)
 		}
 	}
 }
 
-func (l *ShardingLoopJob) tableLoop(ctx context.Context, lock dlock.Lock, dst sharding.Dst) {
+func (l *ShardingLoopJob) tableLoop(ctx context.Context, lock dlock.Lock) {
 	// 在这里执行业务
-	err := l.bizLoop(ctx, lock, dst)
+	err := l.bizLoop(ctx, lock)
 	// 要么是续约失败，要么是 ctx 本身已经过期了
 	if err != nil {
 		l.logger.Error("执行业务失败，将执行重试", elog.FieldErr(err))
@@ -144,12 +138,12 @@ func (l *ShardingLoopJob) tableLoop(ctx context.Context, lock dlock.Lock, dst sh
 	}
 }
 
-func (l *ShardingLoopJob) bizLoop(ctx context.Context, lock dlock.Lock, dst sharding.Dst) error {
+func (l *ShardingLoopJob) bizLoop(ctx context.Context, lock dlock.Lock) error {
 	const bizTimeout = 50 * time.Second
 	for {
 		// 可以确保业务在分布式锁过期之前结束
 		bizCtx, cancel := context.WithTimeout(ctx, bizTimeout)
-		err := l.biz(bizCtx, dst)
+		err := l.biz(bizCtx)
 		cancel()
 		if err != nil {
 			l.logger.Error("业务执行失败", elog.FieldErr(err))

@@ -1,6 +1,7 @@
 package sharding
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -18,6 +19,9 @@ type ShardingStrategy struct {
 type Dst struct {
 	Table string
 	DB    string
+
+	TableSuffix int64
+	DBSuffix    int64
 }
 
 func NewShardingStrategy(dbPrefix, tablePrefix string, tableSharding, dbSharding int64) ShardingStrategy {
@@ -34,8 +38,10 @@ func (s ShardingStrategy) Shard(bizID int64, key string) Dst {
 	dbHash := hashValue % s.dbSharding
 	tabHash := (hashValue / s.dbSharding) % s.tableSharding
 	return Dst{
-		Table: fmt.Sprintf("%s_%d", s.tablePrefix, tabHash),
-		DB:    fmt.Sprintf("%s_%d", s.dbPrefix, dbHash),
+		TableSuffix: tabHash,
+		Table:       fmt.Sprintf("%s_%d", s.tablePrefix, tabHash),
+		DBSuffix:    dbHash,
+		DB:          fmt.Sprintf("%s_%d", s.dbPrefix, dbHash),
 	}
 }
 
@@ -44,8 +50,10 @@ func (s ShardingStrategy) ShardWithID(id int64) Dst {
 	dbHash := hashValue % s.dbSharding
 	tabHash := (hashValue / s.dbSharding) % s.tableSharding
 	return Dst{
-		Table: fmt.Sprintf("%s_%d", s.tablePrefix, tabHash),
-		DB:    fmt.Sprintf("%s_%d", s.dbPrefix, dbHash),
+		TableSuffix: tabHash,
+		Table:       fmt.Sprintf("%s_%d", s.tablePrefix, tabHash),
+		DB:          fmt.Sprintf("%s_%d", s.dbPrefix, dbHash),
+		DBSuffix:    dbHash,
 	}
 }
 
@@ -54,28 +62,12 @@ func (s ShardingStrategy) Broadcast() []Dst {
 	for i := 0; i < int(s.dbSharding); i++ {
 		for j := 0; j < int(s.tableSharding); j++ {
 			ans = append(ans, Dst{
-				Table: fmt.Sprintf("%s_%d", s.tablePrefix, j),
-				DB:    fmt.Sprintf("%s_%d", s.dbPrefix, i),
+				TableSuffix: int64(j),
+				Table:       fmt.Sprintf("%s_%d", s.tablePrefix, j),
+				DB:          fmt.Sprintf("%s_%d", s.dbPrefix, i),
+				DBSuffix:    int64(i),
 			})
 		}
-	}
-	return ans
-}
-
-// 获取所有库名
-func (s ShardingStrategy) DBs() []string {
-	ans := make([]string, 0, s.dbSharding)
-	for i := 0; i < int(s.dbSharding); i++ {
-		ans = append(ans, fmt.Sprintf("%s_%d", s.dbPrefix, i))
-	}
-	return ans
-}
-
-// 获取一个库中所有的表名
-func (s ShardingStrategy) Tables() []string {
-	ans := make([]string, 0, s.tableSharding)
-	for i := 0; i < int(s.tableSharding); i++ {
-		ans = append(ans, fmt.Sprintf("%s_%d", s.tablePrefix, i))
 	}
 	return ans
 }
@@ -84,12 +76,16 @@ func (s ShardingStrategy) TablePrefix() string {
 	return s.tablePrefix
 }
 
-func (s ShardingStrategy) TableSuffix() []string {
-	ans := make([]string, 0, s.tableSharding)
-	for i := 0; i < int(s.tableSharding); i++ {
-		ans = append(ans, fmt.Sprintf("%d", i))
-	}
-	return ans
+type dstKey struct{}
+
+func DstFromCtx(ctx context.Context) (Dst, bool) {
+	val := ctx.Value(dstKey{})
+	res, ok := val.(Dst)
+	return res, ok
+}
+
+func CtxWithDst(ctx context.Context, dst Dst) context.Context {
+	return context.WithValue(ctx, dstKey{}, dst)
 }
 
 // ExtractSuffixAndFormatFromTable 从表名中提取后缀，按照下划线分隔并返回最后一个元素

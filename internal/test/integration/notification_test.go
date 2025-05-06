@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/repository/cache"
+
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/repository"
@@ -32,12 +34,13 @@ type NotificationServiceTestSuite struct {
 	repo            repository.NotificationRepository
 	quotaRepo       repository.QuotaRepository
 	callbackLogRepo repository.CallbackLogRepository
+	quotaCache      cache.QuotaCache
 }
 
 func (s *NotificationServiceTestSuite) SetupSuite() {
 	s.db = testioc.InitDBAndTables()
 	svc := notificationioc.Init()
-	s.svc, s.repo, s.quotaRepo, s.callbackLogRepo = svc.Svc, svc.Repo, svc.QuotaRepo, svc.CallbackLogRepo
+	s.svc, s.repo, s.quotaRepo, s.callbackLogRepo, s.quotaCache = svc.Svc, svc.Repo, svc.QuotaRepo, svc.CallbackLogRepo, svc.QuotaCache
 }
 
 func (s *NotificationServiceTestSuite) TearDownTest() {
@@ -144,6 +147,10 @@ func (s *NotificationServiceTestSuite) assertNotification(t *testing.T, expected
 func (s *NotificationServiceTestSuite) TestRepositoryBatchCreate() {
 	t := s.T()
 	bizID := int64(4)
+	s.createTestQuota(t, domain.Notification{
+		BizID:   bizID,
+		Channel: domain.ChannelSMS,
+	})
 
 	tests := []struct {
 		name          string
@@ -323,6 +330,10 @@ func (s *NotificationServiceTestSuite) TestRepositoryBatchUpdateStatusSucceededO
 
 	// 准备测试数据 - 创建多条通知记录
 	bizID := int64(10)
+	s.createTestQuota(t, domain.Notification{
+		BizID:   bizID,
+		Channel: domain.ChannelSMS,
+	})
 	notifications := []domain.Notification{
 		s.createTestNotification(bizID),
 		s.createTestNotification(bizID),
@@ -487,6 +498,10 @@ func (s *NotificationServiceTestSuite) TestGetByKeys() {
 	t := s.T()
 
 	bizID := int64(7)
+	s.createTestQuota(t, domain.Notification{
+		BizID:   bizID,
+		Channel: domain.ChannelSMS,
+	})
 	notifications, err := s.repo.BatchCreate(t.Context(), []domain.Notification{
 		s.createTestNotification(bizID),
 		s.createTestNotification(bizID),
@@ -677,6 +692,10 @@ func (s *NotificationServiceTestSuite) TestRepositoryBatchGetByIDs() {
 	t := s.T()
 
 	bizID := int64(11)
+	s.createTestQuota(t, domain.Notification{
+		BizID:   bizID,
+		Channel: domain.ChannelSMS,
+	})
 	// 创建多个测试通知
 	notifications := []domain.Notification{
 		s.createTestNotification(bizID),
@@ -756,7 +775,7 @@ func (s *NotificationServiceTestSuite) TestRepositoryCreateWithCallbackLog() {
 
 func (s *NotificationServiceTestSuite) createTestQuota(t *testing.T, notification domain.Notification) int32 {
 	quota := int32(100)
-	err := s.quotaRepo.CreateOrUpdate(t.Context(), domain.Quota{
+	err := s.quotaCache.CreateOrUpdate(t.Context(), domain.Quota{
 		BizID:   notification.BizID,
 		Quota:   quota,
 		Channel: notification.Channel,
@@ -773,6 +792,10 @@ func (s *NotificationServiceTestSuite) TestRepositoryBatchCreateWithCallbackLog(
 		s.createTestNotification(bizID),
 		s.createTestNotification(bizID),
 	}
+	s.createTestQuota(t, domain.Notification{
+		BizID:   bizID,
+		Channel: domain.ChannelSMS,
+	})
 
 	// 设置配额
 	_ = s.createTestQuota(t, notifications[0])

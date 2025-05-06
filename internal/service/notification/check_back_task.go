@@ -74,6 +74,8 @@ func NewTask(repo repository.TxNotificationRepository,
 }
 
 // 为了性能，使用了批量操作，针对的是数据库的批量操作
+//
+//nolint:dupl // 这是为了演示而复制的
 func (task *TxCheckTask) oneLoop(ctx context.Context) error {
 	loopCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()

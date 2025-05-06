@@ -46,9 +46,9 @@ func (q *quotaCache) MutiIncr(ctx context.Context, items []cache.IncrItem) error
 	return nil
 }
 
-func (q *quotaCache) getKeysAndQuotas(items []cache.IncrItem) ([]string, []any) {
-	keys := make([]string, 0, len(items))
-	quotas := make([]any, 0, len(items))
+func (q *quotaCache) getKeysAndQuotas(items []cache.IncrItem) (keys []string, quotas []any) {
+	keys = make([]string, 0, len(items))
+	quotas = make([]any, 0, len(items))
 	for idx := range items {
 		item := items[idx]
 		keys = append(keys, q.key(domain.Quota{
@@ -70,7 +70,7 @@ func (q *quotaCache) MutiDecr(ctx context.Context, items []cache.IncrItem) error
 	if !ok {
 		return errors.New("返回值不正确")
 	}
-	if res.(string) != "" {
+	if resStr != "" {
 		return fmt.Errorf("%s不足 %w", resStr, ErrQuotaLessThenZero)
 	}
 	return nil
@@ -99,7 +99,10 @@ func (q *quotaCache) Decr(ctx context.Context, bizID int64, channel domain.Chann
 }
 
 func (q *quotaCache) CreateOrUpdate(ctx context.Context, quotas ...domain.Quota) error {
-	vals := make([]any, 0, 2*len(quotas))
+	const (
+		number = 2
+	)
+	vals := make([]any, 0, number*len(quotas))
 	for _, quota := range quotas {
 		vals = append(vals, q.key(quota), quota.Quota)
 	}

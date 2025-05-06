@@ -6,30 +6,28 @@ import (
 	"strings"
 	"time"
 
+	shardingStr "gitee.com/flycash/notification-platform/internal/pkg/sharding"
+
 	"github.com/ego-component/egorm"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
+
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"github.com/ecodeclub/ekit/syncx"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
 )
 
-const (
-	txnTabName loopjob.CtxKey = "txnTab"
-	ntabName   loopjob.CtxKey = "nTab"
-	dbName     loopjob.CtxKey = "db"
-)
-
 // 专门为task
 type TxnTaskDAO struct {
-	dbs *syncx.Map[string, *egorm.Component]
+	txnStr shardingStr.ShardingStrategy
+	dbs    *syncx.Map[string, *egorm.Component]
 }
 
-func NewTxnTaskDAO(dbs *syncx.Map[string, *egorm.Component]) *TxnTaskDAO {
+func NewTxnTaskDAO(dbs *syncx.Map[string, *egorm.Component], txnStr shardingStr.ShardingStrategy) *TxnTaskDAO {
 	return &TxnTaskDAO{
-		dbs: dbs,
+		dbs:    dbs,
+		txnStr: txnStr,
 	}
 }
 
@@ -124,18 +122,10 @@ func (t *TxnTaskDAO) UpdateStatus(_ context.Context, _ int64, _ string, _ domain
 }
 
 func (t *TxnTaskDAO) getDBTabFromCtx(ctx context.Context) (db, txnTab, ntab string, err error) {
-	db, ok := ctx.Value(dbName).(string)
+	dst, ok := shardingStr.DstFromCtx(ctx)
 	if !ok {
-		return "", "", "", errors.New("db在ctx中没找到")
+		return "", "", "", errors.New("ctx未找到表名")
 	}
-	txnTab, ok = ctx.Value(txnTabName).(string)
-	if !ok {
-		return "", "", "", errors.New("txnTab不是字符串")
-	}
-
-	ntab, ok = ctx.Value(ntabName).(string)
-	if !ok {
-		return "", "", "", errors.New("nTab表不是字符串")
-	}
-	return db, txnTab, ntab, nil
+	txTab := t.txnStr.ExtractSuffixAndFormatFromTable(dst.Table)
+	return dst.DB, txTab, dst.Table, nil
 }

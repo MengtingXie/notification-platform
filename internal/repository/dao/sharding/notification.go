@@ -15,8 +15,8 @@ import (
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/errs"
+	"gitee.com/flycash/notification-platform/internal/pkg/sharding"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
-	"gitee.com/flycash/notification-platform/internal/sharding"
 	"github.com/ecodeclub/ekit/list"
 	"github.com/ecodeclub/ekit/syncx"
 	"github.com/go-sql-driver/mysql"
@@ -32,7 +32,7 @@ type NotificationShardingDAO struct {
 	idGenerator             *idgen.Generator
 }
 
-func NewNotificationSvc(dbs *syncx.Map[string, *egorm.Component],
+func NewNotificationShardingDAO(dbs *syncx.Map[string, *egorm.Component],
 	notificationShardingSvc sharding.ShardingStrategy,
 	callbackLogShardingSvc sharding.ShardingStrategy,
 	idGenerator *idgen.Generator,
@@ -577,13 +577,8 @@ func (m *modifyIds) listToStr(list []uint64) string {
 	return strings.Join(strSlice, ",")
 }
 
-// escapeString safely escapes single quotes in SQL strings
-func escapeString(s string) string {
-	return strings.ReplaceAll(s, "'", "''")
-}
-
 func (s *NotificationShardingDAO) genNotificationSQL(db *egorm.Component, table string, notis []*dao.Notification, createCallbackLog bool, now int64) []string {
-	sessionDb := db.Session(&gorm.Session{DryRun: true})
+	sessionDB := db.Session(&gorm.Session{DryRun: true})
 	if len(notis) == 0 {
 		return nil
 	}
@@ -592,8 +587,8 @@ func (s *NotificationShardingDAO) genNotificationSQL(db *egorm.Component, table 
 		noti := notis[idx]
 		id := s.idGenerator.GenerateID(noti.BizID, noti.Key)
 		noti.ID = uint64(id)
-		notificationSql := s.convertSql(sessionDb, table, noti)
-		sqls = append(sqls, notificationSql)
+		notificationSQL := s.convertSQL(sessionDB, table, noti)
+		sqls = append(sqls, notificationSQL)
 		if createCallbackLog {
 			callbackTab := s.callbackLogShardingSvc.ShardWithID(id)
 			callbacklog := dao.CallbackLog{
@@ -602,15 +597,15 @@ func (s *NotificationShardingDAO) genNotificationSQL(db *egorm.Component, table 
 				Ctime:          now,
 				Utime:          now,
 			}
-			sqls = append(sqls, s.convertSql(sessionDb, callbackTab.Table, &callbacklog))
+			sqls = append(sqls, s.convertSQL(sessionDB, callbackTab.Table, &callbacklog))
 		}
 	}
 	return sqls
 }
 
-func (s *NotificationShardingDAO) convertSql(sessionDb *egorm.Component, tab string, noti any) string {
-	stmt := sessionDb.Table(tab).Create(noti).Statement
-	return sessionDb.Dialector.Explain(stmt.SQL.String(), stmt.Vars...)
+func (s *NotificationShardingDAO) convertSQL(sessionDB *egorm.Component, tab string, noti any) string {
+	stmt := sessionDB.Table(tab).Create(noti).Statement
+	return sessionDB.Dialector.Explain(stmt.SQL.String(), stmt.Vars...)
 }
 
 func checkNotificationIds(ids []uint64, err error) bool {

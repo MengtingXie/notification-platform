@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
+	"gitee.com/flycash/notification-platform/internal/pkg/sharding"
 	"gitee.com/flycash/notification-platform/internal/repository"
-	"gitee.com/flycash/notification-platform/internal/sharding"
 	"github.com/meoying/dlock-go"
 )
 
@@ -28,13 +28,12 @@ func NewSendingTimeoutTaskV2(dclient dlock.Client,
 func (s *SendingTimeoutTaskV2) Start(ctx context.Context) {
 	const key = "notification_handling_sending_timeout_v2"
 	lj := loopjob.NewShardingLoopJob(s.dclient, key, s.HandleSendingTimeout, s.str, s.sem)
-	lj.Run(ctx)
+	go lj.Run(ctx)
 }
 
-func (s *SendingTimeoutTaskV2) HandleSendingTimeout(ctx context.Context, dst sharding.Dst) error {
+func (s *SendingTimeoutTaskV2) HandleSendingTimeout(ctx context.Context) error {
 	const batchSize = 10
 	const defaultSleepTime = time.Second * 10
-	ctx = s.ctxWithDBTab(ctx, dst)
 	cnt, err := s.repo.MarkTimeoutSendingAsFailed(ctx, batchSize)
 	if err != nil {
 		return err
@@ -45,10 +44,4 @@ func (s *SendingTimeoutTaskV2) HandleSendingTimeout(ctx context.Context, dst sha
 		time.Sleep(defaultSleepTime)
 	}
 	return nil
-}
-
-func (s *SendingTimeoutTaskV2) ctxWithDBTab(ctx context.Context, dst sharding.Dst) context.Context {
-	ctx = context.WithValue(ctx, ntabName, dst.Table)
-	ctx = context.WithValue(ctx, dbName, dst.DB)
-	return ctx
 }

@@ -9,9 +9,9 @@ import (
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/pkg/grpc"
 	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
+	"gitee.com/flycash/notification-platform/internal/pkg/sharding"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/service/config"
-	"gitee.com/flycash/notification-platform/internal/sharding"
 	"github.com/ecodeclub/ekit/list"
 	"github.com/ecodeclub/ekit/slice"
 	"github.com/gotomicro/ego/client/egrpc"
@@ -19,12 +19,6 @@ import (
 	"github.com/meoying/dlock-go"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
-)
-
-const (
-	txnTabName loopjob.CtxKey = "txnTab"
-	ntabName   loopjob.CtxKey = "nTab"
-	dbName     loopjob.CtxKey = "db"
 )
 
 type TxCheckTaskV2 struct {
@@ -61,12 +55,11 @@ func (task *TxCheckTaskV2) Start(ctx context.Context) {
 	go loopjob.NewShardingLoopJob(task.lock, key, task.oneLoop, task.nStr, task.sem).Run(ctx)
 }
 
-// 为了性能，使用了批量操作，针对的是数据库的批量操作
-func (task *TxCheckTaskV2) oneLoop(ctx context.Context, dst sharding.Dst) error {
+//nolint:dupl // 为了演示
+func (task *TxCheckTaskV2) oneLoop(ctx context.Context) error {
 	loopCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
-	// 添加表名
-	loopCtx = task.ctxWithTabs(loopCtx, dst)
+
 	txNotifications, err := task.repo.FindCheckBack(loopCtx, 0, task.batchSize)
 	if err != nil {
 		return err
@@ -99,7 +92,6 @@ func (task *TxCheckTaskV2) oneLoop(ctx context.Context, dst sharding.Dst) error 
 	commitTxns := &list.ConcurrentList[domain.TxNotification]{
 		List: list.NewArrayList[domain.TxNotification](length),
 	}
-	// 挨个处理呀
 	var eg errgroup.Group
 	for idx := range txNotifications {
 		eg.Go(func() error {
@@ -133,14 +125,6 @@ func (task *TxCheckTaskV2) oneLoop(ctx context.Context, dst sharding.Dst) error 
 	// 转 PENDING，后续 Scheduler 会调度执行
 	err = multierror.Append(err, task.updateStatus(loopCtx, commitTxns, domain.SendStatusPending))
 	return err
-}
-
-func (task *TxCheckTaskV2) ctxWithTabs(ctx context.Context, dst sharding.Dst) context.Context {
-	txnTable := task.txnStr.ExtractSuffixAndFormatFromTable(dst.Table)
-	ctx = context.WithValue(ctx, txnTabName, txnTable)
-	ctx = context.WithValue(ctx, ntabName, dst.Table)
-	ctx = context.WithValue(ctx, dbName, dst.DB)
-	return ctx
 }
 
 // 校验完了

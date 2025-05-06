@@ -18,12 +18,12 @@ import (
 	clientv1 "gitee.com/flycash/notification-platform/api/proto/gen/client/v1"
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/pkg/retry"
+	sharding2 "gitee.com/flycash/notification-platform/internal/pkg/sharding"
 	"gitee.com/flycash/notification-platform/internal/repository"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/repository/dao/sharding"
 	configmocks "gitee.com/flycash/notification-platform/internal/service/config/mocks"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
-	sharding2 "gitee.com/flycash/notification-platform/internal/sharding"
 	shardingIoc "gitee.com/flycash/notification-platform/internal/test/integration/ioc/sharding"
 	"gitee.com/flycash/notification-platform/internal/test/integration/testgrpc"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
@@ -90,7 +90,7 @@ func (s *ShardingTxNotificationTask) SetupSuite() {
 	s.txnDAO = sharding.NewTxNShardingDAO(dbs, notiStrategy, txnStrategy)
 
 	// 使用真实的 TxnTaskDAO 作为 DAO 层实现
-	txnTaskDAO := sharding.NewTxnTaskDAO(dbs)
+	txnTaskDAO := sharding.NewTxnTaskDAO(dbs, txnStrategy)
 
 	s.txnRepo = repository.NewTxNotificationRepository(txnTaskDAO)
 

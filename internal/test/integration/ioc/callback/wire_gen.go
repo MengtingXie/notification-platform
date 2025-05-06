@@ -26,8 +26,7 @@ func Init(cnfigSvc config.BusinessConfigService) *Service {
 	callbackLogDAO := dao.NewCallbackLogDAO(v)
 	callbackLogRepository := repository.NewCallbackLogRepository(notificationRepository, callbackLogDAO)
 	service := callback.NewService(cnfigSvc, callbackLogRepository)
-	quotaDAO := dao.NewQuotaDAO(v)
-	quotaRepository := repository.NewQuotaRepository(quotaDAO)
+	quotaRepository := repository.NewQuotaRepositoryV2(quotaCache)
 	callbackService := &Service{
 		Svc:              service,
 		Repo:             callbackLogRepository,

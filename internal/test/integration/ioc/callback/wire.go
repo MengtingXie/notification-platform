@@ -28,8 +28,7 @@ func Init(cnfigSvc configsvc.BusinessConfigService) *Service {
 		repository.NewNotificationRepository,
 		dao.NewNotificationDAO,
 		redis.NewQuotaCache,
-		repository.NewQuotaRepository,
-		dao.NewQuotaDAO,
+		repository.NewQuotaRepositoryV2,
 
 		wire.Struct(new(Service), "*"),
 	)

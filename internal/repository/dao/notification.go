@@ -72,7 +72,7 @@ type Notification struct {
 	Utime             int64
 }
 
-// 判断是否是主键冲突
+// CheckErrIsIDDuplicate 判断是否是主键冲突
 func CheckErrIsIDDuplicate(id uint64, err error) bool {
 	return strings.Contains(err.Error(), fmt.Sprintf("%d", id))
 }
@@ -118,7 +118,7 @@ func (d *notificationDAO) CreateWithCallbackLog(ctx context.Context, data Notifi
 	return d.create(ctx, d.db, data, true)
 }
 
-// createV1 创建通知记录，以及可能的对应回调记录,使用本地事务实现额度的扣减
+//nolint:unused // 演示使用本地事务完成额度扣减
 func (d *notificationDAO) createV1(ctx context.Context, db *gorm.DB, data Notification, createCallbackLog bool) (Notification, error) {
 	now := time.Now().UnixMilli()
 	data.Ctime, data.Utime = now, now

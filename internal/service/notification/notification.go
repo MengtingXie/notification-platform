@@ -8,8 +8,6 @@ import (
 
 	"gitee.com/flycash/notification-platform/internal/domain"
 	"gitee.com/flycash/notification-platform/internal/repository"
-
-	"github.com/sony/sonyflake"
 )
 
 // Service 通知服务接口
@@ -25,15 +23,13 @@ type Service interface {
 
 // notificationService 通知服务实现
 type notificationService struct {
-	repo        repository.NotificationRepository
-	idGenerator *sonyflake.Sonyflake
+	repo repository.NotificationRepository
 }
 
 // NewNotificationService 创建通知服务实例
-func NewNotificationService(repo repository.NotificationRepository, idGenerator *sonyflake.Sonyflake) Service {
+func NewNotificationService(repo repository.NotificationRepository) Service {
 	return &notificationService{
-		repo:        repo,
-		idGenerator: idGenerator,
+		repo: repo,
 	}
 }
 
