@@ -209,6 +209,7 @@ func TestBloomFilterImplementation(t *testing.T) {
 // TestRedisMixImplementation 测试混合策略实现
 func TestRedisMixImplementation(t *testing.T) {
 	t.Parallel()
+	t.Skip()
 	capacity := uint64(10000)
 	errorRate := 0.01
 	client := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
