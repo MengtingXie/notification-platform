@@ -84,8 +84,8 @@ func (ist IdempotencyServiceTest) TestMExists(t *testing.T) {
 
 // TestRedisImplementation 测试Redis实现
 func TestRedisImplementation(t *testing.T) {
-	t.Skip()
 	t.Parallel()
+	t.Skip()
 	// 创建Redis客户端
 	client := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
@@ -209,7 +209,6 @@ func TestBloomFilterImplementation(t *testing.T) {
 // TestRedisMixImplementation 测试混合策略实现
 func TestRedisMixImplementation(t *testing.T) {
 	t.Parallel()
-	t.Skip()
 	capacity := uint64(10000)
 	errorRate := 0.01
 	client := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
@@ -250,6 +249,7 @@ func TestRedisMixImplementation(t *testing.T) {
 		res, err := svc.MExists(ctx, "vkey1", "vkey2", "vkey3", "vkey4")
 		require.NoError(t, err)
 		assert.Equal(t, []bool{false, true, false, false}, res)
+		client.Del(ctx, "mixIdempotency:vkey1", "mixIdempotency:vkey2", "mixIdempotency:vkey3", "mixIdempotency:vkey4")
 	})
 
 	t.Run("顺序一致性验证", func(t *testing.T) {
@@ -264,6 +264,6 @@ func TestRedisMixImplementation(t *testing.T) {
 		res, err := svc.MExists(ctx, keys...)
 		require.NoError(t, err)
 		assert.Equal(t, []bool{true, true, true}, res)
+		client.Del(ctx, "mixIdempotency:z", "mixIdempotency:a", "mixIdempotency:m")
 	})
-	client.Del(t.Context(), "mix_filter", "mixIdempotency:vkey1", "mixIdempotency:vkey2", "mixIdempotency:vkey3", "mixIdempotency:vkey4", "mixIdempotency:z", "mixIdempotency:a", "mixIdempotency:m")
 }

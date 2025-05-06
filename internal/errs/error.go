@@ -49,5 +49,6 @@ var (
 	ErrExternalServiceError        = errors.New("外部服务调用错误")
 	ErrBatchSizeOverLimit          = errors.New("批量大小超过限制")
 
-	ErrToAsync = errors.New("服务崩溃已转异步")
+	ErrToAsync     = errors.New("服务崩溃已转异步")
+	ErrExceedLimit = errors.New("抢资源超出限制")
 )

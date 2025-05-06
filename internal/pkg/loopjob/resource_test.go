@@ -73,3 +73,44 @@ func TestResourceSemaphore_CounterCorrectness(t *testing.T) {
 	// 再次获取1次应该成功
 	assert.NoError(t, r.Acquire(t.Context()))
 }
+
+func TestResourceSemaphore_UpdateMaxCount(t *testing.T) {
+	t.Parallel()
+	r := NewResourceSemaphore(2)
+
+	r.UpdateMaxCount(5)
+	assert.Equal(t, 5, r.maxCount)
+
+	// Test concurrent updates
+	const numGoroutines = 10
+	var wg sync.WaitGroup
+	updateValues := make([]int, numGoroutines)
+	for i := 0; i < numGoroutines; i++ {
+		updateValues[i] = i + 1
+	}
+
+	for _, val := range updateValues {
+		wg.Add(1)
+		go func(val int) {
+			defer wg.Done()
+			r.UpdateMaxCount(val)
+		}(val)
+	}
+	wg.Wait()
+
+	// Verify final value (should be the last value updated)
+	assert.Equal(t, updateValues[len(updateValues)-1], r.maxCount)
+
+	// Test update while resources are being acquired/released
+	ctx := t.Context()
+	go func() {
+		assert.NoError(t, r.Acquire(ctx))
+	}()
+
+	// Update max count while acquisition is happening
+	r.UpdateMaxCount(10)
+	assert.Equal(t, 10, r.maxCount)
+
+	// Verify release works after update
+	assert.NoError(t, r.Release(ctx))
+}
