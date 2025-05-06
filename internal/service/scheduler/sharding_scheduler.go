@@ -64,7 +64,7 @@ func (s *ShardingScheduler) loop(ctx context.Context) error {
 		start := time.Now()
 
 		// 批量发送已就绪的通知
-		err := s.batchSendReadyNotifications(ctx)
+		cnt, err := s.batchSendReadyNotifications(ctx)
 
 		// 记录响应时间
 		responseTime := time.Since(start)
@@ -83,7 +83,7 @@ func (s *ShardingScheduler) loop(ctx context.Context) error {
 		}
 
 		// 没有数据时，响应时间非常快，需要等待一段时间
-		if responseTime < s.minLoopDuration {
+		if cnt == 0 {
 			time.Sleep(s.minLoopDuration - responseTime)
 			continue
 		}
@@ -91,7 +91,7 @@ func (s *ShardingScheduler) loop(ctx context.Context) error {
 }
 
 // batchSendReadyNotifications 批量发送已就绪的通知
-func (s *ShardingScheduler) batchSendReadyNotifications(ctx context.Context) error {
+func (s *ShardingScheduler) batchSendReadyNotifications(ctx context.Context) (int, error) {
 	const defaultTimeout = 3 * time.Second
 
 	loopCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
@@ -100,13 +100,13 @@ func (s *ShardingScheduler) batchSendReadyNotifications(ctx context.Context) err
 	const offset = 0
 	notifications, err := s.repo.FindReadyNotifications(loopCtx, offset, int(s.batchSize.Load()))
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if len(notifications) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	_, err = s.sender.BatchSend(ctx, notifications)
-	return err
+	return len(notifications), err
 }
