@@ -1,3 +1,5 @@
+//go:build uint
+
 package loopjob
 
 import (

@@ -2,10 +2,10 @@ package scheduler
 
 import (
 	"context"
-	"errors"
 	"sync/atomic"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/errs"
 	"gitee.com/flycash/notification-platform/internal/pkg/batchsize"
 	"gitee.com/flycash/notification-platform/internal/pkg/bitring"
 	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
@@ -73,7 +73,7 @@ func (s *ShardingScheduler) loop(ctx context.Context) error {
 		s.errorEvents.Add(err != nil)
 		// 判断错误事件是否已达到预设的条件 —— 连续出现三次错误，或者错误率达到阈值
 		if s.errorEvents.IsConditionMet() {
-			return errors.New("错误事件出现次数或错误率达到阈值")
+			return errs.ErrErrorConditionIsMet
 		}
 
 		// 根据响应时间调整batchSize
