@@ -19,6 +19,7 @@ import (
 const (
 	txnTabName loopjob.CtxKey = "txnTab"
 	ntabName   loopjob.CtxKey = "nTab"
+	dbName     loopjob.CtxKey = "db"
 )
 
 // 专门为task
@@ -123,26 +124,18 @@ func (t *TxnTaskDAO) UpdateStatus(_ context.Context, _ int64, _ string, _ domain
 }
 
 func (t *TxnTaskDAO) getDBTabFromCtx(ctx context.Context) (db, txnTab, ntab string, err error) {
-	dbName, ok := loopjob.DBFromCtx(ctx)
+	db, ok := ctx.Value(dbName).(string)
 	if !ok {
 		return "", "", "", errors.New("db在ctx中没找到")
 	}
-	txnVal := ctx.Value(txnTabName)
-	if txnVal == nil {
-		return "", "", "", errors.New("txnTab表在ctx中没找到")
-	}
-	txnTab, ok = txnVal.(string)
+	txnTab, ok = ctx.Value(txnTabName).(string)
 	if !ok {
 		return "", "", "", errors.New("txnTab不是字符串")
 	}
 
-	nVal := ctx.Value(ntabName)
-	if nVal == nil {
-		return "", "", "", errors.New("nTab表在ctx中没找到")
-	}
-	ntab, ok = nVal.(string)
+	ntab, ok = ctx.Value(ntabName).(string)
 	if !ok {
 		return "", "", "", errors.New("nTab表不是字符串")
 	}
-	return dbName, txnTab, ntab, nil
+	return db, txnTab, ntab, nil
 }

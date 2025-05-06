@@ -118,8 +118,8 @@ func (d *notificationDAO) CreateWithCallbackLog(ctx context.Context, data Notifi
 	return d.create(ctx, d.db, data, true)
 }
 
-// create 创建通知记录，以及可能的对应回调记录
-func (d *notificationDAO) create(ctx context.Context, db *gorm.DB, data Notification, createCallbackLog bool) (Notification, error) {
+// createV1 创建通知记录，以及可能的对应回调记录,使用本地事务实现额度的扣减
+func (d *notificationDAO) createV1(ctx context.Context, db *gorm.DB, data Notification, createCallbackLog bool) (Notification, error) {
 	now := time.Now().UnixMilli()
 	data.Ctime, data.Utime = now, now
 	data.Version = 1
@@ -142,6 +142,33 @@ func (d *notificationDAO) create(ctx context.Context, db *gorm.DB, data Notifica
 			return fmt.Errorf("%w， 原因：%w", errs.ErrNoQuota, res.Error)
 		}
 
+		if createCallbackLog {
+			if err := tx.Create(&CallbackLog{
+				NotificationID: data.ID,
+				Status:         domain.CallbackLogStatusInit.String(),
+				NextRetryTime:  now,
+			}).Error; err != nil {
+				return fmt.Errorf("%w", errs.ErrCreateCallbackLogFailed)
+			}
+		}
+		return nil
+	})
+
+	return data, err
+}
+
+func (d *notificationDAO) create(ctx context.Context, db *gorm.DB, data Notification, createCallbackLog bool) (Notification, error) {
+	now := time.Now().UnixMilli()
+	data.Ctime, data.Utime = now, now
+	data.Version = 1
+
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&data).Error; err != nil {
+			if d.isUniqueConstraintError(err) {
+				return fmt.Errorf("%w", errs.ErrNotificationDuplicate)
+			}
+			return err
+		}
 		if createCallbackLog {
 			if err := tx.Create(&CallbackLog{
 				NotificationID: data.ID,
@@ -394,7 +421,8 @@ func (d *notificationDAO) MarkSuccess(ctx context.Context, notification Notifica
 	})
 }
 
-func (d *notificationDAO) MarkFailed(ctx context.Context, notification Notification) error {
+// 使用本地事务实现额度的扣减
+func (d *notificationDAO) MarkFailedV1(ctx context.Context, notification Notification) error {
 	now := time.Now().UnixMilli()
 	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		err := tx.Model(&Notification{}).
@@ -414,6 +442,17 @@ func (d *notificationDAO) MarkFailed(ctx context.Context, notification Notificat
 				"utime": now,
 			}).Error
 	})
+}
+
+func (d *notificationDAO) MarkFailed(ctx context.Context, notification Notification) error {
+	now := time.Now().UnixMilli()
+	return d.db.WithContext(ctx).Model(&Notification{}).
+		Where("id = ?", notification.ID).
+		Updates(map[string]any{
+			"status":  notification.Status,
+			"utime":   now,
+			"version": gorm.Expr("version + 1"),
+		}).Error
 }
 
 func (d *notificationDAO) MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error) {

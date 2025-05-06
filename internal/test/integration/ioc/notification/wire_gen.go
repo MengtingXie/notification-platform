@@ -8,6 +8,7 @@ package notification
 
 import (
 	"gitee.com/flycash/notification-platform/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/repository/cache/redis"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
 	"gitee.com/flycash/notification-platform/internal/test/ioc"
@@ -16,14 +17,16 @@ import (
 // Injectors from wire.go:
 
 func Init() *Service {
-	db := ioc.InitDBAndTables()
-	notificationDAO := dao.NewNotificationDAO(db)
-	notificationRepository := repository.NewNotificationRepository(notificationDAO)
+	v := ioc.InitDBAndTables()
+	notificationDAO := dao.NewNotificationDAO(v)
+	cmdable := ioc.InitRedis()
+	quotaCache := redis.NewQuotaCache(cmdable)
+	notificationRepository := repository.NewNotificationRepository(notificationDAO, quotaCache)
 	sonyflake := ioc.InitIDGenerator()
 	service := notification.NewNotificationService(notificationRepository, sonyflake)
-	quotaDAO := dao.NewQuotaDAO(db)
+	quotaDAO := dao.NewQuotaDAO(v)
 	quotaRepository := repository.NewQuotaRepository(quotaDAO)
-	callbackLogDAO := dao.NewCallbackLogDAO(db)
+	callbackLogDAO := dao.NewCallbackLogDAO(v)
 	callbackLogRepository := repository.NewCallbackLogRepository(notificationRepository, callbackLogDAO)
 	notificationService := &Service{
 		Svc:             service,

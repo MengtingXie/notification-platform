@@ -41,38 +41,40 @@ import (
 // Injectors from wire.go:
 
 func InitGrpcServer() *ioc.App {
-	db := ioc.InitDB()
-	notificationDAO := dao.NewNotificationDAO(db)
-	notificationRepository := repository.NewNotificationRepository(notificationDAO)
+	v := ioc.InitDB()
+	notificationDAO := dao.NewNotificationDAO(v)
+	cmdable := ioc.InitRedisCmd()
+	quotaCache := redis.NewQuotaCache(cmdable)
+	notificationRepository := repository.NewNotificationRepository(notificationDAO, quotaCache)
 	sonyflake := ioc.InitIDGenerator()
 	service := notification.NewNotificationService(notificationRepository, sonyflake)
-	channelTemplateDAO := dao.NewChannelTemplateDAO(db)
+	channelTemplateDAO := dao.NewChannelTemplateDAO(v)
 	channelTemplateRepository := repository.NewChannelTemplateRepository(channelTemplateDAO)
 	string2 := ioc.InitProviderEncryptKey()
-	providerDAO := dao.NewProviderDAO(db, string2)
+	providerDAO := dao.NewProviderDAO(v, string2)
 	providerRepository := repository.NewProviderRepository(providerDAO)
 	manageService := manage.NewProviderService(providerRepository)
 	auditService := audit.NewService()
-	v := newSMSClients(manageService)
-	channelTemplateService := manage2.NewChannelTemplateService(channelTemplateRepository, manageService, auditService, v)
-	businessConfigDAO := dao.NewBusinessConfigDAO(db)
+	v2 := newSMSClients(manageService)
+	channelTemplateService := manage2.NewChannelTemplateService(channelTemplateRepository, manageService, auditService, v2)
+	businessConfigDAO := dao.NewBusinessConfigDAO(v)
 	client := ioc.InitRedisClient()
 	cache := ioc.InitGoCache()
 	localCache := local.NewLocalCache(client, cache)
 	redisCache := redis.NewCache(client)
 	businessConfigRepository := repository.NewBusinessConfigRepository(businessConfigDAO, localCache, redisCache)
 	businessConfigService := config.NewBusinessConfigService(businessConfigRepository)
-	callbackLogDAO := dao.NewCallbackLogDAO(db)
+	callbackLogDAO := dao.NewCallbackLogDAO(v)
 	callbackLogRepository := repository.NewCallbackLogRepository(notificationRepository, callbackLogDAO)
 	callbackService := callback.NewService(businessConfigService, callbackLogRepository)
-	channel := newChannel(v, channelTemplateService)
+	channel := newChannel(v2, channelTemplateService)
 	taskPool := newTaskPool()
 	notificationSender := newSender(notificationRepository, businessConfigService, callbackService, channel, taskPool)
 	immediateSendStrategy := sendstrategy.NewImmediateStrategy(notificationRepository, notificationSender)
 	defaultSendStrategy := sendstrategy.NewDefaultStrategy(notificationRepository, businessConfigService)
 	sendStrategy := sendstrategy.NewDispatcher(immediateSendStrategy, defaultSendStrategy)
 	sendService := notification.NewSendService(channelTemplateService, service, sonyflake, sendStrategy)
-	txNotificationDAO := dao.NewTxNotificationDAO(db)
+	txNotificationDAO := dao.NewTxNotificationDAO(v)
 	txNotificationRepository := repository.NewTxNotificationRepository(txNotificationDAO)
 	dlockClient := ioc.InitDistributedLock(client)
 	txNotificationService := notification.NewTxNotificationService(txNotificationRepository, businessConfigService, notificationRepository, dlockClient, notificationSender)
@@ -83,16 +85,16 @@ func InitGrpcServer() *ioc.App {
 	notificationScheduler := scheduler.NewScheduler(service, notificationSender, dlockClient)
 	sendingTimeoutTask := notification.NewSendingTimeoutTask(dlockClient, notificationRepository)
 	txCheckTask := notification.NewTxCheckTask(txNotificationRepository, businessConfigService, dlockClient)
-	v2 := ioc.InitTasks(asyncRequestResultCallbackTask, notificationScheduler, sendingTimeoutTask, txCheckTask)
-	quotaDAO := dao.NewQuotaDAO(db)
+	v3 := ioc.InitTasks(asyncRequestResultCallbackTask, notificationScheduler, sendingTimeoutTask, txCheckTask)
+	quotaDAO := dao.NewQuotaDAO(v)
 	quotaRepository := repository.NewQuotaRepository(quotaDAO)
 	quotaService := quota.NewService(quotaRepository)
 	monthlyResetCron := quota.NewQuotaMonthlyResetCron(businessConfigRepository, quotaService)
-	v3 := ioc.Crons(monthlyResetCron, businessConfigRepository)
+	v4 := ioc.Crons(monthlyResetCron, businessConfigRepository)
 	app := &ioc.App{
 		GrpcServer: egrpcComponent,
-		Tasks:      v2,
-		Crons:      v3,
+		Tasks:      v3,
+		Crons:      v4,
 	}
 	return app
 }
@@ -100,9 +102,9 @@ func InitGrpcServer() *ioc.App {
 // wire.go:
 
 var (
-	BaseSet              = wire.NewSet(ioc.InitDB, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitIDGenerator, ioc.InitRedisClient, ioc.InitGoCache, local.NewLocalCache, redis.NewCache)
+	BaseSet              = wire.NewSet(ioc.InitDB, ioc.InitDistributedLock, ioc.InitEtcdClient, ioc.InitIDGenerator, ioc.InitRedisClient, ioc.InitGoCache, ioc.InitRedisCmd, local.NewLocalCache, redis.NewCache)
 	configSvcSet         = wire.NewSet(config.NewBusinessConfigService, repository.NewBusinessConfigRepository, dao.NewBusinessConfigDAO)
-	notificationSvcSet   = wire.NewSet(notification.NewNotificationService, repository.NewNotificationRepository, dao.NewNotificationDAO, notification.NewSendingTimeoutTask)
+	notificationSvcSet   = wire.NewSet(notification.NewNotificationService, repository.NewNotificationRepository, dao.NewNotificationDAO, redis.NewQuotaCache, notification.NewSendingTimeoutTask)
 	txNotificationSvcSet = wire.NewSet(notification.NewTxNotificationService, repository.NewTxNotificationRepository, dao.NewTxNotificationDAO, notification.NewTxCheckTask)
 	senderSvcSet         = wire.NewSet(
 		newSMSClients,

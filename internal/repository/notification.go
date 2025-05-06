@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/repository/cache"
+	"github.com/gotomicro/ego/core/elog"
+
 	"github.com/ecodeclub/ekit/slice"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
@@ -46,22 +49,43 @@ type NotificationRepository interface {
 	MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error)
 }
 
+const (
+	defaultQuotaNumber int32 = 1
+)
+
 // notificationRepository 通知仓储实现
 type notificationRepository struct {
-	dao dao.NotificationDAO
+	dao        dao.NotificationDAO
+	quotaCache cache.QuotaCache
+	logger     *elog.Component
 }
 
 // NewNotificationRepository 创建通知仓储实例
-func NewNotificationRepository(d dao.NotificationDAO) NotificationRepository {
+func NewNotificationRepository(d dao.NotificationDAO, quotaCache cache.QuotaCache) NotificationRepository {
 	return &notificationRepository{
-		dao: d,
+		dao:        d,
+		quotaCache: quotaCache,
+		logger:     elog.DefaultLogger,
 	}
 }
 
 // Create 创建单条通知记录，但不创建对应的回调记录
 func (r *notificationRepository) Create(ctx context.Context, notification domain.Notification) (domain.Notification, error) {
+	// 扣减额度
+	err := r.quotaCache.Decr(ctx, notification.BizID, notification.Channel, defaultQuotaNumber)
+	if err != nil {
+		return domain.Notification{}, err
+	}
 	ds, err := r.dao.Create(ctx, r.toEntity(notification))
 	if err != nil {
+		// 创建没成功把额度还回去
+		qerr := r.quotaCache.Incr(ctx, notification.BizID, notification.Channel, defaultQuotaNumber)
+		if qerr != nil {
+			r.logger.Error("额度归还失败", elog.FieldErr(err),
+				elog.Int64("biz_id", notification.BizID),
+				elog.String("channel", notification.Channel.String()),
+			)
+		}
 		return domain.Notification{}, err
 	}
 	return r.toDomain(ds), nil
@@ -115,8 +139,20 @@ func (r *notificationRepository) toDomain(n dao.Notification) domain.Notificatio
 
 // CreateWithCallbackLog 创建单条通知记录，同时创建对应的回调记录
 func (r *notificationRepository) CreateWithCallbackLog(ctx context.Context, notification domain.Notification) (domain.Notification, error) {
+	// 扣减额度
+	err := r.quotaCache.Decr(ctx, notification.BizID, notification.Channel, defaultQuotaNumber)
+	if err != nil {
+		return domain.Notification{}, err
+	}
 	ds, err := r.dao.CreateWithCallbackLog(ctx, r.toEntity(notification))
 	if err != nil {
+		qerr := r.quotaCache.Incr(ctx, notification.BizID, notification.Channel, defaultQuotaNumber)
+		if qerr != nil {
+			r.logger.Error("额度归还失败", elog.FieldErr(err),
+				elog.Int64("biz_id", notification.BizID),
+				elog.String("channel", notification.Channel.String()),
+			)
+		}
 		return domain.Notification{}, err
 	}
 	return r.toDomain(ds), nil
@@ -138,15 +174,27 @@ func (r *notificationRepository) batchCreate(ctx context.Context, notifications 
 
 	var createdNotifications []dao.Notification
 	var err error
-
+	// 扣减库存
+	err = r.mutiDecr(ctx, notifications)
+	if err != nil {
+		return nil, err
+	}
 	if createCallbackLog {
 		createdNotifications, err = r.dao.BatchCreateWithCallbackLog(ctx, daoNotifications)
 		if err != nil {
+			eerr := r.mutiIncr(ctx, notifications)
+			if eerr != nil {
+				elog.Error("发送失败，归还额度失败", elog.FieldErr(eerr))
+			}
 			return nil, err
 		}
 	} else {
 		createdNotifications, err = r.dao.BatchCreate(ctx, daoNotifications)
 		if err != nil {
+			eerr := r.mutiIncr(ctx, notifications)
+			if eerr != nil {
+				elog.Error("发送失败，归还额度失败", elog.FieldErr(eerr))
+			}
 			return nil, err
 		}
 	}
@@ -154,6 +202,36 @@ func (r *notificationRepository) batchCreate(ctx context.Context, notifications 
 	return slice.Map(createdNotifications, func(_ int, src dao.Notification) domain.Notification {
 		return r.toDomain(src)
 	}), nil
+}
+
+func (r *notificationRepository) mutiDecr(ctx context.Context, notifications []domain.Notification) error {
+	return r.quotaCache.MutiDecr(ctx, r.getItems(notifications))
+}
+
+func (r *notificationRepository) mutiIncr(ctx context.Context, notifications []domain.Notification) error {
+	return r.quotaCache.MutiIncr(ctx, r.getItems(notifications))
+}
+
+func (r *notificationRepository) getItems(notifications []domain.Notification) []cache.IncrItem {
+	notiMap := make(map[string]cache.IncrItem)
+	for idx := range notifications {
+		d := notifications[idx]
+		key := fmt.Sprintf("%d-%s", d.BizID, d.Channel.String())
+		item, ok := notiMap[key]
+		if !ok {
+			item = cache.IncrItem{
+				BizID:   d.BizID,
+				Channel: d.Channel,
+			}
+		}
+		item.Val++
+		notiMap[key] = item
+	}
+	items := make([]cache.IncrItem, 0, len(notiMap))
+	for key := range notiMap {
+		items = append(items, notiMap[key])
+	}
+	return items
 }
 
 // BatchCreateWithCallbackLog 批量创建通知记录，同时创建对应的回调记录
@@ -171,6 +249,7 @@ func (r *notificationRepository) GetByID(ctx context.Context, id uint64) (domain
 }
 
 func (r *notificationRepository) BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]domain.Notification, error) {
+	//
 	notificationMap, err := r.dao.BatchGetByIDs(ctx, ids)
 	if err != nil {
 		return nil, err
@@ -224,7 +303,17 @@ func (r *notificationRepository) BatchUpdateStatusSucceededOrFailed(ctx context.
 		failedItems[i] = r.toEntity(failedNotifications[i])
 	}
 
-	return r.dao.BatchUpdateStatusSucceededOrFailed(ctx, successItems, failedItems)
+	err := r.dao.BatchUpdateStatusSucceededOrFailed(ctx, successItems, failedItems)
+	if err != nil {
+		return err
+	}
+
+	items := r.getItems(failedNotifications)
+	eerr := r.quotaCache.MutiIncr(ctx, items)
+	if eerr != nil {
+		elog.Error("发送失败，归还额度失败", elog.FieldErr(eerr))
+	}
+	return nil
 }
 
 func (r *notificationRepository) FindReadyNotifications(ctx context.Context, offset, limit int) ([]domain.Notification, error) {

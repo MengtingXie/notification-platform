@@ -4,6 +4,7 @@ package tx_notification
 
 import (
 	"gitee.com/flycash/notification-platform/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/repository/cache/redis"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
@@ -22,6 +23,7 @@ func InitTxNotificationService(configSvc config.BusinessConfigService, sender se
 		testioc.BaseSet,
 		dao.NewTxNotificationDAO,
 		dao.NewNotificationDAO,
+		redis.NewQuotaCache,
 		repository.NewNotificationRepository,
 		repository.NewTxNotificationRepository,
 		notification.NewTxNotificationService,

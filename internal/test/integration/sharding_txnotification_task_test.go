@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
+
 	"github.com/ego-component/egorm"
 
 	"github.com/ecodeclub/ekit/syncx"
@@ -123,7 +125,7 @@ func (s *ShardingTxNotificationTask) TestCheckBackTaskV2() {
 		return res, nil
 	}).AnyTimes()
 
-	task := notification.NewTxCheckTaskV2(s.txnRepo, configSvc, s.lock, s.txnShardingStrategy, s.notificationStr)
+	task := notification.NewTxCheckTaskV2(s.txnRepo, configSvc, s.lock, s.txnShardingStrategy, s.notificationStr, loopjob.NewResourceSemaphore(20))
 
 	// Setup test data across shards
 	now := time.Now().UnixMilli()

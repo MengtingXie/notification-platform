@@ -42,6 +42,7 @@ var (
 		prodioc.InitIDGenerator,
 		prodioc.InitRedisClient,
 		prodioc.InitGoCache,
+		prodioc.InitRedisCmd,
 
 		local.NewLocalCache,
 		redis.NewCache,
@@ -51,6 +52,7 @@ var (
 		repository.NewBusinessConfigRepository,
 		dao.NewBusinessConfigDAO)
 	notificationSvcSet = wire.NewSet(
+		redis.NewQuotaCache,
 		notificationsvc.NewNotificationService,
 		repository.NewNotificationRepository,
 		dao.NewNotificationDAO,

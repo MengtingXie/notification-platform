@@ -2,6 +2,7 @@ package sharding
 
 import (
 	"fmt"
+	"strings"
 
 	"gitee.com/flycash/notification-platform/internal/pkg/hash"
 	idgen "gitee.com/flycash/notification-platform/internal/pkg/id_generator"
@@ -89,4 +90,11 @@ func (s ShardingStrategy) TableSuffix() []string {
 		ans = append(ans, fmt.Sprintf("%d", i))
 	}
 	return ans
+}
+
+// ExtractSuffixAndFormatFromTable 从表名中提取后缀，按照下划线分隔并返回最后一个元素
+func (s ShardingStrategy) ExtractSuffixAndFormatFromTable(tableName string) string {
+	parts := strings.Split(tableName, "_")
+	suffix := parts[len(parts)-1]
+	return fmt.Sprintf("%s_%s", s.tablePrefix, suffix)
 }

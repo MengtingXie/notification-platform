@@ -24,21 +24,23 @@ import (
 const (
 	txnTabName loopjob.CtxKey = "txnTab"
 	ntabName   loopjob.CtxKey = "nTab"
+	dbName     loopjob.CtxKey = "db"
 )
 
 type TxCheckTaskV2 struct {
-	repo   repository.TxNotificationRepository
-	txnStr sharding.ShardingStrategy
-
+	repo      repository.TxNotificationRepository
+	txnStr    sharding.ShardingStrategy
 	nStr      sharding.ShardingStrategy
 	configSvc config.BusinessConfigService
 	lock      dlock.Client
 	batchSize int
 	clients   *grpc.Clients[clientv1.TransactionCheckServiceClient]
+	sem       loopjob.ResourceSemaphore
 }
 
 func NewTxCheckTaskV2(repo repository.TxNotificationRepository, configSvc config.BusinessConfigService,
 	lock dlock.Client, txnStr, nStr sharding.ShardingStrategy,
+	sem loopjob.ResourceSemaphore,
 ) *TxCheckTaskV2 {
 	return &TxCheckTaskV2{
 		repo:      repo,
@@ -50,25 +52,21 @@ func NewTxCheckTaskV2(repo repository.TxNotificationRepository, configSvc config
 		txnStr:    txnStr,
 		nStr:      nStr,
 		batchSize: defaultBatchSize,
+		sem:       sem,
 	}
 }
 
 func (task *TxCheckTaskV2) Start(ctx context.Context) {
 	const key = "notification_check_task_v2"
-	dbs := task.txnStr.DBs()
-	for idx := range dbs {
-		// 每个db开一个job
-		db := dbs[idx]
-		go loopjob.NewShardingLoopJob(task.lock, key, task.oneLoop, db, task.txnStr.TableSuffix()).Run(ctx)
-	}
+	go loopjob.NewShardingLoopJob(task.lock, key, task.oneLoop, task.nStr, task.sem).Run(ctx)
 }
 
 // 为了性能，使用了批量操作，针对的是数据库的批量操作
-func (task *TxCheckTaskV2) oneLoop(ctx context.Context) error {
+func (task *TxCheckTaskV2) oneLoop(ctx context.Context, dst sharding.Dst) error {
 	loopCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 	// 添加表名
-	loopCtx = task.ctxWithTabs(loopCtx)
+	loopCtx = task.ctxWithTabs(loopCtx, dst)
 	txNotifications, err := task.repo.FindCheckBack(loopCtx, 0, task.batchSize)
 	if err != nil {
 		return err
@@ -137,12 +135,11 @@ func (task *TxCheckTaskV2) oneLoop(ctx context.Context) error {
 	return err
 }
 
-func (task *TxCheckTaskV2) ctxWithTabs(ctx context.Context) context.Context {
-	suffix, _ := loopjob.TabSuffixFromCtx(ctx)
-	txnTable := fmt.Sprintf("%s_%s", task.txnStr.TablePrefix(), suffix)
-	nTable := fmt.Sprintf("%s_%s", task.nStr.TablePrefix(), suffix)
+func (task *TxCheckTaskV2) ctxWithTabs(ctx context.Context, dst sharding.Dst) context.Context {
+	txnTable := task.txnStr.ExtractSuffixAndFormatFromTable(dst.Table)
 	ctx = context.WithValue(ctx, txnTabName, txnTable)
-	ctx = context.WithValue(ctx, ntabName, nTable)
+	ctx = context.WithValue(ctx, ntabName, dst.Table)
+	ctx = context.WithValue(ctx, dbName, dst.DB)
 	return ctx
 }
 

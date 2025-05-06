@@ -4,6 +4,7 @@ package notification
 
 import (
 	"gitee.com/flycash/notification-platform/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/repository/cache/redis"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
 	testioc "gitee.com/flycash/notification-platform/internal/test/ioc"
@@ -20,6 +21,7 @@ type Service struct {
 func Init() *Service {
 	wire.Build(
 		testioc.BaseSet,
+		redis.NewQuotaCache,
 		repository.NewNotificationRepository,
 		notification.NewNotificationService,
 		dao.NewNotificationDAO,

@@ -8,6 +8,7 @@ package tx_notification
 
 import (
 	"gitee.com/flycash/notification-platform/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/repository/cache/redis"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/notification"
@@ -18,11 +19,13 @@ import (
 // Injectors from wire.go:
 
 func InitTxNotificationService(configSvc config.BusinessConfigService, sender2 sender.NotificationSender) *App {
-	db := ioc.InitDBAndTables()
-	txNotificationDAO := dao.NewTxNotificationDAO(db)
+	v := ioc.InitDBAndTables()
+	txNotificationDAO := dao.NewTxNotificationDAO(v)
 	txNotificationRepository := repository.NewTxNotificationRepository(txNotificationDAO)
-	notificationDAO := dao.NewNotificationDAO(db)
-	notificationRepository := repository.NewNotificationRepository(notificationDAO)
+	notificationDAO := dao.NewNotificationDAO(v)
+	cmdable := ioc.InitRedis()
+	quotaCache := redis.NewQuotaCache(cmdable)
+	notificationRepository := repository.NewNotificationRepository(notificationDAO, quotaCache)
 	client := ioc.InitRedisClient()
 	dlockClient := ioc.InitDistributedLock(client)
 	txNotificationService := notification.NewTxNotificationService(txNotificationRepository, configSvc, notificationRepository, dlockClient, sender2)

@@ -105,7 +105,7 @@ func TestProviderLoadBalancingAndHealthRecovery(t *testing.T) {
 	}
 
 	// 第1阶段：发送足够多的请求，使provider2达到失败阈值并被标记为不健康
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 2000; i++ {
 		_, _ = lb.Send(t.Context(), notification)
 	}
 

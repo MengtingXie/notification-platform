@@ -59,14 +59,15 @@ func (s *mprovider) Send(ctx context.Context, notification domain.Notification) 
 func newMprovider(pro provider.Provider, bufferLen int) mprovider {
 	health := &atomic.Bool{}
 	health.Store(initialHealth)
+	bitCnt := uint64(defaultNumberLen) * uint64(bufferLen)
 	return mprovider{
 		Provider:      pro,
 		healthy:       health,
 		bufferLen:     bufferLen,
 		ringBuffer:    make([]uint64, bufferLen),
-		bitCnt:        uint64(defaultNumberLen) * uint64(bufferLen),
+		bitCnt:        bitCnt,
 		mu:            &sync.RWMutex{},
-		failThreshold: int(float64(bufferLen) * defaultFailPercent),
+		failThreshold: int(float64(bitCnt) * defaultFailPercent),
 	}
 }
 

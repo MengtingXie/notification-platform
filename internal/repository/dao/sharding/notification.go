@@ -466,7 +466,7 @@ func (s *NotificationShardingDAO) tryBatchInsert(ctx context.Context, datas []*d
 				if !ok {
 					return fmt.Errorf("库名%s没找到", db)
 				}
-				sqls, ids := s.getSqlsAndIds(tables, createCallbackLog, now)
+				sqls, ids := s.getSqlsAndIds(gormDB, tables, createCallbackLog, now)
 				if len(sqls) > 0 {
 					combinedSQL := strings.Join(sqls, "; ")
 					err := gormDB.WithContext(ctx).Exec(combinedSQL).Error
@@ -490,14 +490,14 @@ func (s *NotificationShardingDAO) tryBatchInsert(ctx context.Context, datas []*d
 	}), err
 }
 
-func (s *NotificationShardingDAO) getSqlsAndIds(tables map[string][]*dao.Notification, createCallbackLog bool, now int64) (sqls []string, ids []uint64) {
+func (s *NotificationShardingDAO) getSqlsAndIds(db *egorm.Component, tables map[string][]*dao.Notification, createCallbackLog bool, now int64) (sqls []string, ids []uint64) {
 	sqls = make([]string, 0)
 	ids = make([]uint64, 0)
 	for tab, data := range tables {
 		for _, v := range data {
 			ids = append(ids, v.ID)
 		}
-		sqls = append(sqls, s.genNotificationSQL(tab, data, createCallbackLog, now)...)
+		sqls = append(sqls, s.genNotificationSQL(db, tab, data, createCallbackLog, now)...)
 	}
 	return sqls, ids
 }
@@ -582,70 +582,35 @@ func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
 }
 
-// genSql generates SQL INSERT statements for a slice of notifications
-// It returns a slice of SQL strings ready for execution
-func (s *NotificationShardingDAO) genNotificationSQL(table string, notis []*dao.Notification, createCallbackLog bool, now int64) []string {
+func (s *NotificationShardingDAO) genNotificationSQL(db *egorm.Component, table string, notis []*dao.Notification, createCallbackLog bool, now int64) []string {
+	sessionDb := db.Session(&gorm.Session{DryRun: true})
 	if len(notis) == 0 {
 		return nil
 	}
-
-	// Column definitions
-	columns := []string{
-		"id", "biz_id", "key", "receivers", "channel",
-		"template_id", "template_version_id", "template_params",
-		"status", "scheduled_stime", "scheduled_etime",
-		"version", "ctime", "utime",
-	}
-
-	logsColumns := []string{
-		"notification_id", "next_retry_time",
-		"ctime", "utime",
-	}
-
-	// Join columns into a single string
-	columnStr := "`" + strings.Join(columns, "`, `") + "`"
-	logColumnStr := "`" + strings.Join(logsColumns, "`, `") + "`"
-
-	sqlStatements := make([]string, 0, len(notis))
-	for _, noti := range notis {
+	sqls := make([]string, 0, len(notis))
+	for idx := range notis {
+		noti := notis[idx]
 		id := s.idGenerator.GenerateID(noti.BizID, noti.Key)
 		noti.ID = uint64(id)
-		values := fmt.Sprintf(
-			"(%d, %d, '%s', '%s', '%s', %d, %d, '%s', '%s', %d, %d, %d, %d, %d)",
-			id,
-			noti.BizID,
-			escapeString(noti.Key),
-			escapeString(noti.Receivers),
-			noti.Channel,
-			noti.TemplateID,
-			noti.TemplateVersionID,
-			escapeString(noti.TemplateParams),
-			noti.Status,
-			noti.ScheduledSTime,
-			noti.ScheduledETime,
-			noti.Version,
-			noti.Ctime,
-			noti.Utime,
-		)
-
-		sql := fmt.Sprintf("INSERT INTO `%s` (%s) VALUES %s", table, columnStr, values)
-		sqlStatements = append(sqlStatements, sql)
+		notificationSql := s.convertSql(sessionDb, table, noti)
+		sqls = append(sqls, notificationSql)
 		if createCallbackLog {
-			dst := s.callbackLogShardingSvc.ShardWithID(id)
-			vals := fmt.Sprintf(
-				"(%d,  %d, %d, %d)",
-				id,
-				now,
-				now,
-				now,
-			)
-			// Construct the full SQL statement
-			sql = fmt.Sprintf("INSERT INTO `%s` (%s) VALUES %s", dst.Table, logColumnStr, vals)
-			sqlStatements = append(sqlStatements, sql)
+			callbackTab := s.callbackLogShardingSvc.ShardWithID(id)
+			callbacklog := dao.CallbackLog{
+				NotificationID: noti.ID,
+				NextRetryTime:  now,
+				Ctime:          now,
+				Utime:          now,
+			}
+			sqls = append(sqls, s.convertSql(sessionDb, callbackTab.Table, &callbacklog))
 		}
 	}
+	return sqls
+}
 
-	return sqlStatements
+func (s *NotificationShardingDAO) convertSql(sessionDb *egorm.Component, tab string, noti any) string {
+	stmt := sessionDb.Table(tab).Create(noti).Statement
+	return sessionDb.Dialector.Explain(stmt.SQL.String(), stmt.Vars...)
 }
 
 func checkNotificationIds(ids []uint64, err error) bool {

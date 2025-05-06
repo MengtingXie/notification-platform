@@ -45,7 +45,7 @@ var (
 		ioc.InitIDGenerator,
 		ioc.InitRedisClient,
 		ioc.InitGoCache,
-
+		ioc.InitRedisCmd,
 		local.NewLocalCache,
 		redis.NewCache,
 	)
@@ -57,6 +57,7 @@ var (
 		notificationsvc.NewNotificationService,
 		repository.NewNotificationRepository,
 		dao.NewNotificationDAO,
+		redis.NewQuotaCache,
 		notificationsvc.NewSendingTimeoutTask,
 	)
 	txNotificationSvcSet = wire.NewSet(

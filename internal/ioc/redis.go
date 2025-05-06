@@ -23,3 +23,20 @@ func InitRedisClient() *redis.Client {
 	cmd = metrics.WithMetrics(cmd)
 	return cmd
 }
+
+func InitRedisCmd() redis.Cmdable {
+	type Config struct {
+		Addr string
+	}
+	var cfg Config
+	err := econf.UnmarshalKey("redis", &cfg)
+	if err != nil {
+		panic(err)
+	}
+	cmd := redis.NewClient(&redis.Options{
+		Addr: cfg.Addr,
+	})
+	cmd = tracing.WithTracing(cmd)
+	cmd = metrics.WithMetrics(cmd)
+	return cmd
+}

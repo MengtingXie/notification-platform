@@ -204,3 +204,60 @@ func TestBloomFilterImplementation(t *testing.T) {
 	// 运行所有测试
 	bloomTest.RunTests(t)
 }
+
+// TestRedisMixImplementation 测试混合策略实现
+func TestRedisMixImplementation(t *testing.T) {
+	t.Parallel()
+	capacity := uint64(10000)
+	errorRate := 0.01
+	client := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+	client.Do(t.Context(), "BF.RESERVE", "mix_filter", errorRate, capacity)
+	ctx := t.Context()
+	require.NoError(t, client.Ping(ctx).Err())
+	require.NoError(t, client.FlushDB(ctx).Err())
+
+	mixTest := IdempotencyServiceTest{
+		Name: "RedisMix",
+		NewService: func() (IdempotencyService, func(), error) {
+			client.FlushDB(ctx)
+			return NewRedisMix(client), func() {}, nil
+		},
+	}
+
+	t.Run("全不存在场景", func(t *testing.T) {
+		svc, cleanup, _ := mixTest.NewService()
+		t.Cleanup(cleanup)
+
+		res, err := svc.MExists(ctx, "key1", "key2")
+		require.NoError(t, err)
+		assert.Equal(t, []bool{false, false}, res)
+	})
+
+	t.Run("混合存在场景", func(t *testing.T) {
+		svc, cleanup, _ := mixTest.NewService()
+		t.Cleanup(cleanup)
+
+		// 预置部分key在bloom
+		client.BFAdd(ctx, "mix_filter", "vkey2")
+		client.BFAdd(ctx, "mix_filter", "vkey4")
+
+		client.SetNX(ctx, "mixIdempotency:vkey2", "xxxx", 100*time.Second)
+
+		res, err := svc.MExists(ctx, "vkey1", "vkey2", "vkey3", "vkey4")
+		require.NoError(t, err)
+		assert.Equal(t, []bool{false, true, false, false}, res)
+	})
+
+	t.Run("顺序一致性验证", func(t *testing.T) {
+		svc, cleanup, _ := mixTest.NewService()
+		t.Cleanup(cleanup)
+
+		keys := []string{"z", "a", "m"}
+		svc.MExists(ctx, keys...) // 首次调用生成记录
+
+		res, err := svc.MExists(ctx, keys...)
+		require.NoError(t, err)
+		assert.Equal(t, []bool{true, true, true}, res)
+	})
+	client.Del(t.Context(), "mix_filter", "mixIdempotency:vkey1", "mixIdempotency:vkey2", "mixIdempotency:vkey3", "mixIdempotency:vkey4", "mixIdempotency:z", "mixIdempotency:a", "mixIdempotency:m")
+}

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
-	"gitee.com/flycash/notification-platform/internal/pkg/loopjob"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"github.com/ecodeclub/ekit/syncx"
 	"github.com/ego-component/egorm"
@@ -16,6 +15,12 @@ import (
 
 type NotificationTask struct {
 	dbs *syncx.Map[string, *egorm.Component]
+}
+
+func NewNotificationTask(dbs *syncx.Map[string, *egorm.Component]) *NotificationTask {
+	return &NotificationTask{
+		dbs: dbs,
+	}
 }
 
 func (n *NotificationTask) Create(_ context.Context, _ dao.Notification) (dao.Notification, error) {
@@ -138,6 +143,7 @@ func (n *NotificationTask) MarkTimeoutSendingAsFailed(ctx context.Context, batch
 
 		// 根据查询到的 ID 集合更新记录
 		res := tx.Model(&dao.Notification{}).
+			Table(tab).
 			Where("id IN ?", idsToUpdate).
 			Updates(map[string]any{
 				"status":  domain.SendStatusFailed.String(),
@@ -153,18 +159,13 @@ func (n *NotificationTask) MarkTimeoutSendingAsFailed(ctx context.Context, batch
 }
 
 func (n *NotificationTask) getDBTabFromCtx(ctx context.Context) (db, ntab string, err error) {
-	dbName, ok := loopjob.DBFromCtx(ctx)
+	db, ok := ctx.Value(dbName).(string)
 	if !ok {
 		return "", "", errors.New("db在ctx中没找到")
 	}
-
-	nVal := ctx.Value(ntabName)
-	if nVal == nil {
-		return "", "", errors.New("nTab表在ctx中没找到")
-	}
-	ntab, ok = nVal.(string)
+	ntab, ok = ctx.Value(ntabName).(string)
 	if !ok {
 		return "", "", errors.New("nTab表不是字符串")
 	}
-	return dbName, ntab, nil
+	return db, ntab, nil
 }

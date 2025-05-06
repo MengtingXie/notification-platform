@@ -3,7 +3,6 @@ package scheduler
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,6 +18,7 @@ import (
 
 const (
 	ntabName loopjob.CtxKey = "nTab"
+	dbName   loopjob.CtxKey = "db"
 )
 
 // ShardingScheduler 通知调度服务实现
@@ -37,6 +37,7 @@ type ShardingScheduler struct {
 	batchSizeAdjuster batchsize.Adjuster
 
 	errorEvents *bitring.BitRing
+	sem         loopjob.ResourceSemaphore
 }
 
 // NewShardingScheduler 创建通知调度服务
@@ -50,6 +51,7 @@ func NewShardingScheduler(
 	batchSize int,
 	batchSizeAdjuster batchsize.Adjuster,
 	errorEvents *bitring.BitRing,
+	sem loopjob.ResourceSemaphore,
 ) *ShardingScheduler {
 	s := &ShardingScheduler{
 		repo:              repo,
@@ -60,6 +62,7 @@ func NewShardingScheduler(
 		maxLockedTables:   uint64(maxLockedTables),
 		batchSizeAdjuster: batchSizeAdjuster,
 		errorEvents:       errorEvents,
+		sem:               sem,
 	}
 	s.batchSize.Store(uint64(batchSize))
 	return s
@@ -69,35 +72,22 @@ func NewShardingScheduler(
 // 当 ctx 被取消的或者关闭的时候，就会结束循环
 func (s *ShardingScheduler) Start(ctx context.Context) {
 	const key = "notification_platform_async_sharding_scheduler"
-	dbs := s.shardingStrategy.DBs()
-	for i := range dbs {
-		go loopjob.NewShardingLoopJob(s.dclient, key, s.loop, dbs[i], s.shardingStrategy.TableSuffix()).Run(ctx)
-	}
+	go loopjob.NewShardingLoopJob(s.dclient, key, s.loop, s.shardingStrategy, s.sem).Run(ctx)
 }
 
-func (s *ShardingScheduler) loop(ctx context.Context) error {
-	// 检查锁表计数
-	s.mu.Lock()
-	if s.curLockedTables == s.maxLockedTables {
-		s.mu.Unlock()
-		return errors.New("已锁定足够数量的表")
-	}
-	s.curLockedTables++
-	s.mu.Unlock()
+func (task *ShardingScheduler) ctxWithTabs(ctx context.Context, dst sharding.Dst) context.Context {
+	ctx = context.WithValue(ctx, ntabName, dst.Table)
+	ctx = context.WithValue(ctx, dbName, dst.DB)
+	return ctx
+}
 
-	// 退出前更新锁表计数
-	defer func() {
-		s.mu.Lock()
-		s.curLockedTables--
-		s.mu.Unlock()
-	}()
-
+func (s *ShardingScheduler) loop(ctx context.Context, dst sharding.Dst) error {
 	for {
 		// 记录开始执行时间
 		start := time.Now()
 
 		// 批量发送已就绪的通知
-		err := s.batchSendReadyNotifications(ctx)
+		err := s.batchSendReadyNotifications(ctx, dst)
 
 		// 记录响应时间
 		responseTime := time.Since(start)
@@ -124,13 +114,13 @@ func (s *ShardingScheduler) loop(ctx context.Context) error {
 }
 
 // batchSendReadyNotifications 批量发送已就绪的通知
-func (s *ShardingScheduler) batchSendReadyNotifications(ctx context.Context) error {
+func (s *ShardingScheduler) batchSendReadyNotifications(ctx context.Context, dst sharding.Dst) error {
 	const defaultTimeout = 3 * time.Second
 
 	loopCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 
-	loopCtx = s.ctxWithTableName(loopCtx)
+	loopCtx = s.ctxWithTabs(loopCtx, dst)
 	const offset = 0
 	notifications, err := s.repo.FindReadyNotifications(loopCtx, offset, int(s.batchSize.Load()))
 	if err != nil {
@@ -143,13 +133,6 @@ func (s *ShardingScheduler) batchSendReadyNotifications(ctx context.Context) err
 
 	_, err = s.sender.BatchSend(ctx, notifications)
 	return err
-}
-
-func (s *ShardingScheduler) ctxWithTableName(ctx context.Context) context.Context {
-	suffix, _ := loopjob.TabSuffixFromCtx(ctx)
-	nTable := fmt.Sprintf("%s_%s", s.shardingStrategy.TablePrefix(), suffix)
-	ctx = context.WithValue(ctx, ntabName, nTable)
-	return ctx
 }
 
 func (s *ShardingScheduler) UpdateMaxLockedTables(maxLockedTables uint64) {

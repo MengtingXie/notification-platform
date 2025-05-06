@@ -8,6 +8,7 @@ package callback
 
 import (
 	"gitee.com/flycash/notification-platform/internal/repository"
+	"gitee.com/flycash/notification-platform/internal/repository/cache/redis"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
 	"gitee.com/flycash/notification-platform/internal/service/config"
 	"gitee.com/flycash/notification-platform/internal/service/notification/callback"
@@ -17,13 +18,15 @@ import (
 // Injectors from wire.go:
 
 func Init(cnfigSvc config.BusinessConfigService) *Service {
-	db := ioc.InitDBAndTables()
-	notificationDAO := dao.NewNotificationDAO(db)
-	notificationRepository := repository.NewNotificationRepository(notificationDAO)
-	callbackLogDAO := dao.NewCallbackLogDAO(db)
+	v := ioc.InitDBAndTables()
+	notificationDAO := dao.NewNotificationDAO(v)
+	cmdable := ioc.InitRedis()
+	quotaCache := redis.NewQuotaCache(cmdable)
+	notificationRepository := repository.NewNotificationRepository(notificationDAO, quotaCache)
+	callbackLogDAO := dao.NewCallbackLogDAO(v)
 	callbackLogRepository := repository.NewCallbackLogRepository(notificationRepository, callbackLogDAO)
 	service := callback.NewService(cnfigSvc, callbackLogRepository)
-	quotaDAO := dao.NewQuotaDAO(db)
+	quotaDAO := dao.NewQuotaDAO(v)
 	quotaRepository := repository.NewQuotaRepository(quotaDAO)
 	callbackService := &Service{
 		Svc:              service,
