@@ -123,7 +123,7 @@ func (c *EventConsumer) Consume(ctx context.Context) error {
 		var evt Event
 
 		if err := json.Unmarshal(msg.Value, &evt); err != nil {
-			c.logger.Warn("解析消息失败",
+			c.logger.Error("解析消息失败",
 				elog.FieldErr(err),
 				elog.Any("msg", msg))
 			// 解析失败，跳过本条，继续下一轮
