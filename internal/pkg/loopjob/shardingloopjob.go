@@ -110,6 +110,7 @@ func (l *ShardingLoopJob) Run(ctx context.Context) {
 }
 
 func (l *ShardingLoopJob) tableLoop(ctx context.Context, lock dlock.Lock) {
+	defer l.resourceSemaphore.Release(ctx)
 	// 在这里执行业务
 	err := l.bizLoop(ctx, lock)
 	// 要么是续约失败，要么是 ctx 本身已经过期了
