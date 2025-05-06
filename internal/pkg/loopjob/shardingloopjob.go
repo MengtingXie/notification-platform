@@ -81,8 +81,6 @@ func (l *ShardingLoopJob) Run(ctx context.Context) {
 			if err != nil {
 				l.logger.Error("初始化分布式锁失败，重试",
 					elog.Any("err", err))
-				// 暂停一会
-				time.Sleep(l.retryInterval)
 				err = l.resourceSemaphore.Release(ctx)
 				if err != nil {
 					l.logger.Error("释放表的信号量失败", elog.FieldErr(err))
@@ -110,7 +108,9 @@ func (l *ShardingLoopJob) Run(ctx context.Context) {
 }
 
 func (l *ShardingLoopJob) tableLoop(ctx context.Context, lock dlock.Lock) {
-	defer l.resourceSemaphore.Release(ctx)
+	defer func() {
+		_ = l.resourceSemaphore.Release(ctx)
+	}()
 	// 在这里执行业务
 	err := l.bizLoop(ctx, lock)
 	// 要么是续约失败，要么是 ctx 本身已经过期了
