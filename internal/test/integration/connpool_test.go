@@ -44,7 +44,7 @@ type ConnPoolSuite struct {
 
 // SetupSuite 在所有测试之前初始化测试环境
 func (s *ConnPoolSuite) SetupSuite() {
-	dsn := "root:root@tcp(localhost:13316)/notification?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true"
+	dsn := "root:root@tcp(localhost:13316)/notification?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true&interpolateParams=true"
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		s.T().Fatal(err)

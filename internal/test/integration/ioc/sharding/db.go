@@ -36,7 +36,7 @@ func InitDbs() *syncx.Map[string, *egorm.Component] {
 	defer mu.Unlock()
 
 	once.Do(func() {
-		dsn0 := "root:root@tcp(localhost:13316)/notification_0?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true"
+		dsn0 := "root:root@tcp(localhost:13316)/notification_0?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true&interpolateParams=true"
 		ioc.WaitForDBSetup(dsn0)
 		econf.Set("mysql0", map[string]any{
 			"dsn":   dsn0,
@@ -45,7 +45,7 @@ func InitDbs() *syncx.Map[string, *egorm.Component] {
 
 		db0 := egorm.Load("mysql0").Build()
 
-		dsn1 := "root:root@tcp(localhost:13316)/notification_1?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true"
+		dsn1 := "root:root@tcp(localhost:13316)/notification_1?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=True&loc=Local&timeout=1s&readTimeout=3s&writeTimeout=3s&multiStatements=true&interpolateParams=true"
 		ioc.WaitForDBSetup(dsn1)
 		econf.Set("mysql1", map[string]any{
 			"dsn":   dsn1,
