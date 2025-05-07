@@ -2,6 +2,7 @@ package batchsize
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"gitee.com/flycash/notification-platform/internal/pkg/ringbuffer"
@@ -10,6 +11,7 @@ import (
 // RingBufferAdjuster 基于过去执行时间维护的环形缓冲区动态调整批大小
 // 当前执行时间超过历史平均值时减少批大小，低于平均值时增加批大小
 type RingBufferAdjuster struct {
+	mutex          *sync.RWMutex
 	timeBuffer     *ringbuffer.TimeDurationRingBuffer // 历史执行时间的环形缓冲区
 	batchSize      int                                // 当前批大小
 	minBatchSize   int                                // 最小批大小
@@ -49,6 +51,7 @@ func NewRingBufferAdjuster(initialSize, minSize, maxSize, adjustStep int,
 		adjustStep:     adjustStep,
 		cooldownPeriod: cooldownPeriod,
 		lastAdjustTime: time.Time{}, // 零值时间，初始允许立即调整
+		mutex:          &sync.RWMutex{},
 	}
 }
 
@@ -57,6 +60,9 @@ func NewRingBufferAdjuster(initialSize, minSize, maxSize, adjustStep int,
 // 2. 如果当前时间比平均时间长，且不在冷却期，则减少批大小
 // 3. 如果当前时间比平均时间短，且不在冷却期，则增加批大小
 func (a *RingBufferAdjuster) Adjust(_ context.Context, responseTime time.Duration) (int, error) {
+	// 思来想去，我觉得作为一个放在 pkg 里面的通用实现，还是得自己加锁保护线程安全
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
 	// 记录当前响应时间到环形缓冲区
 	a.timeBuffer.Add(responseTime)
 
