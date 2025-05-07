@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ecodeclub/ekit/mapx"
+
 	"github.com/ecodeclub/ekit/slice"
 
 	idgen "gitee.com/flycash/notification-platform/internal/pkg/id_generator"
@@ -455,6 +457,7 @@ func (s *NotificationShardingDAO) batchCreate(ctx context.Context, datas []dao.N
 // tryBatchInsert attempts to insert all notifications in batch mode
 func (s *NotificationShardingDAO) tryBatchInsert(ctx context.Context, datas []*dao.Notification, createCallbackLog bool) ([]dao.Notification, error) {
 	now := time.Now().UnixMilli()
+	// db => (table => []Notification)
 	notiMap := s.getNotificationMap(datas)
 	var eg errgroup.Group
 	for dbName, tablesMap := range notiMap {
@@ -466,6 +469,7 @@ func (s *NotificationShardingDAO) tryBatchInsert(ctx context.Context, datas []*d
 				if !ok {
 					return fmt.Errorf("库名%s没找到", db)
 				}
+
 				sqls, ids := s.getSqlsAndIds(gormDB, tables, createCallbackLog, now)
 				if len(sqls) > 0 {
 					combinedSQL := strings.Join(sqls, "; ")
@@ -490,20 +494,8 @@ func (s *NotificationShardingDAO) tryBatchInsert(ctx context.Context, datas []*d
 	}), err
 }
 
-func (s *NotificationShardingDAO) getSqlsAndIds(db *egorm.Component, tables map[string][]*dao.Notification, createCallbackLog bool, now int64) (sqls []string, ids []uint64) {
-	sqls = make([]string, 0)
-	ids = make([]uint64, 0)
-	for tab, data := range tables {
-		for _, v := range data {
-			ids = append(ids, v.ID)
-		}
-		sqls = append(sqls, s.genNotificationSQL(db, tab, data, createCallbackLog, now)...)
-	}
-	return sqls, ids
-}
-
-func (s *NotificationShardingDAO) getNotificationMap(datas []*dao.Notification) map[string]map[string][]*dao.Notification {
-	notiMap := make(map[string]map[string][]*dao.Notification)
+func (s *NotificationShardingDAO) getNotificationMap(datas []*dao.Notification) map[string]*mapx.MultiMap[string, *dao.Notification] {
+	notiMap := make(map[string]*mapx.MultiMap[string, *dao.Notification])
 
 	for idx := range datas {
 		data := datas[idx]
@@ -511,18 +503,57 @@ func (s *NotificationShardingDAO) getNotificationMap(datas []*dao.Notification) 
 
 		tableMap, dbExists := notiMap[dst.DB]
 		if !dbExists {
-			tableMap = make(map[string][]*dao.Notification)
+			// 凭借经验预估的
+			const defaultCap = 4
+			tableMap = mapx.NewMultiBuiltinMap[string, *dao.Notification](defaultCap)
 			notiMap[dst.DB] = tableMap
 		}
-		notis, tableExists := tableMap[dst.Table]
-		if !tableExists {
-			notis = []*dao.Notification{data}
-		} else {
-			notis = append(notis, data)
-		}
-		tableMap[dst.Table] = notis
+		_ = tableMap.Put(dst.Table, data)
 	}
 	return notiMap
+}
+
+func (s *NotificationShardingDAO) getSqlsAndIds(db *egorm.Component, tables *mapx.MultiMap[string, *dao.Notification], createCallbackLog bool, now int64) (sqls []string, ids []uint64) {
+	sqls = make([]string, 0)
+	ids = make([]uint64, 0)
+	keys := tables.Keys()
+	for _, key := range keys {
+		data, ok := tables.Get(key)
+		if !ok {
+			continue
+		}
+		for _, v := range data {
+			ids = append(ids, v.ID)
+		}
+		sqls = append(sqls, s.genNotificationSQL(db, key, data, createCallbackLog, now)...)
+	}
+	return sqls, ids
+}
+
+func (s *NotificationShardingDAO) genNotificationSQL(db *egorm.Component, table string, notis []*dao.Notification, createCallbackLog bool, now int64) []string {
+	sessionDB := db.Session(&gorm.Session{DryRun: true})
+	if len(notis) == 0 {
+		return nil
+	}
+	sqls := make([]string, 0, len(notis))
+	for idx := range notis {
+		noti := notis[idx]
+		id := s.idGenerator.GenerateID(noti.BizID, noti.Key)
+		noti.ID = uint64(id)
+		notificationSQL := s.convertSQL(sessionDB, table, noti)
+		sqls = append(sqls, notificationSQL)
+		if createCallbackLog {
+			callbackTab := s.callbackLogShardingSvc.ShardWithID(id)
+			callbacklog := dao.CallbackLog{
+				NotificationID: noti.ID,
+				NextRetryTime:  now,
+				Ctime:          now,
+				Utime:          now,
+			}
+			sqls = append(sqls, s.convertSQL(sessionDB, callbackTab.Table, &callbacklog))
+		}
+	}
+	return sqls
 }
 
 func (s *NotificationShardingDAO) batchMark(tx *gorm.DB, ids map[string]*modifyIds) error {
@@ -575,32 +606,6 @@ func (m *modifyIds) listToStr(list []uint64) string {
 		strSlice[i] = fmt.Sprintf("%d", num)
 	}
 	return strings.Join(strSlice, ",")
-}
-
-func (s *NotificationShardingDAO) genNotificationSQL(db *egorm.Component, table string, notis []*dao.Notification, createCallbackLog bool, now int64) []string {
-	sessionDB := db.Session(&gorm.Session{DryRun: true})
-	if len(notis) == 0 {
-		return nil
-	}
-	sqls := make([]string, 0, len(notis))
-	for idx := range notis {
-		noti := notis[idx]
-		id := s.idGenerator.GenerateID(noti.BizID, noti.Key)
-		noti.ID = uint64(id)
-		notificationSQL := s.convertSQL(sessionDB, table, noti)
-		sqls = append(sqls, notificationSQL)
-		if createCallbackLog {
-			callbackTab := s.callbackLogShardingSvc.ShardWithID(id)
-			callbacklog := dao.CallbackLog{
-				NotificationID: noti.ID,
-				NextRetryTime:  now,
-				Ctime:          now,
-				Utime:          now,
-			}
-			sqls = append(sqls, s.convertSQL(sessionDB, callbackTab.Table, &callbacklog))
-		}
-	}
-	return sqls
 }
 
 func (s *NotificationShardingDAO) convertSQL(sessionDB *egorm.Component, tab string, noti any) string {
