@@ -456,13 +456,14 @@ func (s *NotificationShardingDAO) batchCreate(ctx context.Context, datas []dao.N
 
 // tryBatchInsert attempts to insert all notifications in batch mode
 func (s *NotificationShardingDAO) tryBatchInsert(ctx context.Context, datas []*dao.Notification, createCallbackLog bool) ([]dao.Notification, error) {
-	now := time.Now().UnixMilli()
-	// db => (table => []Notification)
+	// db => notifications
 	notiMap := s.getNotificationMap(datas)
 	var eg errgroup.Group
-	for dbName, tablesMap := range notiMap {
+	dbNames := notiMap.Keys()
+	for _, dbName := range dbNames {
 		db := dbName
-		tables := tablesMap
+		// 不可能不存在
+		notis, _ := notiMap.Get(db)
 		eg.Go(func() error {
 			for {
 				gormDB, ok := s.dbs.Load(db)
@@ -470,10 +471,10 @@ func (s *NotificationShardingDAO) tryBatchInsert(ctx context.Context, datas []*d
 					return fmt.Errorf("库名%s没找到", db)
 				}
 
-				sqls, ids := s.getSqlsAndIds(gormDB, tables, createCallbackLog, now)
+				sqls, args, ids := s.genSQLs(gormDB, notis, createCallbackLog)
 				if len(sqls) > 0 {
 					combinedSQL := strings.Join(sqls, "; ")
-					err := gormDB.WithContext(ctx).Exec(combinedSQL).Error
+					err := gormDB.WithContext(ctx).Exec(combinedSQL, args...).Error
 					if err != nil {
 						if errors.Is(err, gorm.ErrDuplicatedKey) && checkNotificationIds(ids, err) {
 							continue
@@ -494,66 +495,45 @@ func (s *NotificationShardingDAO) tryBatchInsert(ctx context.Context, datas []*d
 	}), err
 }
 
-func (s *NotificationShardingDAO) getNotificationMap(datas []*dao.Notification) map[string]*mapx.MultiMap[string, *dao.Notification] {
-	notiMap := make(map[string]*mapx.MultiMap[string, *dao.Notification])
+func (s *NotificationShardingDAO) genSQLs(db *egorm.Component, notis []*dao.Notification, callbackLog bool) ([]string, []any, []uint64) {
+	sessionDB := db.Session(&gorm.Session{DryRun: true})
+	ids := make([]uint64, 0, len(notis))
+	// 可能需要 callback log，所以 * 2
+	const sqlRate = 2
+	sqls := make([]string, 0, len(notis)*sqlRate)
+	// notification 的字段数量 + callback log 的字段数量
+	const paramsRate = 21
+	args := make([]any, 0, len(notis)*paramsRate)
+	// 生成 SQL
+	// notis 里面放的是指针，所以可以直接操作
+	for _, noti := range notis {
+		id := s.idGenerator.GenerateID(noti.BizID, noti.Key)
+		noti.ID = uint64(id)
+		ids = append(ids, noti.ID)
+		dst := s.notificationShardingSvc.Shard(noti.BizID, noti.Key)
+		stmt := sessionDB.Table(dst.Table).Create(noti).Statement
+		sqls = append(sqls, stmt.SQL.String())
+		args = append(args, stmt.Vars...)
+		if callbackLog {
+			dst = s.callbackLogShardingSvc.Shard(noti.BizID, noti.Key)
+			stmt = sessionDB.Table(dst.Table).Create(noti).Statement
+			sqls = append(sqls, stmt.SQL.String())
+			args = append(args, stmt.Vars...)
+		}
+	}
+	return sqls, args, ids
+}
 
+func (s *NotificationShardingDAO) getNotificationMap(datas []*dao.Notification) *mapx.MultiMap[string, *dao.Notification] {
+	// 最多就是 32 个 DB
+	const maxDB = 32
+	notiMap := mapx.NewMultiBuiltinMap[string, *dao.Notification](maxDB)
 	for idx := range datas {
 		data := datas[idx]
 		dst := s.notificationShardingSvc.Shard(data.BizID, data.Key)
-
-		tableMap, dbExists := notiMap[dst.DB]
-		if !dbExists {
-			// 凭借经验预估的
-			const defaultCap = 4
-			tableMap = mapx.NewMultiBuiltinMap[string, *dao.Notification](defaultCap)
-			notiMap[dst.DB] = tableMap
-		}
-		_ = tableMap.Put(dst.Table, data)
+		_ = notiMap.Put(dst.DB, data)
 	}
 	return notiMap
-}
-
-func (s *NotificationShardingDAO) getSqlsAndIds(db *egorm.Component, tables *mapx.MultiMap[string, *dao.Notification], createCallbackLog bool, now int64) (sqls []string, ids []uint64) {
-	sqls = make([]string, 0)
-	ids = make([]uint64, 0)
-	keys := tables.Keys()
-	for _, key := range keys {
-		data, ok := tables.Get(key)
-		if !ok {
-			continue
-		}
-		for _, v := range data {
-			ids = append(ids, v.ID)
-		}
-		sqls = append(sqls, s.genNotificationSQL(db, key, data, createCallbackLog, now)...)
-	}
-	return sqls, ids
-}
-
-func (s *NotificationShardingDAO) genNotificationSQL(db *egorm.Component, table string, notis []*dao.Notification, createCallbackLog bool, now int64) []string {
-	sessionDB := db.Session(&gorm.Session{DryRun: true})
-	if len(notis) == 0 {
-		return nil
-	}
-	sqls := make([]string, 0, len(notis))
-	for idx := range notis {
-		noti := notis[idx]
-		id := s.idGenerator.GenerateID(noti.BizID, noti.Key)
-		noti.ID = uint64(id)
-		notificationSQL := s.convertSQL(sessionDB, table, noti)
-		sqls = append(sqls, notificationSQL)
-		if createCallbackLog {
-			callbackTab := s.callbackLogShardingSvc.ShardWithID(id)
-			callbacklog := dao.CallbackLog{
-				NotificationID: noti.ID,
-				NextRetryTime:  now,
-				Ctime:          now,
-				Utime:          now,
-			}
-			sqls = append(sqls, s.convertSQL(sessionDB, callbackTab.Table, &callbacklog))
-		}
-	}
-	return sqls
 }
 
 func (s *NotificationShardingDAO) batchMark(tx *gorm.DB, ids map[string]*modifyIds) error {
@@ -620,4 +600,9 @@ func checkNotificationIds(ids []uint64, err error) bool {
 		}
 	}
 	return false
+}
+
+type Query struct {
+	SQL  string
+	Args []any
 }
