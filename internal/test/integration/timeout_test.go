@@ -15,7 +15,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 
-	clientpkg "gitee.com/flycash/notification-platform/internal/pkg/client/timeout"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -116,7 +115,7 @@ func (s *TimeoutTestSuite) TestTimeout() {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithUnaryInterceptor(
 			// 注入客户端超时拦截器
-			clientpkg.InjectorInterceptor(),
+			timeout.InjectorInterceptor(),
 		),
 	)
 	defer func() {
