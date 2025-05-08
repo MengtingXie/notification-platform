@@ -215,12 +215,10 @@ func TestRedisMixImplementation(t *testing.T) {
 	client.Do(t.Context(), "BF.RESERVE", "mix_filter", errorRate, capacity)
 	ctx := t.Context()
 	require.NoError(t, client.Ping(ctx).Err())
-	require.NoError(t, client.FlushDB(ctx).Err())
 
 	mixTest := IdempotencyServiceTest{
 		Name: "RedisMix",
 		NewService: func() (IdempotencyService, func(), error) {
-			client.FlushDB(ctx)
 			return NewRedisMix(client), func() {}, nil
 		},
 	}
@@ -254,8 +252,7 @@ func TestRedisMixImplementation(t *testing.T) {
 
 	t.Run("顺序一致性验证", func(t *testing.T) {
 		t.Parallel()
-		svc, cleanup, _ := mixTest.NewService()
-		t.Cleanup(cleanup)
+		svc, _, _ := mixTest.NewService()
 
 		keys := []string{"z", "a", "m"}
 		_, err := svc.MExists(ctx, keys...) // 首次调用生成记录

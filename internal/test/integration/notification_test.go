@@ -200,7 +200,7 @@ func (s *NotificationServiceTestSuite) TestRepositoryCASStatus() {
 	bizID := int64(8)
 	tests := []struct {
 		name   string
-		before func(t *testing.T) (uint64, int) // 返回ID和Version
+		before func(t *testing.T) (uint64, int)
 		after  func(t *testing.T, id uint64)
 
 		requireFunc require.ErrorAssertionFunc

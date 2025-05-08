@@ -493,16 +493,16 @@ func (s *NotificationShardingDAO) tryBatchInsert(ctx context.Context, datas []*d
 	}), err
 }
 
-func (s *NotificationShardingDAO) genSQLs(db *egorm.Component, notis []*dao.Notification, callbackLog bool) ([]string, []any, []uint64) {
+func (s *NotificationShardingDAO) genSQLs(db *egorm.Component, notis []*dao.Notification, callbackLog bool) (sqls []string, args []any, ids []uint64) {
 	now := time.Now().UnixMilli()
 	sessionDB := db.Session(&gorm.Session{DryRun: true})
-	ids := make([]uint64, 0, len(notis))
+	ids = make([]uint64, 0, len(notis))
 	// 可能需要 callback log，所以 * 2
 	const sqlRate = 2
-	sqls := make([]string, 0, len(notis)*sqlRate)
+	sqls = make([]string, 0, len(notis)*sqlRate)
 	// notification 的字段数量 + callback log 的字段数量
 	const paramsRate = 21
-	args := make([]any, 0, len(notis)*paramsRate)
+	args = make([]any, 0, len(notis)*paramsRate)
 	// 生成 SQL
 	// notis 里面放的是指针，所以可以直接操作
 	for _, noti := range notis {
@@ -591,11 +591,6 @@ func (m *modifyIds) listToStr(list []uint64) string {
 		strSlice[i] = fmt.Sprintf("%d", num)
 	}
 	return strings.Join(strSlice, ",")
-}
-
-func (s *NotificationShardingDAO) convertSQL(sessionDB *egorm.Component, tab string, noti any) string {
-	stmt := sessionDB.Table(tab).Create(noti).Statement
-	return sessionDB.Dialector.Explain(stmt.SQL.String(), stmt.Vars...)
 }
 
 func checkNotificationIds(ids []uint64, err error) bool {

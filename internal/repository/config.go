@@ -8,11 +8,11 @@ import (
 	"github.com/ecodeclub/ekit/slice"
 
 	"gitee.com/flycash/notification-platform/internal/domain"
+	"gitee.com/flycash/notification-platform/internal/pkg/sqlx"
 	"gitee.com/flycash/notification-platform/internal/repository/cache"
 	"gitee.com/flycash/notification-platform/internal/repository/cache/local"
 	"gitee.com/flycash/notification-platform/internal/repository/cache/redis"
 	"gitee.com/flycash/notification-platform/internal/repository/dao"
-	"github.com/ecodeclub/ekit/sqlx"
 	"github.com/gotomicro/ego/core/elog"
 )
 
@@ -350,28 +350,28 @@ func (b *businessConfigRepository) toEntity(config domain.BusinessConfig) dao.Bu
 	}
 
 	if config.ChannelConfig != nil {
-		businessConfig.ChannelConfig = sqlx.JsonColumn[domain.ChannelConfig]{
+		businessConfig.ChannelConfig = sqlx.JSONColumn[domain.ChannelConfig]{
 			Val:   *config.ChannelConfig,
 			Valid: true,
 		}
 	}
 
 	if config.TxnConfig != nil {
-		businessConfig.TxnConfig = sqlx.JsonColumn[domain.TxnConfig]{
+		businessConfig.TxnConfig = sqlx.JSONColumn[domain.TxnConfig]{
 			Val:   *config.TxnConfig,
 			Valid: true,
 		}
 	}
 
 	if config.Quota != nil {
-		businessConfig.Quota = sqlx.JsonColumn[domain.QuotaConfig]{
+		businessConfig.Quota = sqlx.JSONColumn[domain.QuotaConfig]{
 			Val:   *config.Quota,
 			Valid: true,
 		}
 	}
 
 	if config.CallbackConfig != nil {
-		businessConfig.CallbackConfig = sqlx.JsonColumn[domain.CallbackConfig]{
+		businessConfig.CallbackConfig = sqlx.JSONColumn[domain.CallbackConfig]{
 			Val:   *config.CallbackConfig,
 			Valid: true,
 		}
