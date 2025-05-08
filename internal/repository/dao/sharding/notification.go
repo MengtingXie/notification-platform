@@ -461,16 +461,14 @@ func (s *NotificationShardingDAO) tryBatchInsert(ctx context.Context, datas []*d
 	var eg errgroup.Group
 	dbNames := notiMap.Keys()
 	for _, dbName := range dbNames {
-		db := dbName
 		// 不可能不存在
-		notis, _ := notiMap.Get(db)
+		notis, _ := notiMap.Get(dbName)
+		gormDB, ok := s.dbs.Load(dbName)
+		if !ok {
+			return nil, fmt.Errorf("库名%s没找到", dbName)
+		}
 		eg.Go(func() error {
 			for {
-				gormDB, ok := s.dbs.Load(db)
-				if !ok {
-					return fmt.Errorf("库名%s没找到", db)
-				}
-
 				sqls, args, ids := s.genSQLs(gormDB, notis, createCallbackLog)
 				if len(sqls) > 0 {
 					combinedSQL := strings.Join(sqls, "; ")
@@ -496,6 +494,7 @@ func (s *NotificationShardingDAO) tryBatchInsert(ctx context.Context, datas []*d
 }
 
 func (s *NotificationShardingDAO) genSQLs(db *egorm.Component, notis []*dao.Notification, callbackLog bool) ([]string, []any, []uint64) {
+	now := time.Now().UnixMilli()
 	sessionDB := db.Session(&gorm.Session{DryRun: true})
 	ids := make([]uint64, 0, len(notis))
 	// 可能需要 callback log，所以 * 2
@@ -516,7 +515,13 @@ func (s *NotificationShardingDAO) genSQLs(db *egorm.Component, notis []*dao.Noti
 		args = append(args, stmt.Vars...)
 		if callbackLog {
 			dst = s.callbackLogShardingSvc.Shard(noti.BizID, noti.Key)
-			stmt = sessionDB.Table(dst.Table).Create(noti).Statement
+			stmt = sessionDB.Table(dst.Table).Create(&dao.CallbackLog{
+				NotificationID: noti.ID,
+				Status:         domain.CallbackLogStatusInit.String(),
+				NextRetryTime:  now,
+				Ctime:          now,
+				Utime:          now,
+			}).Statement
 			sqls = append(sqls, stmt.SQL.String())
 			args = append(args, stmt.Vars...)
 		}
