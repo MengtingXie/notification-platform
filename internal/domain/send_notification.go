@@ -81,13 +81,20 @@ func (e SendStrategyConfig) Validate() error {
 
 // SendResponse 发送响应
 type SendResponse struct {
-	NotificationID uint64     // 通知ID
-	Status         SendStatus // 发送状态
+	NotificationID uint64     `json:"notificationId"`  // 通知ID
+	Status         SendStatus `json:"status"`          // 发送状态
+	IsIdempotent   bool       `json:"isIdempotent"`    // 是否为幂等响应
+	ProcessedAt    time.Time  `json:"processedAt"`     // 处理时间
+	Error          error      `json:"error,omitempty"` // 错误信息
 }
 
 // BatchSendResponse 批量发送响应
 type BatchSendResponse struct {
-	Results []SendResponse // 所有结果
+	Results         []SendResponse `json:"results"`         // 所有结果
+	TotalCount      int            `json:"totalCount"`      // 总数量
+	SuccessCount    int            `json:"successCount"`    // 成功数量
+	IdempotentCount int            `json:"idempotentCount"` // 幂等冲突数量
+	FailedCount     int            `json:"failedCount"`     // 失败数量
 }
 
 // BatchSendAsyncResponse 批量异步发送响应
