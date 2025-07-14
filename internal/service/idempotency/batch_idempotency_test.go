@@ -31,6 +31,67 @@ type MockNotificationRepository struct {
 	mock.Mock
 }
 
+func (m *MockNotificationRepository) UpdateStatus(ctx context.Context, notification domain.Notification) error {
+	args := m.Called(ctx, notification)
+	return args.Error(0)
+}
+
+func (m *MockNotificationRepository) MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error) {
+	args := m.Called(ctx, batchSize)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockNotificationRepository) MarkSuccess(ctx context.Context, notification domain.Notification) error {
+	args := m.Called(ctx, notification)
+	return args.Error(0)
+}
+
+func (m *MockNotificationRepository) MarkFailed(ctx context.Context, notification domain.Notification) error {
+	args := m.Called(ctx, notification)
+	return args.Error(0)
+}
+
+func (m *MockNotificationRepository) GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]domain.Notification, error) {
+	args := m.Called(ctx, bizID, keys)
+	return args.Get(0).([]domain.Notification), args.Error(1)
+}
+
+func (m *MockNotificationRepository) GetByID(ctx context.Context, id uint64) (domain.Notification, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(domain.Notification), args.Error(1)
+}
+
+func (m *MockNotificationRepository) FindReadyNotifications(ctx context.Context, offset int, limit int) ([]domain.Notification, error) {
+	args := m.Called(ctx, offset, limit)
+	return args.Get(0).([]domain.Notification), args.Error(1)
+}
+
+func (m *MockNotificationRepository) CreateWithCallbackLog(ctx context.Context, notification domain.Notification) (domain.Notification, error) {
+	args := m.Called(ctx, notification)
+	return args.Get(0).(domain.Notification), args.Error(1)
+}
+
+func (m *MockNotificationRepository) CASStatus(ctx context.Context, notification domain.Notification) error {
+	args := m.Called(ctx, notification)
+	return args.Error(0)
+}
+
+func (m *MockNotificationRepository) BatchUpdateStatusSucceededOrFailed(ctx context.Context, succeededNotifications, failedNotifications []domain.Notification) error {
+	args := m.Called(ctx, succeededNotifications, failedNotifications)
+	return args.Error(0)
+}
+
+func (m *MockNotificationRepository) BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]domain.Notification, error) {
+	args := m.Called(ctx, ids)
+	return args.Get(0).(map[uint64]domain.Notification), args.Error(1)
+}
+
+// BatchCreateWithCallbackLog mocks the batch creation of notifications with callback log
+func (m *MockNotificationRepository) BatchCreateWithCallbackLog(ctx context.Context, notifications []domain.Notification) ([]domain.Notification, error) {
+	args := m.Called(ctx, notifications)
+	return args.Get(0).([]domain.Notification), args.Error(1)
+}
+
 func (m *MockNotificationRepository) GetByKey(ctx context.Context, bizID int64, key string) (domain.Notification, error) {
 	args := m.Called(ctx, bizID, key)
 	return args.Get(0).(domain.Notification), args.Error(1)
@@ -291,7 +352,7 @@ func TestBatchIdempotencyService_ValidateClassification(t *testing.T) {
 			name:     "有效分类",
 			original: createTestNotifications(3),
 			classification: &NotificationClassification{
-				NewNotifications:        createTestNotifications(2)[:2],
+				NewNotifications:        createTestNotifications(3)[1:],
 				IdempotentNotifications: createTestNotifications(1),
 			},
 			expectError: false,
