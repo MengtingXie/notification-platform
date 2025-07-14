@@ -23,7 +23,14 @@ func (m *MockIdempotencyService) Exists(ctx context.Context, key string) (bool, 
 
 func (m *MockIdempotencyService) MExists(ctx context.Context, keys ...string) ([]bool, error) {
 	args := m.Called(ctx, keys)
-	return args.Get(0).([]bool), args.Error(1)
+	if err := args.Error(1); err != nil {
+		return nil, err
+	}
+	result, ok := args.Get(0).([]bool)
+	if !ok {
+		return nil, fmt.Errorf("type assertion failed")
+	}
+	return result, nil
 }
 
 // MockNotificationRepository 模拟通知仓库
@@ -38,7 +45,14 @@ func (m *MockNotificationRepository) UpdateStatus(ctx context.Context, notificat
 
 func (m *MockNotificationRepository) MarkTimeoutSendingAsFailed(ctx context.Context, batchSize int) (int64, error) {
 	args := m.Called(ctx, batchSize)
-	return args.Get(0).(int64), args.Error(1)
+	if err := args.Error(1); err != nil {
+		return 0, err
+	}
+	result, ok := args.Get(0).(int64)
+	if !ok {
+		return 0, fmt.Errorf("type assertion failed")
+	}
+	return result, nil
 }
 
 func (m *MockNotificationRepository) MarkSuccess(ctx context.Context, notification domain.Notification) error {
@@ -53,22 +67,50 @@ func (m *MockNotificationRepository) MarkFailed(ctx context.Context, notificatio
 
 func (m *MockNotificationRepository) GetByKeys(ctx context.Context, bizID int64, keys ...string) ([]domain.Notification, error) {
 	args := m.Called(ctx, bizID, keys)
-	return args.Get(0).([]domain.Notification), args.Error(1)
+	if err := args.Error(1); err != nil {
+		return nil, err
+	}
+	result, ok := args.Get(0).([]domain.Notification)
+	if !ok {
+		return nil, fmt.Errorf("type assertion failed")
+	}
+	return result, nil
 }
 
 func (m *MockNotificationRepository) GetByID(ctx context.Context, id uint64) (domain.Notification, error) {
 	args := m.Called(ctx, id)
-	return args.Get(0).(domain.Notification), args.Error(1)
+	if err := args.Error(1); err != nil {
+		return domain.Notification{}, err
+	}
+	result, ok := args.Get(0).(domain.Notification)
+	if !ok {
+		return domain.Notification{}, fmt.Errorf("type assertion failed")
+	}
+	return result, nil
 }
 
-func (m *MockNotificationRepository) FindReadyNotifications(ctx context.Context, offset int, limit int) ([]domain.Notification, error) {
+func (m *MockNotificationRepository) FindReadyNotifications(ctx context.Context, offset, limit int) ([]domain.Notification, error) {
 	args := m.Called(ctx, offset, limit)
-	return args.Get(0).([]domain.Notification), args.Error(1)
+	if err := args.Error(1); err != nil {
+		return nil, err
+	}
+	result, ok := args.Get(0).([]domain.Notification)
+	if !ok {
+		return nil, fmt.Errorf("type assertion failed")
+	}
+	return result, nil
 }
 
 func (m *MockNotificationRepository) CreateWithCallbackLog(ctx context.Context, notification domain.Notification) (domain.Notification, error) {
 	args := m.Called(ctx, notification)
-	return args.Get(0).(domain.Notification), args.Error(1)
+	if err := args.Error(1); err != nil {
+		return domain.Notification{}, err
+	}
+	result, ok := args.Get(0).(domain.Notification)
+	if !ok {
+		return domain.Notification{}, fmt.Errorf("type assertion failed")
+	}
+	return result, nil
 }
 
 func (m *MockNotificationRepository) CASStatus(ctx context.Context, notification domain.Notification) error {
@@ -83,29 +125,64 @@ func (m *MockNotificationRepository) BatchUpdateStatusSucceededOrFailed(ctx cont
 
 func (m *MockNotificationRepository) BatchGetByIDs(ctx context.Context, ids []uint64) (map[uint64]domain.Notification, error) {
 	args := m.Called(ctx, ids)
-	return args.Get(0).(map[uint64]domain.Notification), args.Error(1)
+	if err := args.Error(1); err != nil {
+		return nil, err
+	}
+	result, ok := args.Get(0).(map[uint64]domain.Notification)
+	if !ok {
+		return nil, fmt.Errorf("type assertion failed")
+	}
+	return result, nil
 }
 
 // BatchCreateWithCallbackLog mocks the batch creation of notifications with callback log
 func (m *MockNotificationRepository) BatchCreateWithCallbackLog(ctx context.Context, notifications []domain.Notification) ([]domain.Notification, error) {
 	args := m.Called(ctx, notifications)
-	return args.Get(0).([]domain.Notification), args.Error(1)
+	if err := args.Error(1); err != nil {
+		return nil, err
+	}
+	result, ok := args.Get(0).([]domain.Notification)
+	if !ok {
+		return nil, fmt.Errorf("type assertion failed")
+	}
+	return result, nil
 }
 
 func (m *MockNotificationRepository) GetByKey(ctx context.Context, bizID int64, key string) (domain.Notification, error) {
 	args := m.Called(ctx, bizID, key)
-	return args.Get(0).(domain.Notification), args.Error(1)
+	if err := args.Error(1); err != nil {
+		return domain.Notification{}, err
+	}
+	result, ok := args.Get(0).(domain.Notification)
+	if !ok {
+		return domain.Notification{}, fmt.Errorf("type assertion failed")
+	}
+	return result, nil
 }
 
 // 实现其他必要的接口方法（简化版）
 func (m *MockNotificationRepository) Create(ctx context.Context, notification domain.Notification) (domain.Notification, error) {
 	args := m.Called(ctx, notification)
-	return args.Get(0).(domain.Notification), args.Error(1)
+	if err := args.Error(1); err != nil {
+		return domain.Notification{}, err
+	}
+	result, ok := args.Get(0).(domain.Notification)
+	if !ok {
+		return domain.Notification{}, fmt.Errorf("type assertion failed")
+	}
+	return result, nil
 }
 
 func (m *MockNotificationRepository) BatchCreate(ctx context.Context, notifications []domain.Notification) ([]domain.Notification, error) {
 	args := m.Called(ctx, notifications)
-	return args.Get(0).([]domain.Notification), args.Error(1)
+	if err := args.Error(1); err != nil {
+		return nil, err
+	}
+	result, ok := args.Get(0).([]domain.Notification)
+	if !ok {
+		return nil, fmt.Errorf("type assertion failed")
+	}
+	return result, nil
 }
 
 // 创建测试通知
@@ -123,6 +200,7 @@ func createTestNotifications(count int) []domain.Notification {
 }
 
 func TestBatchIdempotencyService_ClassifyNotifications(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		notifications []domain.Notification
@@ -174,6 +252,7 @@ func TestBatchIdempotencyService_ClassifyNotifications(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			// 创建模拟服务
 			mockIdempotent := &MockIdempotencyService{}
 			mockRepo := &MockNotificationRepository{}
@@ -190,7 +269,7 @@ func TestBatchIdempotencyService_ClassifyNotifications(t *testing.T) {
 			}
 
 			// 执行测试
-			ctx := context.Background()
+			ctx := t.Context()
 			result, err := service.ClassifyNotifications(ctx, tt.notifications)
 
 			// 验证结果
@@ -214,6 +293,7 @@ func TestBatchIdempotencyService_ClassifyNotifications(t *testing.T) {
 }
 
 func TestBatchIdempotencyService_HandleIdempotentNotifications(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		notifications []domain.Notification
@@ -251,6 +331,7 @@ func TestBatchIdempotencyService_HandleIdempotentNotifications(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			// 创建模拟服务
 			mockIdempotent := &MockIdempotencyService{}
 			mockRepo := &MockNotificationRepository{}
@@ -266,7 +347,7 @@ func TestBatchIdempotencyService_HandleIdempotentNotifications(t *testing.T) {
 			}
 
 			// 执行测试
-			ctx := context.Background()
+			ctx := t.Context()
 			results, err := service.HandleIdempotentNotifications(ctx, tt.notifications)
 
 			// 验证结果
@@ -289,6 +370,7 @@ func TestBatchIdempotencyService_HandleIdempotentNotifications(t *testing.T) {
 }
 
 func TestReorderResults(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		original      []domain.Notification
@@ -324,6 +406,7 @@ func TestReorderResults(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			reordered := ReorderResults(tt.original, tt.results)
 
 			if len(tt.original) != len(tt.results) {
@@ -341,6 +424,7 @@ func TestReorderResults(t *testing.T) {
 }
 
 func TestBatchIdempotencyService_ValidateClassification(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name           string
 		original       []domain.Notification
@@ -371,6 +455,7 @@ func TestBatchIdempotencyService_ValidateClassification(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			service := &BatchIdempotencyService{}
 			err := service.ValidateClassification(tt.original, tt.classification)
 

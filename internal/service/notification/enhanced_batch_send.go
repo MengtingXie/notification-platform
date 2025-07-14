@@ -121,11 +121,12 @@ func (s *EnhancedBatchSendService) calculateResponseStats(response *domain.Batch
 	response.FailedCount = 0
 
 	for _, result := range response.Results {
-		if result.Error != nil {
+		switch {
+		case result.Error != nil:
 			response.FailedCount++
-		} else if result.IsIdempotent {
+		case result.IsIdempotent:
 			response.IdempotentCount++
-		} else {
+		default:
 			switch result.Status {
 			case domain.SendStatusSucceeded, domain.SendStatusPending:
 				response.SuccessCount++
@@ -149,8 +150,6 @@ func (s *EnhancedBatchSendService) BatchSendNotificationsAsync(
 		return domain.BatchSendAsyncResponse{}, fmt.Errorf("%w: 通知列表不能为空", errs.ErrInvalidParameter)
 	}
 
-	ids := make([]uint64, 0, len(notifications))
-
 	// 生成ID并进行校验
 	for i := range notifications {
 		if err := notifications[i].Validate(); err != nil {
@@ -159,7 +158,6 @@ func (s *EnhancedBatchSendService) BatchSendNotificationsAsync(
 		// 生成通知ID
 		id := s.idGenerator.GenerateID(notifications[i].BizID, notifications[i].Key)
 		notifications[i].ID = uint64(id)
-		ids = append(ids, uint64(id))
 		notifications[i].ReplaceAsyncImmediate()
 	}
 
@@ -199,16 +197,16 @@ func (s *EnhancedBatchSendService) BatchSendNotificationsAsync(
 			return domain.BatchSendAsyncResponse{}, fmt.Errorf("发送失败 %w", errs.ErrSendNotificationFailed)
 		}
 
-		for _, notification := range classification.NewNotifications {
-			newIDs = append(newIDs, notification.ID)
+		for i := range classification.NewNotifications {
+			newIDs = append(newIDs, classification.NewNotifications[i].ID)
 		}
 	}
 
 	// 合并所有ID并按原始顺序排列
-	allIDs := append(existingIDs, newIDs...)
+	existingIDs = append(existingIDs, newIDs...)
 
 	return domain.BatchSendAsyncResponse{
-		NotificationIDs: s.reorderIDs(notifications, allIDs),
+		NotificationIDs: s.reorderIDs(notifications, existingIDs),
 	}, nil
 }
 
@@ -224,8 +222,8 @@ func (s *EnhancedBatchSendService) reorderIDs(
 
 	// 创建ID到索引的映射
 	idToIndex := make(map[uint64]int)
-	for i, n := range originalNotifications {
-		idToIndex[n.ID] = i
+	for i := range originalNotifications {
+		idToIndex[originalNotifications[i].ID] = i
 	}
 
 	// 按原始顺序排列
@@ -244,7 +242,7 @@ func (s *EnhancedBatchSendService) reorderIDs(
 
 // GetBatchProcessingStats 获取批量处理统计信息（用于监控）
 func (s *EnhancedBatchSendService) GetBatchProcessingStats(
-	ctx context.Context,
+	_ context.Context,
 	results []domain.SendResponse,
 ) map[string]int {
 	stats := map[string]int{
@@ -255,11 +253,12 @@ func (s *EnhancedBatchSendService) GetBatchProcessingStats(
 	}
 
 	for _, result := range results {
-		if result.Error != nil {
+		switch {
+		case result.Error != nil:
 			stats["failed"]++
-		} else if result.IsIdempotent {
+		case result.IsIdempotent:
 			stats["idempotent"]++
-		} else {
+		default:
 			stats["success"]++
 		}
 	}

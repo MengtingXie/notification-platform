@@ -51,8 +51,8 @@ func (s *BatchIdempotencyService) ClassifyNotifications(
 	keys := make([]string, len(notifications))
 	indexMap := make(map[string]int)
 
-	for i, n := range notifications {
-		key := fmt.Sprintf("%d-%s", n.BizID, n.Key)
+	for i := range notifications {
+		key := fmt.Sprintf("%d-%s", notifications[i].BizID, notifications[i].Key)
 		keys[i] = key
 		indexMap[key] = i
 	}
@@ -98,7 +98,8 @@ func (s *BatchIdempotencyService) HandleIdempotentNotifications(
 
 	responses := make([]domain.SendResponse, 0, len(notifications))
 
-	for _, notification := range notifications {
+	for i := range notifications {
+		notification := &notifications[i]
 		// 查询已存在的通知记录
 		existing, err := s.repo.GetByKey(ctx, notification.BizID, notification.Key)
 		if err != nil {
@@ -127,7 +128,7 @@ func (s *BatchIdempotencyService) HandleIdempotentNotifications(
 
 // RollbackIdempotencyMarks 回滚幂等标记（当新通知处理失败时）
 func (s *BatchIdempotencyService) RollbackIdempotencyMarks(
-	ctx context.Context,
+	_ context.Context,
 	notifications []domain.Notification,
 ) error {
 	if len(notifications) == 0 {
@@ -135,8 +136,8 @@ func (s *BatchIdempotencyService) RollbackIdempotencyMarks(
 	}
 
 	keys := make([]string, len(notifications))
-	for i, n := range notifications {
-		keys[i] = fmt.Sprintf("%d-%s", n.BizID, n.Key)
+	for i := range notifications {
+		keys[i] = fmt.Sprintf("%d-%s", notifications[i].BizID, notifications[i].Key)
 	}
 
 	// 这里需要扩展IdempotencyService接口，增加删除方法
@@ -183,8 +184,8 @@ func ReorderResults(
 
 	// 创建通知ID到原始索引的映射
 	originalIndexMap := make(map[uint64]int)
-	for i, n := range originalNotifications {
-		originalIndexMap[n.ID] = i
+	for i := range originalNotifications {
+		originalIndexMap[originalNotifications[i].ID] = i
 	}
 
 	// 创建结果ID到结果的映射
@@ -195,7 +196,8 @@ func ReorderResults(
 
 	// 按原始顺序重新排列
 	orderedResults := make([]domain.SendResponse, len(originalNotifications))
-	for i, n := range originalNotifications {
+	for i := range originalNotifications {
+		n := &originalNotifications[i]
 		if result, exists := resultMap[n.ID]; exists {
 			orderedResults[i] = result
 		} else {
@@ -224,7 +226,8 @@ func (s *BatchIdempotencyService) ValidateClassification(
 
 	// 验证没有重复的通知
 	seen := make(map[string]bool)
-	for _, n := range classification.NewNotifications {
+	for i := range classification.NewNotifications {
+		n := &classification.NewNotifications[i]
 		key := fmt.Sprintf("%d-%s", n.BizID, n.Key)
 		if seen[key] {
 			return fmt.Errorf("发现重复的新通知: %s", key)
@@ -232,7 +235,8 @@ func (s *BatchIdempotencyService) ValidateClassification(
 		seen[key] = true
 	}
 
-	for _, n := range classification.IdempotentNotifications {
+	for i := range classification.IdempotentNotifications {
+		n := &classification.IdempotentNotifications[i]
 		key := fmt.Sprintf("%d-%s", n.BizID, n.Key)
 		if seen[key] {
 			return fmt.Errorf("发现重复的幂等通知: %s", key)
